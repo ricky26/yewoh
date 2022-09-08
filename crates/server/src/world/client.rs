@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 
@@ -5,9 +6,16 @@ use bevy_ecs::prelude::*;
 use glam::{UVec2, UVec3};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
-use yewoh::{Direction, EntityId, Notoriety};
 
-use yewoh::protocol::{AccountLogin, AnyPacket, CharacterList, ClientVersion, ClientVersionRequest, CreateCharacterEnhanced, BeginEnterWorld, FeatureFlags, GameServer, GameServerLogin, Reader, EndEnterWorld, Seed, SelectGameServer, ServerList, StartingCity, SupportedFeatures, SwitchServer, Writer, ExtendedCommand, ChangeSeason, SetTime, ExtendedClientVersion, UpsertLocalPlayer, EntityFlags, UpsertEntityCharacter, UpsertEntityStats, Move, MoveConfirm};
+use yewoh::{Direction, EntityId, Notoriety};
+use yewoh::protocol::{
+    AccountLogin, AnyPacket, BeginEnterWorld, ChangeSeason, CharacterList, ClientVersion,
+    ClientVersionRequest, CreateCharacterEnhanced, EndEnterWorld, EntityFlags,
+    ExtendedClientVersion, ExtendedCommand, FeatureFlags, GameServer, GameServerLogin, Move,
+    MoveConfirm, Reader, Seed, SelectGameServer, ServerList, SetTime, StartingCity,
+    SupportedFeatures, SwitchServer, UpsertEntityCharacter, UpsertEntityStats, UpsertLocalPlayer,
+    Writer,
+};
 
 pub struct NewConnection {
     pub address: SocketAddr,
@@ -20,21 +28,27 @@ pub enum WriterAction {
     EnableCompression,
 }
 
-#[derive(Clone, Component)]
+#[derive(Debug, Clone, Component)]
 pub struct NetClient {
+    address: SocketAddr,
+}
+
+#[derive(Debug, Clone)]
+pub struct ClientState {
     address: SocketAddr,
     client_version: ClientVersion,
     seed: u32,
+    owns: Vec<Entity>,
     tx: mpsc::UnboundedSender<WriterAction>,
 }
 
-impl NetClient {
+impl ClientState {
     pub fn enable_compression(&mut self) {
         self.tx.send(WriterAction::EnableCompression).ok();
     }
 
     pub fn send_packet(&mut self, packet: AnyPacket) {
-        log::debug!("OUT: {:?}", packet);
+        log::debug!("OUT ({:?}): {:?}", self.address, packet);
         self.tx.send(WriterAction::Send(self.client_version, packet)).ok();
     }
 }
@@ -46,6 +60,8 @@ pub struct PlayerServer {
     internal_tx: mpsc::UnboundedSender<(Entity, AnyPacket)>,
     internal_close_tx: mpsc::UnboundedSender<Entity>,
     internal_close_rx: mpsc::UnboundedReceiver<Entity>,
+
+    clients: HashMap<Entity, ClientState>,
 }
 
 impl PlayerServer {
@@ -59,6 +75,19 @@ impl PlayerServer {
             internal_tx,
             internal_close_tx,
             internal_close_rx,
+            clients: HashMap::new(),
+        }
+    }
+
+    pub fn enable_compression(&mut self, entity: Entity) {
+        if let Some(client) = self.clients.get_mut(&entity) {
+            client.enable_compression();
+        }
+    }
+
+    pub fn send_packet(&mut self, entity: Entity, packet: AnyPacket) {
+        if let Some(client) = self.clients.get_mut(&entity) {
+            client.send_packet(packet);
         }
     }
 }
@@ -94,11 +123,16 @@ pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<PlayerServer>
         let entity = commands.spawn()
             .insert(NetClient {
                 address: new_connection.address,
-                seed: 0,
-                client_version: ClientVersion::default(),
-                tx,
             })
             .id();
+        let client = ClientState {
+            address: new_connection.address,
+            client_version: Default::default(),
+            seed: 0,
+            owns: vec![],
+            tx,
+        };
+        server.clients.insert(entity, client);
 
         let mut reader = new_connection.reader;
         let internal_tx = server.internal_tx.clone();
@@ -138,14 +172,14 @@ pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<PlayerServer>
     }
 }
 
-pub fn handle_packets(mut server: ResMut<PlayerServer>, mut clients: Query<&mut NetClient>) {
+pub fn handle_packets(mut server: ResMut<PlayerServer>) {
     while let Ok((entity, packet)) = server.packet_rx.try_recv() {
-        let mut client = match clients.get_mut(entity) {
-            Ok(x) => x,
+        let mut client = match server.clients.get_mut(&entity) {
+            Some(x) => x,
             _ => continue,
         };
 
-        log::debug!("IN: {:?}", packet);
+        log::debug!("IN ({:?}): {:?}", client.address, packet);
 
         let entity_id = EntityId::from_u32(1337);
         let position = UVec3::new(500, 2000, 0);
@@ -231,7 +265,7 @@ pub fn handle_packets(mut server: ResMut<PlayerServer>, mut clients: Query<&mut 
                 position,
                 direction,
             }.into());
-            client.send_packet(UpsertEntityCharacter{
+            client.send_packet(UpsertEntityCharacter {
                 id: entity_id,
                 body_type,
                 position,
@@ -239,7 +273,7 @@ pub fn handle_packets(mut server: ResMut<PlayerServer>, mut clients: Query<&mut 
                 hue,
                 flags: EntityFlags::empty(),
                 notoriety: Notoriety::Innocent,
-                children: vec![]
+                children: vec![],
             }.into());
             client.send_packet(UpsertEntityStats {
                 id: entity_id,

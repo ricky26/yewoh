@@ -9,6 +9,8 @@ pub mod time;
 
 pub mod client;
 
+pub mod entity;
+
 #[derive(Default)]
 pub struct ServerPlugin;
 
