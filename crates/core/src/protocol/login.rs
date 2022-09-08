@@ -11,27 +11,6 @@ use crate::protocol::{PacketReadExt, PacketWriteExt};
 use super::{ClientFlags, ClientVersion, Endian, Packet};
 
 #[derive(Debug, Clone, Default)]
-pub struct LegacySeed {
-    pub seed: u32,
-}
-
-impl Packet for LegacySeed {
-    fn packet_kind() -> u8 { unreachable!() }
-
-    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(4) }
-
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
-        let seed = payload.read_u32::<Endian>()?;
-        Ok(Self { seed })
-    }
-
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
-        writer.write_u32::<Endian>(self.seed)?;
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, Default)]
 pub struct Seed {
     pub seed: u32,
     pub client_version: ClientVersion,
@@ -194,6 +173,109 @@ impl Packet for SelectGameServer {
 }
 
 #[derive(Debug, Clone, Default)]
+pub struct SwitchServer {
+    pub ip: u32,
+    pub port: u16,
+    pub token: u32,
+}
+
+impl Packet for SwitchServer {
+    fn packet_kind() -> u8 { 0x8c }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(11) }
+
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let ip = payload.read_u32::<Endian>()?;
+        let port = payload.read_u16::<Endian>()?;
+        let token = payload.read_u32::<Endian>()?;
+        Ok(Self { ip, port, token })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_u32::<Endian>(self.ip)?;
+        writer.write_u16::<Endian>(self.port)?;
+        writer.write_u32::<Endian>(self.token)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GameServerLogin {
+    pub seed: u32,
+    pub username: String,
+    pub password: String,
+}
+
+impl Packet for GameServerLogin {
+    fn packet_kind() -> u8 { 0x91 }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(0x40) }
+
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let seed = payload.read_u32::<Endian>()?;
+        let username = payload.read_str_block(30)?;
+        let password = payload.read_str_block(30)?;
+        Ok(GameServerLogin {
+            seed,
+            username,
+            password,
+        })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_u32::<Endian>(self.seed)?;
+        writer.write_str_block(&self.username, 30)?;
+        writer.write_str_block(&self.password, 30)?;
+        Ok(())
+    }
+}
+
+bitflags! {
+    #[derive(Default)]
+    pub struct FeatureFlags : u32 {
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SupportedFeatures {
+    pub feature_flags: FeatureFlags,
+}
+
+impl SupportedFeatures {
+    const EXTENDED_MIN_VERSION: ClientVersion = ClientVersion::new(6, 0, 14, 2);
+}
+
+impl Packet for SupportedFeatures {
+    fn packet_kind() -> u8 { 0xb9 }
+
+    fn fixed_length(client_version: ClientVersion) -> Option<usize> {
+        Some(if client_version >= Self::EXTENDED_MIN_VERSION { 5 } else { 3 })
+    }
+
+    fn decode(client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let extended = client_version >= Self::EXTENDED_MIN_VERSION;
+        let feature_flags = FeatureFlags::from_bits_truncate(if extended {
+            payload.read_u32::<Endian>()?
+        } else {
+            payload.read_u16::<Endian>()? as u32
+        });
+        Ok(SupportedFeatures {
+            feature_flags,
+        })
+    }
+
+    fn encode(&self, client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+        let extended = client_version >= Self::EXTENDED_MIN_VERSION;
+        if extended {
+            writer.write_u32::<Endian>(self.feature_flags.bits())?;
+        } else {
+            writer.write_u16::<Endian>(self.feature_flags.bits() as u16)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct CharacterFromList {
     pub name: String,
     pub password: String,
@@ -283,7 +365,7 @@ impl Packet for CharacterList {
             });
         }
 
-        Ok(CharacterList{
+        Ok(CharacterList {
             characters,
             cities,
         })
@@ -339,37 +421,6 @@ impl Packet for CharacterList {
             writer.write_u16::<Endian>(0xffff)?;
         }
 
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct GameServerLogin {
-    pub seed: u32,
-    pub username: String,
-    pub password: String,
-}
-
-impl Packet for GameServerLogin {
-    fn packet_kind() -> u8 { 0x91 }
-
-    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(0x40) }
-
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
-        let seed = payload.read_u32::<Endian>()?;
-        let username = payload.read_str_block(30)?;
-        let password = payload.read_str_block(30)?;
-        Ok(GameServerLogin {
-            seed,
-            username,
-            password,
-        })
-    }
-
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
-        writer.write_u32::<Endian>(self.seed)?;
-        writer.write_str_block(&self.username, 30)?;
-        writer.write_str_block(&self.password, 30)?;
         Ok(())
     }
 }

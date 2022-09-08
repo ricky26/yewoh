@@ -18,11 +18,14 @@ pub use client_version::{ClientFlags, ClientVersion, ExtendedClientVersion};
 pub use format::{PacketReadExt, PacketWriteExt};
 pub use login::*;
 
+mod format;
+
+mod compression;
+
 mod client_version;
 
 mod login;
 
-mod format;
 
 pub trait Packet where Self: Sized {
     fn packet_kind() -> u8;
@@ -88,8 +91,10 @@ fn packet_registry() -> &'static PacketRegistry {
             PacketRegistration::for_type::<AccountLogin>(),
             PacketRegistration::for_type::<ServerList>(),
             PacketRegistration::for_type::<SelectGameServer>(),
-            PacketRegistration::for_type::<CharacterList>(),
+            PacketRegistration::for_type::<SwitchServer>(),
             PacketRegistration::for_type::<GameServerLogin>(),
+            PacketRegistration::for_type::<SupportedFeatures>(),
+            PacketRegistration::for_type::<CharacterList>(),
             PacketRegistration::for_type::<CreateCharacterClassic>(),
             PacketRegistration::for_type::<CreateCharacterEnhanced>(),
             PacketRegistration::for_type::<DeleteCharacter>(),
@@ -204,7 +209,7 @@ impl Reader {
                 let mut seed_bytes = [first_byte, 0u8, 0u8, 0u8];
                 self.reader.read_exact(&mut seed_bytes[1..]).await?;
                 let seed = Endian::read_u32(&seed_bytes);
-                return Ok(AnyPacket::from_packet(LegacySeed { seed }));
+                return Ok(AnyPacket::from_packet(Seed { seed, ..Default::default() }));
             }
 
             first_byte
@@ -262,7 +267,7 @@ impl Writer {
         self.has_sent = true;
 
         if let Some(length) = T::fixed_length(client_version) {
-            self.buffer.reserve(length + 1);
+            self.buffer.reserve(length);
             self.buffer.push(T::packet_kind());
             packet.encode(client_version, &mut self.buffer)?;
             assert_eq!(length, self.buffer.len(), "Fixed length packet wrote wrong size");
@@ -285,7 +290,7 @@ impl Writer {
 
         let kind = packet.packet_kind();
         if let Some(length) = packet.fixed_length(client_version) {
-            self.buffer.reserve(length + 1);
+            self.buffer.reserve(length);
             self.buffer.push(kind);
             packet.encode(client_version, &mut self.buffer)?;
             assert_eq!(length, self.buffer.len(), "Fixed length packet wrote wrong size");

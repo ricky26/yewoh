@@ -1,17 +1,17 @@
 use std::collections::HashSet;
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddr};
 
 use bevy_ecs::prelude::*;
 use glam::IVec3;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 
-use yewoh::protocol::{AccountLogin, AnyPacket, CharacterList, GameServer, Packet, SelectGameServer, ServerList, StartingCity};
+use yewoh::protocol::{AccountLogin, AnyPacket, CharacterList, FeatureFlags, GameServer, GameServerLogin, Packet, Reader, SelectGameServer, ServerList, StartingCity, SupportedFeatures, SwitchServer, Writer};
 
 pub struct NewConnection {
     pub address: SocketAddr,
-    pub packet_rx: mpsc::UnboundedReceiver<AnyPacket>,
-    pub packet_tx: mpsc::UnboundedSender<AnyPacket>,
+    pub reader: Reader,
+    pub writer: Writer,
 }
 
 #[derive(Clone, Component)]
@@ -21,7 +21,7 @@ pub struct RemoteAddress {
 
 #[derive(Clone, Component)]
 pub struct PacketSender {
-    packet_tx: mpsc::UnboundedSender<AnyPacket>,
+    writer: Writer,
 }
 
 pub struct PlayerServer {
@@ -60,14 +60,16 @@ pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<PlayerServer>
     while let Ok(new_connection) = server.new_connections.try_recv() {
         let entity = commands.spawn()
             .insert(RemoteAddress { address: new_connection.address })
-            .insert(PacketSender { packet_tx: new_connection.packet_tx })
+            .insert(PacketSender { writer: new_connection.writer })
             .id();
 
-        let mut rx = new_connection.packet_rx;
+        let mut reader = new_connection.reader;
         let mut internal_tx = server.internal_tx.clone();
         let mut internal_close = server.internal_close_tx.clone();
         runtime.spawn(async move {
-            while let Some(packet) = rx.recv().await {
+            let client_version = Default::default();
+
+            while let Ok(packet) = reader.receive(client_version).await {
                 if let Err(err) = internal_tx.send((entity, packet)) {
                     log::warn!("Error forwarding packet {err}");
                     return;
@@ -83,16 +85,19 @@ pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<PlayerServer>
     }
 }
 
-pub fn handle_packets(mut server: ResMut<PlayerServer>, connections: Query<(&PacketSender)>) {
+pub fn handle_packets(mut server: ResMut<PlayerServer>, mut connections: Query<(&mut PacketSender)>) {
     while let Ok((entity, packet)) = server.packet_rx.try_recv() {
-        let sender = match connections.get(entity) {
+        let sender = match connections.get_mut(entity) {
             Ok(x) => x,
             _ => continue,
         };
 
+        log::debug!("Got packet type {:2x}", packet.packet_kind());
+
+        let client_version = Default::default();
         if let Some(account_login) = packet.downcast::<AccountLogin>() {
             log::info!("New login attempt for {}", &account_login.username);
-            sender.packet_tx.send(ServerList {
+            sender.writer.send(client_version, &ServerList {
                 system_info_flags: 0x5d,
                 game_servers: vec![
                     GameServer {
@@ -101,9 +106,19 @@ pub fn handle_packets(mut server: ResMut<PlayerServer>, connections: Query<(&Pac
                     },
                 ],
                 ..Default::default()
-            }.into()).ok();
+            }).ok();
         } else if let Some(game_server) = packet.downcast::<SelectGameServer>() {
-            sender.packet_tx.send(CharacterList {
+            sender.writer.send(client_version, &SwitchServer {
+                ip: Ipv4Addr::LOCALHOST.into(),
+                port: 2593,
+                token: 7,
+            }).ok();
+        } else if let Some(game_login) = packet.downcast::<GameServerLogin>() {
+            log::debug!("token {}", game_login.seed);
+            sender.writer.send(client_version, &SupportedFeatures {
+                feature_flags: FeatureFlags::empty(),
+            }.into()).ok();
+            sender.writer.send(client_version, &CharacterList {
                 characters: vec![None; 5],
                 cities: vec![StartingCity {
                     index: 0,
