@@ -1,10 +1,10 @@
-use std::io::SeekFrom::End;
 use std::io::Write;
 
 use anyhow::anyhow;
 use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use glam::UVec3;
+use crate::Direction;
 
 use crate::protocol::{PacketReadExt, PacketWriteExt};
 
@@ -19,7 +19,7 @@ pub struct Seed {
 impl Packet for Seed {
     fn packet_kind() -> u8 { 0xef }
 
-    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(20) }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(21) }
 
     fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let seed = payload.read_u32::<Endian>()?;
@@ -63,7 +63,7 @@ impl Default for AccountLogin {
 impl Packet for AccountLogin {
     fn packet_kind() -> u8 { 0x80 }
 
-    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(61) }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(62) }
 
     fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let username = payload.read_str_block(30)?;
@@ -155,7 +155,7 @@ pub struct SelectGameServer {
 impl Packet for SelectGameServer {
     fn packet_kind() -> u8 { 0xA0 }
 
-    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(3) }
 
     fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         payload.skip(1)?;
@@ -209,7 +209,7 @@ pub struct GameServerLogin {
 impl Packet for GameServerLogin {
     fn packet_kind() -> u8 { 0x91 }
 
-    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(0x40) }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(0x41) }
 
     fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let token = payload.read_u32::<Endian>()?;
@@ -616,7 +616,7 @@ pub struct CreateCharacterClassic(pub CreateCharacter);
 
 impl Packet for CreateCharacterClassic {
     fn packet_kind() -> u8 { 0 }
-    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(103) }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(104) }
 
     fn decode(client_version: ClientVersion, payload: &[u8]) -> anyhow::Result<Self> {
         CreateCharacter::decode(false, client_version, payload).map(Self)
@@ -632,7 +632,7 @@ pub struct CreateCharacterEnhanced(pub CreateCharacter);
 
 impl Packet for CreateCharacterEnhanced {
     fn packet_kind() -> u8 { 0xf8 }
-    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(105) }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(106) }
 
     fn decode(client_version: ClientVersion, payload: &[u8]) -> anyhow::Result<Self> {
         CreateCharacter::decode(true, client_version, payload).map(Self)
@@ -652,7 +652,7 @@ pub struct DeleteCharacter {
 impl Packet for DeleteCharacter {
     fn packet_kind() -> u8 { 0x83 }
 
-    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(38) }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(39) }
 
     fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         payload.skip(30)?;
@@ -683,7 +683,7 @@ pub struct SelectCharacter {
 impl Packet for SelectCharacter {
     fn packet_kind() -> u8 { 0x5d }
 
-    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(72) }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(73) }
 
     fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         if payload.read_u32::<Endian>()? != CREATE_CHARACTER_MAGIC_1 {
@@ -726,30 +726,28 @@ impl Packet for ClientVersionRequest {
     fn packet_kind() -> u8 { 0xbd }
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         Ok(ClientVersionRequest {
-            version: std::str::from_utf8(&payload[..payload.len()-1])?.to_string(),
+            version: payload.read_str_nul()?,
         })
     }
 
     fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
-        writer.write_all(self.version.as_bytes())?;
-        writer.write_u8(0)?;
-        Ok(())
+        writer.write_str_nul(&self.version)
     }
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct EnterWorld {
+pub struct BeginEnterWorld {
     pub mobile_id: u32,
     pub body: u16,
     pub position: UVec3,
-    pub direction: u8,
+    pub direction: Direction,
     pub map_width: u16,
     pub map_height: u16,
 }
 
-impl Packet for EnterWorld {
+impl Packet for BeginEnterWorld {
     fn packet_kind() -> u8 { 0x1b }
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(37) }
@@ -761,17 +759,18 @@ impl Packet for EnterWorld {
         let x = payload.read_u16::<Endian>()? as u32;
         let y = payload.read_u16::<Endian>()? as u32;
         let z = payload.read_u16::<Endian>()? as u32;
-        let direction = payload.read_u8()?;
+        let direction = Direction::from_u8(payload.read_u8()?)
+            .ok_or_else(|| anyhow!("Invalid direction"))?;
         payload.skip(9)?;
         let map_width = payload.read_u16::<Endian>()?;
         let map_height = payload.read_u16::<Endian>()?;
-        Ok(EnterWorld {
+        Ok(BeginEnterWorld {
             mobile_id,
             body,
             position: UVec3::new(x, y, z),
             direction,
             map_width,
-            map_height
+            map_height,
         })
     }
 
@@ -782,7 +781,7 @@ impl Packet for EnterWorld {
         writer.write_i16::<Endian>(self.position.x as i16)?;
         writer.write_i16::<Endian>(self.position.y as i16)?;
         writer.write_i16::<Endian>(self.position.z as i16)?;
-        writer.write_u8(self.direction)?;
+        writer.write_u8(self.direction as u8)?;
         writer.write_u8(0)?;
         writer.write_u32::<Endian>(0xffffffff)?;
         writer.write_u32::<Endian>(0)?;
@@ -794,15 +793,51 @@ impl Packet for EnterWorld {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct Ready;
+pub struct EndEnterWorld;
 
-impl Packet for Ready {
+impl Packet for EndEnterWorld {
     fn packet_kind() -> u8 { 0x55 }
-
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(1) }
 
     fn decode(_client_version: ClientVersion, _payload: &[u8]) -> anyhow::Result<Self> {
-        Ok(Ready)
+        Ok(EndEnterWorld)
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _writer: &mut impl Write) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ShowPublicHouses {
+    pub show: bool,
+}
+
+impl Packet for ShowPublicHouses {
+    fn packet_kind() -> u8 { 0xfb }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
+
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let show = payload.read_u8()? != 0;
+        Ok(Self { show })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_u8(if self.show { 1 } else { 0 })?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Ping;
+
+impl Packet for Ping {
+    fn packet_kind() -> u8 { 0x73 }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
+
+    fn decode(_client_version: ClientVersion, _payload: &[u8]) -> anyhow::Result<Self> {
+        Ok(Self)
     }
 
     fn encode(&self, _client_version: ClientVersion, _writer: &mut impl Write) -> anyhow::Result<()> {

@@ -1,8 +1,6 @@
 use std::time::{Duration, Instant};
 
 use bevy_ecs::prelude::*;
-use tokio::io::Interest;
-use tokio::time::Interval;
 
 #[derive(Debug, Clone)]
 pub struct TickRate {
@@ -12,6 +10,9 @@ pub struct TickRate {
 }
 
 impl TickRate {
+    pub fn tick_rate(&self) -> f32 { self.tick_rate }
+    pub fn interval(&self) -> Duration { self.interval }
+
     pub fn from_rate(tick_rate: f32) -> TickRate {
         let interval = Duration::from_secs_f32(1.0 / tick_rate);
         TickRate {

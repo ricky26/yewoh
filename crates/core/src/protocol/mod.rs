@@ -3,14 +3,11 @@ use std::fmt;
 use std::fmt::Debug;
 use std::io::Write;
 use std::mem::{MaybeUninit, size_of, transmute};
-use std::ops::Deref;
-use std::str::FromStr;
 
 use anyhow::anyhow;
 use byteorder::{ByteOrder, WriteBytesExt};
 pub use byteorder::BigEndian as Endian;
 use once_cell::sync::OnceCell;
-use pretty_hex::PrettyHex;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
@@ -18,8 +15,13 @@ use tokio::net::TcpStream;
 pub use client_version::{ClientFlags, ClientVersion, ExtendedClientVersion};
 pub use format::{PacketReadExt, PacketWriteExt};
 pub use login::*;
+pub use map::*;
+pub use extended::*;
+pub use input::*;
+pub use mobile::*;
 
-use crate::protocol::compression::{HuffmanDecoder, HuffmanVecWriter};
+use crate::protocol::compression::{HuffmanVecWriter};
+use crate::protocol::ui::OpenChatWindow;
 
 mod format;
 
@@ -29,6 +31,15 @@ mod client_version;
 
 mod login;
 
+mod map;
+
+mod extended;
+
+mod input;
+
+mod mobile;
+
+mod ui;
 
 pub trait Packet where Self: Sized {
     fn packet_kind() -> u8;
@@ -97,6 +108,8 @@ fn packet_registry() -> &'static PacketRegistry {
 
         for registration in [
             // Add packet types here. It's not ideal but it works for now.
+
+            // Login
             PacketRegistration::for_type::<Seed>(),
             PacketRegistration::for_type::<AccountLogin>(),
             PacketRegistration::for_type::<ServerList>(),
@@ -110,8 +123,28 @@ fn packet_registry() -> &'static PacketRegistry {
             PacketRegistration::for_type::<DeleteCharacter>(),
             PacketRegistration::for_type::<SelectCharacter>(),
             PacketRegistration::for_type::<ClientVersionRequest>(),
-            PacketRegistration::for_type::<EnterWorld>(),
-            PacketRegistration::for_type::<Ready>(),
+            PacketRegistration::for_type::<BeginEnterWorld>(),
+            PacketRegistration::for_type::<EndEnterWorld>(),
+            PacketRegistration::for_type::<ShowPublicHouses>(),
+            PacketRegistration::for_type::<Ping>(),
+
+            // Extended
+            PacketRegistration::for_type::<ExtendedCommand>(),
+
+            // Input
+            PacketRegistration::for_type::<SingleClick>(),
+            PacketRegistration::for_type::<DoubleClick>(),
+
+            // UI
+            PacketRegistration::for_type::<OpenChatWindow>(),
+
+            // Map
+            PacketRegistration::for_type::<SetTime>(),
+            PacketRegistration::for_type::<ChangeSeason>(),
+            PacketRegistration::for_type::<ViewRange>(),
+
+            // Mobile
+            PacketRegistration::for_type::<MobileRequest>(),
         ].into_iter() {
             max_size = registration.size.max(max_size);
             let index = registration.packet_kind as usize;
@@ -247,7 +280,7 @@ impl Reader {
         };
 
         let length = if let Some(fixed_length) = (registration.fixed_length)(client_version) {
-            fixed_length
+            fixed_length - 1
         } else {
             self.reader.read_u16().await? as usize - 3
         };

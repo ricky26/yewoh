@@ -11,7 +11,7 @@ impl AdminHttpApi {
 }
 
 impl HttpServiceFactory for AdminHttpApi {
-    fn register(self, config: &mut AppService) {
+    fn register(self, _config: &mut AppService) {
 
     }
 }

@@ -1,12 +1,13 @@
-use std::collections::HashSet;
 use std::net::{Ipv4Addr, SocketAddr};
+use std::str::FromStr;
 
 use bevy_ecs::prelude::*;
 use glam::UVec3;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
+use yewoh::Direction;
 
-use yewoh::protocol::{AccountLogin, AnyPacket, CharacterList, ClientVersion, ClientVersionRequest, CreateCharacterEnhanced, EnterWorld, FeatureFlags, GameServer, GameServerLogin, Packet, Reader, Ready, Seed, SelectGameServer, ServerList, StartingCity, SupportedFeatures, SwitchServer, Writer};
+use yewoh::protocol::{AccountLogin, AnyPacket, CharacterList, ClientVersion, ClientVersionRequest, CreateCharacterEnhanced, BeginEnterWorld, FeatureFlags, GameServer, GameServerLogin, Reader, EndEnterWorld, Seed, SelectGameServer, ServerList, StartingCity, SupportedFeatures, SwitchServer, Writer, ExtendedCommand, ChangeSeason, SetTime, ExtendedClientVersion};
 
 pub struct NewConnection {
     pub address: SocketAddr,
@@ -33,6 +34,7 @@ impl NetClient {
     }
 
     pub fn send_packet(&mut self, packet: AnyPacket) {
+        log::debug!("OUT: {:?}", packet);
         self.tx.send(WriterAction::Send(self.client_version, packet)).ok();
     }
 }
@@ -99,19 +101,27 @@ pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<PlayerServer>
             .id();
 
         let mut reader = new_connection.reader;
-        let mut internal_tx = server.internal_tx.clone();
-        let mut internal_close = server.internal_close_tx.clone();
+        let internal_tx = server.internal_tx.clone();
+        let internal_close = server.internal_close_tx.clone();
         runtime.spawn(async move {
-            let mut client_version = ClientVersion::new(8, 0, 0, 0);
+            let mut client_version = ClientVersion::new(0, 0, 0, 0);
 
-            while let Ok(packet) = reader.receive(client_version).await {
-                if let Some(seed) = packet.downcast::<Seed>() {
-                    client_version = seed.client_version;
-                }
+            loop {
+                match reader.receive(client_version).await {
+                    Ok(packet) => {
+                        if let Some(seed) = packet.downcast::<Seed>() {
+                            client_version = seed.client_version;
+                        }
 
-                if let Err(err) = internal_tx.send((entity, packet)) {
-                    log::warn!("Error forwarding packet {err}");
-                    return;
+                        if let Err(err) = internal_tx.send((entity, packet)) {
+                            log::warn!("Error forwarding packet {err}");
+                            break;
+                        }
+                    }
+                    Err(err) => {
+                        log::warn!("Error receiving packet {err}");
+                        break;
+                    }
                 }
             }
 
@@ -128,14 +138,14 @@ pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<PlayerServer>
     }
 }
 
-pub fn handle_packets(mut server: ResMut<PlayerServer>, mut clients: Query<(&mut NetClient)>) {
+pub fn handle_packets(mut server: ResMut<PlayerServer>, mut clients: Query<&mut NetClient>) {
     while let Ok((entity, packet)) = server.packet_rx.try_recv() {
         let mut client = match clients.get_mut(entity) {
             Ok(x) => x,
             _ => continue,
         };
 
-        log::debug!("Got packet {:?}", packet);
+        log::debug!("IN: {:?}", packet);
 
         if let Some(seed) = packet.downcast::<Seed>() {
             client.seed = seed.seed;
@@ -152,7 +162,7 @@ pub fn handle_packets(mut server: ResMut<PlayerServer>, mut clients: Query<(&mut
                 ],
                 ..Default::default()
             }.into());
-        } else if let Some(game_server) = packet.downcast::<SelectGameServer>() {
+        } else if let Some(_game_server) = packet.downcast::<SelectGameServer>() {
             // TODO: pass this across using token
             client.send_packet(SwitchServer {
                 ip: Ipv4Addr::LOCALHOST.into(),
@@ -160,9 +170,12 @@ pub fn handle_packets(mut server: ResMut<PlayerServer>, mut clients: Query<(&mut
                 token: 7,
             }.into());
         } else if let Some(game_login) = packet.downcast::<GameServerLogin>() {
-            log::debug!("Game login {:?}", game_login);
-            client.client_version = ClientVersion::new(8, 0, 0, 0);
             client.enable_compression();
+
+            // HACK: assume new client for now
+            client.client_version = ClientVersion::new(8, 0, 0, 0);
+            client.send_packet(ClientVersionRequest::default().into());
+
             client.send_packet(SupportedFeatures {
                 feature_flags: FeatureFlags::T2A
                     | FeatureFlags::UOR
@@ -192,18 +205,31 @@ pub fn handle_packets(mut server: ResMut<PlayerServer>, mut clients: Query<(&mut
                     description_id: 0,
                 }],
             }.into());
-        } else if let Some(create_character) = packet.downcast::<CreateCharacterEnhanced>() {
-            client.send_packet(ClientVersionRequest::default().into());
-        } else if let Some(version_request) = packet.downcast::<ClientVersionRequest>() {
-            client.send_packet(EnterWorld {
+        } else if let Some(_create_character) = packet.downcast::<CreateCharacterEnhanced>() {
+            client.send_packet(BeginEnterWorld {
                 mobile_id: 1234,
                 body: 12,
                 position: Default::default(),
-                direction: 2,
+                direction: Direction::West,
                 map_width: 1000,
-                map_height: 1000
+                map_height: 1000,
             }.into());
-            client.send_packet(Ready.into());
+            client.send_packet(ExtendedCommand::ChangeMap(0).into());
+            client.send_packet(ChangeSeason { season: 0, play_sound: true }.into());
+            client.send_packet(EndEnterWorld.into());
+
+            client.send_packet(SetTime {
+                hour: 12,
+                minute: 16,
+                second: 31,
+            }.into());
+        } else if let Some(version_request) = packet.downcast::<ClientVersionRequest>() {
+            match ExtendedClientVersion::from_str(&version_request.version) {
+                Ok(client_version) => client.client_version = client_version.client_version,
+                Err(err) => {
+                    log::warn!("Unable to parse client version '{}': {err}", &version_request.version);
+                }
+            }
         }
     }
 }

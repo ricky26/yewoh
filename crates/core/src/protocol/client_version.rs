@@ -22,6 +22,10 @@ impl ClientVersion {
             build,
         }
     }
+
+    pub fn is_valid(&self) -> bool {
+        self.major != 0 || self.minor != 0 || self.patch != 0 || self.build != 0
+    }
 }
 
 impl fmt::Display for ClientVersion {
@@ -32,8 +36,8 @@ impl fmt::Display for ClientVersion {
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct ExtendedClientVersion {
-    client_version: ClientVersion,
-    suffix: String,
+    pub client_version: ClientVersion,
+    pub suffix: String,
 }
 
 impl ExtendedClientVersion {
@@ -65,7 +69,7 @@ impl FromStr for ExtendedClientVersion {
         let (patch, build, suffix) = if let Some((patch_str, rest)) = rest.split_once('.') {
             let patch = u8::from_str(patch_str)?;
             let (build_str, rest) = rest.split_once(|c: char| !c.is_digit(10))
-                .ok_or_else(|| anyhow!("Missing build number"))?;
+                .unwrap_or_else(|| (rest, ""));
             let build = u8::from_str(build_str)?;
             (patch, build, rest)
         } else {

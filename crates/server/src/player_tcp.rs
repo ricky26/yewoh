@@ -3,12 +3,12 @@ use tokio::spawn;
 use tokio::sync::mpsc;
 
 use log::{info, warn};
-use yewoh::protocol::{ClientVersion, new_io};
+use yewoh::protocol::{new_io};
 
 use crate::world::client::NewConnection;
 
 pub fn accept_player_connections(listener: TcpListener) -> mpsc::UnboundedReceiver<NewConnection> {
-    let (mut tx, rx) = mpsc::unbounded_channel();
+    let (tx, rx) = mpsc::unbounded_channel();
 
     spawn(async move {
         loop {
