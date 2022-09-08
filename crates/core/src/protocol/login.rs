@@ -4,7 +4,7 @@ use std::io::Write;
 use anyhow::anyhow;
 use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use glam::IVec3;
+use glam::UVec3;
 
 use crate::protocol::{PacketReadExt, PacketWriteExt};
 
@@ -201,7 +201,7 @@ impl Packet for SwitchServer {
 
 #[derive(Debug, Clone)]
 pub struct GameServerLogin {
-    pub seed: u32,
+    pub token: u32,
     pub username: String,
     pub password: String,
 }
@@ -212,18 +212,18 @@ impl Packet for GameServerLogin {
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(0x40) }
 
     fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
-        let seed = payload.read_u32::<Endian>()?;
+        let token = payload.read_u32::<Endian>()?;
         let username = payload.read_str_block(30)?;
         let password = payload.read_str_block(30)?;
         Ok(GameServerLogin {
-            seed,
+            token,
             username,
             password,
         })
     }
 
     fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
-        writer.write_u32::<Endian>(self.seed)?;
+        writer.write_u32::<Endian>(self.token)?;
         writer.write_str_block(&self.username, 30)?;
         writer.write_str_block(&self.password, 30)?;
         Ok(())
@@ -233,6 +233,30 @@ impl Packet for GameServerLogin {
 bitflags! {
     #[derive(Default)]
     pub struct FeatureFlags : u32 {
+        const T2A = 0x1;
+        const UOR = 0x2;
+        const UOTD = 0x4;
+        const LBR = 0x8;
+        const AOS = 0x10;
+        const SIXTH_CHARACTER_SLOT = 0x20;
+        const SE = 0x40;
+        const ML = 0x80;
+        const EIGTH_AGE = 0x100;
+        const NINTH_AGE = 0x200;
+        const TENTH_AGE = 0x400;
+        const INCREASED_STORAGE = 0x800;
+        const SEVENTH_CHARACTER_SLOT = 0x1000;
+        const ROLEPLAY_FACES = 0x2000;
+        const TRIAL_ACCOUNT = 0x4000;
+        const LIVE_ACCOUNT = 0x8000;
+        const SA = 0x10000;
+        const HS = 0x20000;
+        const GOTHIC = 0x40000;
+        const RUSTIC = 0x80000;
+        const JUNGLE = 0x100000;
+        const SHADOWGUARD = 0x200000;
+        const TOL = 0x400000;
+        const EJ = 0x800000;
     }
 }
 
@@ -286,7 +310,7 @@ pub struct StartingCity {
     pub index: u8,
     pub city: String,
     pub building: String,
-    pub location: IVec3,
+    pub location: UVec3,
     pub map_id: u32,
     pub description_id: u32,
 }
@@ -344,15 +368,15 @@ impl Packet for CharacterList {
             let building = payload.read_str_block(text_length)?;
 
             let (location, map_id, description_id) = if new_character_list {
-                let x = payload.read_i32::<Endian>()?;
-                let y = payload.read_i32::<Endian>()?;
-                let z = payload.read_i32::<Endian>()?;
+                let x = payload.read_u32::<Endian>()?;
+                let y = payload.read_u32::<Endian>()?;
+                let z = payload.read_u32::<Endian>()?;
                 let map_id = payload.read_u32::<Endian>()?;
                 let description_id = payload.read_u32::<Endian>()?;
                 payload.skip(4)?;
-                (IVec3::new(x, y, z), map_id, description_id)
+                (UVec3::new(x, y, z), map_id, description_id)
             } else {
-                (IVec3::new(0, 0, 0), 0, 0)
+                (UVec3::new(0, 0, 0), 0, 0)
             };
 
             cities.push(StartingCity {
@@ -392,9 +416,9 @@ impl Packet for CharacterList {
             writer.write_str_block(&city.building, text_length)?;
 
             if new_character_list {
-                writer.write_i32::<Endian>(city.location.x)?;
-                writer.write_i32::<Endian>(city.location.y)?;
-                writer.write_i32::<Endian>(city.location.z)?;
+                writer.write_u32::<Endian>(city.location.x)?;
+                writer.write_u32::<Endian>(city.location.y)?;
+                writer.write_u32::<Endian>(city.location.z)?;
                 writer.write_u32::<Endian>(city.map_id)?;
                 writer.write_u32::<Endian>(city.description_id)?;
                 writer.write_u32::<Endian>(0)?;
@@ -592,7 +616,7 @@ pub struct CreateCharacterClassic(pub CreateCharacter);
 
 impl Packet for CreateCharacterClassic {
     fn packet_kind() -> u8 { 0 }
-    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(0x86) }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(103) }
 
     fn decode(client_version: ClientVersion, payload: &[u8]) -> anyhow::Result<Self> {
         CreateCharacter::decode(false, client_version, payload).map(Self)
@@ -608,7 +632,7 @@ pub struct CreateCharacterEnhanced(pub CreateCharacter);
 
 impl Packet for CreateCharacterEnhanced {
     fn packet_kind() -> u8 { 0xf8 }
-    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(0x90) }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(105) }
 
     fn decode(client_version: ClientVersion, payload: &[u8]) -> anyhow::Result<Self> {
         CreateCharacter::decode(true, client_version, payload).map(Self)
@@ -689,6 +713,99 @@ impl Packet for SelectCharacter {
         writer.write_zeros(24)?;
         writer.write_u32::<Endian>(self.character_index)?;
         writer.write_u32::<Endian>(self.ip)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ClientVersionRequest {
+    pub version: String,
+}
+
+impl Packet for ClientVersionRequest {
+    fn packet_kind() -> u8 { 0xbd }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
+
+    fn decode(_client_version: ClientVersion, payload: &[u8]) -> anyhow::Result<Self> {
+        Ok(ClientVersionRequest {
+            version: std::str::from_utf8(&payload[..payload.len()-1])?.to_string(),
+        })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_all(self.version.as_bytes())?;
+        writer.write_u8(0)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct EnterWorld {
+    pub mobile_id: u32,
+    pub body: u16,
+    pub position: UVec3,
+    pub direction: u8,
+    pub map_width: u16,
+    pub map_height: u16,
+}
+
+impl Packet for EnterWorld {
+    fn packet_kind() -> u8 { 0x1b }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(37) }
+
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let mobile_id = payload.read_u32::<Endian>()?;
+        payload.skip(4)?;
+        let body = payload.read_u16::<Endian>()?;
+        let x = payload.read_u16::<Endian>()? as u32;
+        let y = payload.read_u16::<Endian>()? as u32;
+        let z = payload.read_u16::<Endian>()? as u32;
+        let direction = payload.read_u8()?;
+        payload.skip(9)?;
+        let map_width = payload.read_u16::<Endian>()?;
+        let map_height = payload.read_u16::<Endian>()?;
+        Ok(EnterWorld {
+            mobile_id,
+            body,
+            position: UVec3::new(x, y, z),
+            direction,
+            map_width,
+            map_height
+        })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_u32::<Endian>(self.mobile_id)?;
+        writer.write_u32::<Endian>(0)?;
+        writer.write_u16::<Endian>(self.body)?;
+        writer.write_i16::<Endian>(self.position.x as i16)?;
+        writer.write_i16::<Endian>(self.position.y as i16)?;
+        writer.write_i16::<Endian>(self.position.z as i16)?;
+        writer.write_u8(self.direction)?;
+        writer.write_u8(0)?;
+        writer.write_u32::<Endian>(0xffffffff)?;
+        writer.write_u32::<Endian>(0)?;
+        writer.write_u16::<Endian>(self.map_width)?;
+        writer.write_u16::<Endian>(self.map_height)?;
+        writer.write_zeros(6)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Ready;
+
+impl Packet for Ready {
+    fn packet_kind() -> u8 { 0x55 }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(1) }
+
+    fn decode(_client_version: ClientVersion, _payload: &[u8]) -> anyhow::Result<Self> {
+        Ok(Ready)
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _writer: &mut impl Write) -> anyhow::Result<()> {
         Ok(())
     }
 }

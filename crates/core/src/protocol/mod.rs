@@ -1,13 +1,14 @@
 use std::any::type_name;
 use std::fmt;
+use std::fmt::Debug;
 use std::io::Write;
 use std::mem::{MaybeUninit, size_of, transmute};
 use std::ops::Deref;
 use std::str::FromStr;
 
 use anyhow::anyhow;
+use byteorder::{ByteOrder, WriteBytesExt};
 pub use byteorder::BigEndian as Endian;
-use byteorder::ByteOrder;
 use once_cell::sync::OnceCell;
 use pretty_hex::PrettyHex;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
@@ -18,9 +19,11 @@ pub use client_version::{ClientFlags, ClientVersion, ExtendedClientVersion};
 pub use format::{PacketReadExt, PacketWriteExt};
 pub use login::*;
 
+use crate::protocol::compression::{HuffmanDecoder, HuffmanVecWriter};
+
 mod format;
 
-mod compression;
+pub mod compression;
 
 mod client_version;
 
@@ -43,10 +46,11 @@ struct PacketRegistration {
     fixed_length: fn(client_version: ClientVersion) -> Option<usize>,
     decode: fn(client_version: ClientVersion, payload: &[u8]) -> anyhow::Result<AnyPacket>,
     encode: fn(client_version: ClientVersion, writer: &mut dyn Write, ptr: *mut ()) -> anyhow::Result<()>,
+    debug: fn(ptr: *mut (), f: &mut fmt::Formatter<'_>) -> fmt::Result,
 }
 
 impl PacketRegistration {
-    pub fn for_type<T: Packet>() -> PacketRegistration {
+    pub fn for_type<T: Packet + Debug>() -> PacketRegistration {
         fn drop_packet<T: Packet>(ptr: *mut ()) {
             unsafe { std::ptr::drop_in_place(ptr as *mut T) }
         }
@@ -62,6 +66,11 @@ impl PacketRegistration {
             packet.encode(client_version, &mut writer)
         }
 
+        fn debug<T: Debug>(ptr: *mut (), f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            let packet = unsafe { &*(ptr as *const T) };
+            packet.fmt(f)
+        }
+
         PacketRegistration {
             packet_kind: T::packet_kind(),
             size: size_of::<T>(),
@@ -69,6 +78,7 @@ impl PacketRegistration {
             fixed_length: T::fixed_length,
             decode: decode_packet::<T>,
             encode: encode_packet::<T>,
+            debug: debug::<T>,
         }
     }
 }
@@ -99,6 +109,9 @@ fn packet_registry() -> &'static PacketRegistry {
             PacketRegistration::for_type::<CreateCharacterEnhanced>(),
             PacketRegistration::for_type::<DeleteCharacter>(),
             PacketRegistration::for_type::<SelectCharacter>(),
+            PacketRegistration::for_type::<ClientVersionRequest>(),
+            PacketRegistration::for_type::<EnterWorld>(),
+            PacketRegistration::for_type::<Ready>(),
         ].into_iter() {
             max_size = registration.size.max(max_size);
             let index = registration.packet_kind as usize;
@@ -169,6 +182,14 @@ impl AnyPacket {
 
     pub fn encode(&self, client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         (self.registration().encode)(client_version, writer, unsafe { transmute(&self.buffer) })
+    }
+}
+
+impl Debug for AnyPacket {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        unsafe {
+            (self.registration().debug)(transmute(&self.buffer), f)
+        }
     }
 }
 
@@ -246,9 +267,15 @@ pub struct Writer {
     writer: BufWriter<OwnedWriteHalf>,
     buffer: Vec<u8>,
     has_sent: bool,
+    compress: bool,
+    compress_buffer: Vec<u8>,
 }
 
 impl Writer {
+    pub fn enable_compression(&mut self) {
+        self.compress = true;
+    }
+
     pub async fn send_legacy_seed(&mut self, seed: u32) -> anyhow::Result<()> {
         if self.has_sent {
             return Err(anyhow!("Tried to send legacy hello after other packets"));
@@ -266,16 +293,37 @@ impl Writer {
         -> anyhow::Result<()> {
         self.has_sent = true;
 
-        if let Some(length) = T::fixed_length(client_version) {
-            self.buffer.reserve(length);
-            self.buffer.push(T::packet_kind());
-            packet.encode(client_version, &mut self.buffer)?;
-            assert_eq!(length, self.buffer.len(), "Fixed length packet wrote wrong size");
-        } else {
-            self.buffer.extend([T::packet_kind(), 0, 0]);
-            packet.encode(client_version, &mut self.buffer)?;
-            let packet_len = self.buffer.len() as u16;
-            Endian::write_u16(&mut self.buffer[1..3], packet_len);
+        match (T::fixed_length(client_version), self.compress) {
+            (Some(_), true) => {
+                let mut writer = HuffmanVecWriter::new(&mut self.buffer);
+                writer.write_u8(T::packet_kind())?;
+                packet.encode(client_version, &mut writer)?;
+                writer.finish();
+            }
+            (Some(length), false) => {
+                self.buffer.reserve(length);
+                self.buffer.push(T::packet_kind());
+                packet.encode(client_version, &mut self.buffer)?;
+                assert_eq!(length, self.buffer.len(), "Fixed length packet wrote wrong size");
+            }
+            (None, true) => {
+                self.compress_buffer.clear();
+                self.compress_buffer.reserve(4096);
+                self.compress_buffer.extend([T::packet_kind(), 0, 0]);
+                packet.encode(client_version, &mut self.compress_buffer)?;
+                let packet_len = self.compress_buffer.len() as u16;
+                Endian::write_u16(&mut self.compress_buffer[1..3], packet_len);
+                let mut writer = HuffmanVecWriter::new(&mut self.buffer);
+                writer.write(&self.compress_buffer)?;
+                writer.finish();
+                self.compress_buffer.clear();
+            }
+            (None, false) => {
+                self.buffer.extend([T::packet_kind(), 0, 0]);
+                packet.encode(client_version, &mut self.buffer)?;
+                let packet_len = self.buffer.len() as u16;
+                Endian::write_u16(&mut self.buffer[1..3], packet_len);
+            }
         }
 
         self.writer.write_all(&mut self.buffer).await?;
@@ -289,19 +337,38 @@ impl Writer {
         self.has_sent = true;
 
         let kind = packet.packet_kind();
-        if let Some(length) = packet.fixed_length(client_version) {
-            self.buffer.reserve(length);
-            self.buffer.push(kind);
-            packet.encode(client_version, &mut self.buffer)?;
-            assert_eq!(length, self.buffer.len(), "Fixed length packet wrote wrong size");
-        } else {
-            self.buffer.extend([kind, 0, 0]);
-            packet.encode(client_version, &mut self.buffer)?;
-            let packet_len = self.buffer.len() as u16;
-            Endian::write_u16(&mut self.buffer[1..3], packet_len);
+        match (packet.fixed_length(client_version), self.compress) {
+            (Some(_), true) => {
+                let mut writer = HuffmanVecWriter::new(&mut self.buffer);
+                writer.write_u8(kind)?;
+                packet.encode(client_version, &mut writer)?;
+                writer.finish();
+            }
+            (Some(length), false) => {
+                self.buffer.reserve(length);
+                self.buffer.push(kind);
+                packet.encode(client_version, &mut self.buffer)?;
+                assert_eq!(length, self.buffer.len(), "Fixed length packet wrote wrong size");
+            }
+            (None, true) => {
+                self.compress_buffer.clear();
+                self.compress_buffer.reserve(4096);
+                self.compress_buffer.extend([kind, 0, 0]);
+                packet.encode(client_version, &mut self.compress_buffer)?;
+                let packet_len = self.compress_buffer.len() as u16;
+                Endian::write_u16(&mut self.compress_buffer[1..3], packet_len);
+                let mut writer = HuffmanVecWriter::new(&mut self.buffer);
+                writer.write(&self.compress_buffer)?;
+                writer.finish();
+                self.compress_buffer.clear();
+            }
+            (None, false) => {
+                self.buffer.extend([kind, 0, 0]);
+                packet.encode(client_version, &mut self.buffer)?;
+                let packet_len = self.buffer.len() as u16;
+                Endian::write_u16(&mut self.buffer[1..3], packet_len);
+            }
         }
-
-        log::debug!("Sending {:?}", self.buffer.hex_dump());
 
         self.writer.write_all(&mut self.buffer).await?;
         self.buffer.clear();
@@ -320,5 +387,7 @@ pub fn new_io(stream: TcpStream, is_server: bool) -> (Reader, Writer) {
         writer: BufWriter::new(writer),
         buffer: Vec::with_capacity(4096),
         has_sent: is_server,
+        compress: false,
+        compress_buffer: Vec::new(),
     })
 }
