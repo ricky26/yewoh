@@ -2,9 +2,11 @@ use std::collections::HashSet;
 use std::net::SocketAddr;
 
 use bevy_ecs::prelude::*;
+use glam::IVec3;
+use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 
-use yewoh::protocol::AnyPacket;
+use yewoh::protocol::{AccountLogin, AnyPacket, CharacterList, GameServer, Packet, SelectGameServer, ServerList, StartingCity};
 
 pub struct NewConnection {
     pub address: SocketAddr,
@@ -53,11 +55,8 @@ impl Default for PlayerServer {
     }
 }
 
-pub struct PlayerClient {
-    packet_tx: mpsc::Sender<()>,
-}
-
-pub fn accept_new_clients(mut server: ResMut<PlayerServer>, mut commands: Commands) {
+pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<PlayerServer>,
+    mut commands: Commands) {
     while let Ok(new_connection) = server.new_connections.try_recv() {
         let entity = commands.spawn()
             .insert(RemoteAddress { address: new_connection.address })
@@ -67,9 +66,10 @@ pub fn accept_new_clients(mut server: ResMut<PlayerServer>, mut commands: Comman
         let mut rx = new_connection.packet_rx;
         let mut internal_tx = server.internal_tx.clone();
         let mut internal_close = server.internal_close_tx.clone();
-        tokio::spawn(async move {
+        runtime.spawn(async move {
             while let Some(packet) = rx.recv().await {
-                if internal_tx.send((entity, packet)).is_err() {
+                if let Err(err) = internal_tx.send((entity, packet)) {
+                    log::warn!("Error forwarding packet {err}");
                     return;
                 }
             }
@@ -80,5 +80,40 @@ pub fn accept_new_clients(mut server: ResMut<PlayerServer>, mut commands: Comman
 
     while let Ok(entity) = server.internal_close_rx.try_recv() {
         commands.entity(entity).despawn();
+    }
+}
+
+pub fn handle_packets(mut server: ResMut<PlayerServer>, connections: Query<(&PacketSender)>) {
+    while let Ok((entity, packet)) = server.packet_rx.try_recv() {
+        let sender = match connections.get(entity) {
+            Ok(x) => x,
+            _ => continue,
+        };
+
+        if let Some(account_login) = packet.downcast::<AccountLogin>() {
+            log::info!("New login attempt for {}", &account_login.username);
+            sender.packet_tx.send(ServerList {
+                system_info_flags: 0x5d,
+                game_servers: vec![
+                    GameServer {
+                        server_name: "My Server".into(),
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            }.into()).ok();
+        } else if let Some(game_server) = packet.downcast::<SelectGameServer>() {
+            sender.packet_tx.send(CharacterList {
+                characters: vec![None; 5],
+                cities: vec![StartingCity {
+                    index: 0,
+                    city: "My City".into(),
+                    building: "My Building".into(),
+                    location: IVec3::new(0, 1, 2),
+                    map_id: 0,
+                    description_id: 0,
+                }],
+            }.into()).ok();
+        }
     }
 }

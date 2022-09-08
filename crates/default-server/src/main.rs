@@ -40,13 +40,15 @@ fn main() -> anyhow::Result<()> {
     let mmap = unsafe { Mmap::map(&art_uop_file)? };
     let _uop = UopBuffer::try_from_backing(mmap)?;
 
-    let client_listener = rt.block_on(TcpListener::bind(args.client_bind))?;
+    let client_listener = rt.block_on(TcpListener::bind(&args.client_bind))?;
     let new_connections = accept_player_connections(client_listener);
 
     let mut app = App::new();
     app
         .add_plugin(ServerPlugin)
         .insert_resource(PlayerServer::new(new_connections));
+
+    info!("Listening for client connections on {}", &args.client_bind);
 
     loop {
         app.update();

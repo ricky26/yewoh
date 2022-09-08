@@ -1,38 +1,169 @@
+use std::io::SeekFrom::End;
 use std::io::Write;
 
 use anyhow::anyhow;
+use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
+use glam::IVec3;
 
 use crate::protocol::{PacketReadExt, PacketWriteExt};
 
 use super::{ClientFlags, ClientVersion, Endian, Packet};
 
 #[derive(Debug, Clone, Default)]
-pub struct RegionLogin {
-    pub username: String,
-    pub password: String,
+pub struct LegacySeed {
+    pub seed: u32,
 }
 
-impl Packet for RegionLogin {
+impl Packet for LegacySeed {
+    fn packet_kind() -> u8 { unreachable!() }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(4) }
+
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let seed = payload.read_u32::<Endian>()?;
+        Ok(Self { seed })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_u32::<Endian>(self.seed)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Seed {
+    pub seed: u32,
+    pub client_version: ClientVersion,
+}
+
+impl Packet for Seed {
+    fn packet_kind() -> u8 { 0xef }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(20) }
+
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let seed = payload.read_u32::<Endian>()?;
+        let major = payload.read_u32::<Endian>()? as u8;
+        let minor = payload.read_u32::<Endian>()? as u8;
+        let patch = payload.read_u32::<Endian>()? as u8;
+        let build = payload.read_u32::<Endian>()? as u8;
+        Ok(Self {
+            seed,
+            client_version: ClientVersion::new(major, minor, patch, build),
+        })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_u32::<Endian>(self.seed)?;
+        writer.write_u32::<Endian>(self.client_version.major as u32)?;
+        writer.write_u32::<Endian>(self.client_version.minor as u32)?;
+        writer.write_u32::<Endian>(self.client_version.patch as u32)?;
+        writer.write_u32::<Endian>(self.client_version.build as u32)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AccountLogin {
+    pub username: String,
+    pub password: String,
+    pub next_login_key: u8,
+}
+
+impl Default for AccountLogin {
+    fn default() -> Self {
+        Self {
+            username: Default::default(),
+            password: Default::default(),
+            next_login_key: 0xff,
+        }
+    }
+}
+
+impl Packet for AccountLogin {
     fn packet_kind() -> u8 { 0x80 }
 
-    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(0x3d) }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(61) }
 
     fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let username = payload.read_str_block(30)?;
         let password = payload.read_str_block(30)?;
-        payload.skip(1)?;
+        let next_login_key = payload.read_u8()?;
 
-        Ok(RegionLogin {
+        Ok(AccountLogin {
             username,
             password,
+            next_login_key,
         })
     }
 
     fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_str_block(&self.username, 30)?;
         writer.write_str_block(&self.password, 30)?;
-        writer.write_u8(0xff)?;
+        writer.write_u8(self.next_login_key)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct GameServer {
+    pub server_index: u16,
+    pub server_name: String,
+    pub load_percent: u8,
+    pub timezone: u8,
+    pub ip: u32,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ServerList {
+    pub system_info_flags: u8,
+    pub game_servers: Vec<GameServer>,
+}
+
+impl Packet for ServerList {
+    fn packet_kind() -> u8 { 0xa8 }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
+
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let system_info_flags = payload.read_u8()?;
+        let game_server_count = payload.read_u16::<Endian>()? as usize;
+        let mut game_servers = Vec::with_capacity(game_server_count);
+
+        for _ in 0..game_server_count {
+            let server_index = payload.read_u16::<Endian>()?;
+            let server_name = payload.read_str_block(32)?;
+            let load_percent = payload.read_u8()?;
+            let timezone = payload.read_u8()?;
+            let ip = payload.read_u32::<Endian>()?;
+            game_servers.push(GameServer {
+                server_index,
+                server_name,
+                load_percent,
+                timezone,
+                ip,
+            });
+        }
+
+        Ok(Self {
+            system_info_flags,
+            game_servers,
+        })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_u8(self.system_info_flags)?;
+        writer.write_u16::<Endian>(self.game_servers.len() as u16)?;
+
+        for server in self.game_servers.iter() {
+            writer.write_u16::<Endian>(server.server_index)?;
+            writer.write_str_block(&server.server_name, 32)?;
+            writer.write_u8(server.load_percent)?;
+            writer.write_u8(server.timezone)?;
+            writer.write_u32::<Endian>(server.ip)?;
+        }
+
         Ok(())
     }
 }
@@ -58,6 +189,156 @@ impl Packet for SelectGameServer {
     fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u8(0)?;
         writer.write_u8(self.server_id)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct CharacterFromList {
+    pub name: String,
+    pub password: String,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct StartingCity {
+    pub index: u8,
+    pub city: String,
+    pub building: String,
+    pub location: IVec3,
+    pub map_id: u32,
+    pub description_id: u32,
+}
+
+bitflags! {
+    pub struct CharacterListFlags : u32 {
+        const SINGLE_CHARACTER_SLOT = 0x4;
+        const SLOT_LIMIT = 0x10;
+        const SIXTH_CHARACTER_SLOT = 0x40;
+        const SEVENTH_CHARACTER_SLOT = 0x1000;
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct CharacterList {
+    pub characters: Vec<Option<CharacterFromList>>,
+    pub cities: Vec<StartingCity>,
+}
+
+impl CharacterList {
+    const NEW_CHARACTER_LIST: ClientVersion = ClientVersion::new(7, 0, 13, 0);
+}
+
+impl Packet for CharacterList {
+    fn packet_kind() -> u8 { 0xa9 }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
+
+    fn decode(client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let new_character_list = client_version >= Self::NEW_CHARACTER_LIST;
+        let text_length = if new_character_list { 32 } else { 31 };
+
+        let slot_count = payload.read_u8()? as usize;
+        let mut characters = Vec::with_capacity(slot_count);
+
+        for _ in 0..slot_count {
+            let name = payload.read_str_block(30)?;
+            let password = payload.read_str_block(30)?;
+
+            characters.push(if !name.is_empty() {
+                Some(CharacterFromList {
+                    name,
+                    password,
+                })
+            } else {
+                None
+            });
+        }
+
+        let city_count = payload.read_u8()? as usize;
+        let mut cities = Vec::with_capacity(city_count);
+
+        for _ in 0..city_count {
+            let index = payload.read_u8()?;
+            let city = payload.read_str_block(text_length)?;
+            let building = payload.read_str_block(text_length)?;
+
+            let (location, map_id, description_id) = if new_character_list {
+                let x = payload.read_i32::<Endian>()?;
+                let y = payload.read_i32::<Endian>()?;
+                let z = payload.read_i32::<Endian>()?;
+                let map_id = payload.read_u32::<Endian>()?;
+                let description_id = payload.read_u32::<Endian>()?;
+                payload.skip(4)?;
+                (IVec3::new(x, y, z), map_id, description_id)
+            } else {
+                (IVec3::new(0, 0, 0), 0, 0)
+            };
+
+            cities.push(StartingCity {
+                index,
+                city,
+                building,
+                location,
+                map_id,
+                description_id,
+            });
+        }
+
+        Ok(CharacterList{
+            characters,
+            cities,
+        })
+    }
+
+    fn encode(&self, client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+        let new_character_list = client_version >= Self::NEW_CHARACTER_LIST;
+        let text_length = if new_character_list { 32 } else { 31 };
+
+        writer.write_u8(self.characters.len() as u8)?;
+        for character in self.characters.iter() {
+            if let Some(character) = character {
+                writer.write_str_block(&character.name, 30)?;
+                writer.write_str_block(&character.password, 30)?;
+            } else {
+                writer.write_zeros(60)?;
+            }
+        }
+
+        writer.write_u8(self.cities.len() as u8)?;
+        for city in self.cities.iter() {
+            writer.write_u8(city.index)?;
+            writer.write_str_block(&city.city, text_length)?;
+            writer.write_str_block(&city.building, text_length)?;
+
+            if new_character_list {
+                writer.write_i32::<Endian>(city.location.x)?;
+                writer.write_i32::<Endian>(city.location.y)?;
+                writer.write_i32::<Endian>(city.location.z)?;
+                writer.write_u32::<Endian>(city.map_id)?;
+                writer.write_u32::<Endian>(city.description_id)?;
+                writer.write_u32::<Endian>(0)?;
+            }
+        }
+
+        let mut flags = CharacterListFlags::empty();
+
+        if self.characters.len() > 6 {
+            flags |= CharacterListFlags::SEVENTH_CHARACTER_SLOT;
+        }
+
+        if self.characters.len() > 5 {
+            flags |= CharacterListFlags::SIXTH_CHARACTER_SLOT;
+        }
+
+        if self.characters.len() == 1 {
+            flags |= CharacterListFlags::SLOT_LIMIT
+                | CharacterListFlags::SINGLE_CHARACTER_SLOT;
+        }
+
+        writer.write_u32::<Endian>(flags.bits())?;
+        if new_character_list {
+            writer.write_u16::<Endian>(0xffff)?;
+        }
+
         Ok(())
     }
 }

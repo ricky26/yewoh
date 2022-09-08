@@ -19,10 +19,10 @@ pub fn accept_player_connections(listener: TcpListener) -> mpsc::UnboundedReceiv
                     let (mut received_tx, packet_rx) = mpsc::unbounded_channel();
 
                     spawn(async move {
-                        let mut buffer = Vec::new();
+                        let client_version = ClientVersion::default();
 
                         loop {
-                            match reader.receive(&mut buffer).await {
+                            match reader.receive(client_version).await {
                                 Ok(packet) => received_tx.send(packet).ok(),
                                 Err(err) => {
                                     warn!("error receiving packet: {err}");
@@ -34,7 +34,7 @@ pub fn accept_player_connections(listener: TcpListener) -> mpsc::UnboundedReceiv
 
                     spawn(async move {
                         while let Some(packet) = to_send_rx.recv().await {
-                            if let Err(err) =  writer.send_any(ClientVersion::default(), packet).await {
+                            if let Err(err) =  writer.send_any(ClientVersion::default(), &packet).await {
                                 warn!("failed to send packet: {err}");
                                 break;
                             }
