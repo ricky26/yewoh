@@ -247,6 +247,7 @@ pub struct UpsertLocalPlayer {
     pub id: EntityId,
     pub body_type: u16,
     pub hue: u16,
+    pub server_id: u16,
     pub flags: EntityFlags,
     pub position: UVec3,
     pub direction: Direction,
@@ -259,16 +260,19 @@ impl Packet for UpsertLocalPlayer {
     fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
         let body_type = payload.read_u16::<Endian>()?;
+        payload.skip(1)?;
         let hue = payload.read_u16::<Endian>()?;
         let flags = EntityFlags::from_bits_truncate(payload.read_u8()?);
         let x = payload.read_u16::<Endian>()? as u32;
         let y = payload.read_u16::<Endian>()? as u32;
+        let server_id = payload.read_u16::<Endian>()?;
         let direction = payload.read_direction()?;
         let z = payload.read_u8()? as u32;
         Ok(Self {
             id,
             body_type,
             hue,
+            server_id,
             flags,
             position: UVec3::new(x, y, z),
             direction
@@ -278,10 +282,12 @@ impl Packet for UpsertLocalPlayer {
     fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.id)?;
         writer.write_u16::<Endian>(self.body_type)?;
+        writer.write_u8(0)?;
         writer.write_u16::<Endian>(self.hue)?;
         writer.write_u8(self.flags.bits())?;
         writer.write_u16::<Endian>(self.position.x as u16)?;
         writer.write_u16::<Endian>(self.position.y as u16)?;
+        writer.write_u16::<Endian>(self.server_id)?;
         writer.write_direction(self.direction)?;
         writer.write_u8(self.position.z as u8)?;
         Ok(())

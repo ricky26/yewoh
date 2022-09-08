@@ -222,14 +222,15 @@ pub fn handle_packets(mut server: ResMut<PlayerServer>, mut clients: Query<&mut 
             client.send_packet(ExtendedCommand::ChangeMap(0).into());
             client.send_packet(ChangeSeason { season: 0, play_sound: true }.into());
 
-            /*client.send_packet(UpsertLocalPlayer {
+            client.send_packet(UpsertLocalPlayer {
                 id: entity_id,
                 body_type,
+                server_id: 0,
                 hue,
                 flags: EntityFlags::empty(),
                 position,
                 direction,
-            }.into());*/
+            }.into());
             client.send_packet(UpsertEntityCharacter{
                 id: entity_id,
                 body_type,
