@@ -3,9 +3,9 @@ use std::io::Write;
 use anyhow::anyhow;
 use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use glam::UVec3;
-use crate::Direction;
+use glam::{UVec2, UVec3};
 
+use crate::{Direction, EntityId};
 use crate::protocol::{PacketReadExt, PacketWriteExt};
 
 use super::{ClientFlags, ClientVersion, Endian, Packet};
@@ -310,7 +310,7 @@ pub struct StartingCity {
     pub index: u8,
     pub city: String,
     pub building: String,
-    pub location: UVec3,
+    pub position: UVec3,
     pub map_id: u32,
     pub description_id: u32,
 }
@@ -383,7 +383,7 @@ impl Packet for CharacterList {
                 index,
                 city,
                 building,
-                location,
+                position: location,
                 map_id,
                 description_id,
             });
@@ -416,9 +416,9 @@ impl Packet for CharacterList {
             writer.write_str_block(&city.building, text_length)?;
 
             if new_character_list {
-                writer.write_u32::<Endian>(city.location.x)?;
-                writer.write_u32::<Endian>(city.location.y)?;
-                writer.write_u32::<Endian>(city.location.z)?;
+                writer.write_u32::<Endian>(city.position.x)?;
+                writer.write_u32::<Endian>(city.position.y)?;
+                writer.write_u32::<Endian>(city.position.z)?;
                 writer.write_u32::<Endian>(city.map_id)?;
                 writer.write_u32::<Endian>(city.description_id)?;
                 writer.write_u32::<Endian>(0)?;
@@ -739,12 +739,11 @@ impl Packet for ClientVersionRequest {
 
 #[derive(Debug, Clone, Default)]
 pub struct BeginEnterWorld {
-    pub mobile_id: u32,
-    pub body: u16,
+    pub entity_id: EntityId,
+    pub body_type: u16,
     pub position: UVec3,
     pub direction: Direction,
-    pub map_width: u16,
-    pub map_height: u16,
+    pub map_size: UVec2,
 }
 
 impl Packet for BeginEnterWorld {
@@ -753,7 +752,7 @@ impl Packet for BeginEnterWorld {
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(37) }
 
     fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
-        let mobile_id = payload.read_u32::<Endian>()?;
+        let entity_id = payload.read_entity_id()?;
         payload.skip(4)?;
         let body = payload.read_u16::<Endian>()?;
         let x = payload.read_u16::<Endian>()? as u32;
@@ -762,22 +761,21 @@ impl Packet for BeginEnterWorld {
         let direction = Direction::from_u8(payload.read_u8()?)
             .ok_or_else(|| anyhow!("Invalid direction"))?;
         payload.skip(9)?;
-        let map_width = payload.read_u16::<Endian>()?;
-        let map_height = payload.read_u16::<Endian>()?;
+        let map_width = payload.read_u16::<Endian>()? as u32;
+        let map_height = payload.read_u16::<Endian>()? as u32;
         Ok(BeginEnterWorld {
-            mobile_id,
-            body,
+            entity_id,
+            body_type: body,
             position: UVec3::new(x, y, z),
             direction,
-            map_width,
-            map_height,
+            map_size: UVec2::new(map_width, map_height),
         })
     }
 
     fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
-        writer.write_u32::<Endian>(self.mobile_id)?;
+        writer.write_entity_id(self.entity_id)?;
         writer.write_u32::<Endian>(0)?;
-        writer.write_u16::<Endian>(self.body)?;
+        writer.write_u16::<Endian>(self.body_type)?;
         writer.write_i16::<Endian>(self.position.x as i16)?;
         writer.write_i16::<Endian>(self.position.y as i16)?;
         writer.write_i16::<Endian>(self.position.z as i16)?;
@@ -785,8 +783,8 @@ impl Packet for BeginEnterWorld {
         writer.write_u8(0)?;
         writer.write_u32::<Endian>(0xffffffff)?;
         writer.write_u32::<Endian>(0)?;
-        writer.write_u16::<Endian>(self.map_width)?;
-        writer.write_u16::<Endian>(self.map_height)?;
+        writer.write_u16::<Endian>(self.map_size.x as u16)?;
+        writer.write_u16::<Endian>(self.map_size.y as u16)?;
         writer.write_zeros(6)?;
         Ok(())
     }
@@ -829,7 +827,7 @@ impl Packet for ShowPublicHouses {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Ping;
 
 impl Packet for Ping {
@@ -841,6 +839,46 @@ impl Packet for Ping {
     }
 
     fn encode(&self, _client_version: ClientVersion, _writer: &mut impl Write) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Logout;
+
+impl Packet for Logout {
+    fn packet_kind() -> u8 { 0x01 }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(5) }
+
+    fn decode(_client_version: ClientVersion, _payload: &[u8]) -> anyhow::Result<Self> {
+        Ok(Logout)
+    }
+
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_u32::<Endian>(0xffffffff)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct WarMode {
+    pub war: bool,
+}
+
+impl Packet for WarMode {
+    fn packet_kind() -> u8 { 0x72 }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(5) }
+
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let war = payload.read_u8()? != 0;
+        payload.skip(3)?;
+        Ok(Self { war })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_u8(if self.war { 1 } else { 0 })?;
+        writer.write_all(&[0, 0x32, 0])?;
         Ok(())
     }
 }

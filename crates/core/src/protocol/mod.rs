@@ -18,9 +18,10 @@ pub use login::*;
 pub use map::*;
 pub use extended::*;
 pub use input::*;
-pub use mobile::*;
+pub use entity::*;
 
 use crate::protocol::compression::{HuffmanVecWriter};
+use crate::protocol::sound::PlayMusic;
 use crate::protocol::ui::OpenChatWindow;
 
 mod format;
@@ -37,9 +38,11 @@ mod extended;
 
 mod input;
 
-mod mobile;
+mod entity;
 
 mod ui;
+
+mod sound;
 
 pub trait Packet where Self: Sized {
     fn packet_kind() -> u8;
@@ -98,7 +101,7 @@ struct PacketRegistry {
     registrations: Vec<Option<PacketRegistration>>,
 }
 
-const MAX_PACKET_STRUCT_SIZE: usize = 64;
+const MAX_PACKET_STRUCT_SIZE: usize = 128;
 static PACKET_REGISTRY: OnceCell<PacketRegistry> = OnceCell::new();
 
 fn packet_registry() -> &'static PacketRegistry {
@@ -127,24 +130,38 @@ fn packet_registry() -> &'static PacketRegistry {
             PacketRegistration::for_type::<EndEnterWorld>(),
             PacketRegistration::for_type::<ShowPublicHouses>(),
             PacketRegistration::for_type::<Ping>(),
+            PacketRegistration::for_type::<Logout>(),
+            PacketRegistration::for_type::<WarMode>(),
 
             // Extended
             PacketRegistration::for_type::<ExtendedCommand>(),
 
             // Input
+            PacketRegistration::for_type::<Move>(),
+            PacketRegistration::for_type::<MoveConfirm>(),
+            PacketRegistration::for_type::<MoveReject>(),
             PacketRegistration::for_type::<SingleClick>(),
             PacketRegistration::for_type::<DoubleClick>(),
 
             // UI
             PacketRegistration::for_type::<OpenChatWindow>(),
 
+            // Sound
+            PacketRegistration::for_type::<PlayMusic>(),
+
             // Map
             PacketRegistration::for_type::<SetTime>(),
             PacketRegistration::for_type::<ChangeSeason>(),
             PacketRegistration::for_type::<ViewRange>(),
 
-            // Mobile
-            PacketRegistration::for_type::<MobileRequest>(),
+            // Entity
+            PacketRegistration::for_type::<EntityRequest>(),
+            PacketRegistration::for_type::<UpsertEntityLegacy>(),
+            PacketRegistration::for_type::<UpsertEntity>(),
+            PacketRegistration::for_type::<DeleteEntity>(),
+            PacketRegistration::for_type::<UpsertLocalPlayer>(),
+            PacketRegistration::for_type::<UpsertEntityCharacter>(),
+            PacketRegistration::for_type::<UpsertEntityStats>(),
         ].into_iter() {
             max_size = registration.size.max(max_size);
             let index = registration.packet_kind as usize;

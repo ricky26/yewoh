@@ -2,12 +2,12 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 
 use bevy_ecs::prelude::*;
-use glam::UVec3;
+use glam::{UVec2, UVec3};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
-use yewoh::Direction;
+use yewoh::{Direction, EntityId, Notoriety};
 
-use yewoh::protocol::{AccountLogin, AnyPacket, CharacterList, ClientVersion, ClientVersionRequest, CreateCharacterEnhanced, BeginEnterWorld, FeatureFlags, GameServer, GameServerLogin, Reader, EndEnterWorld, Seed, SelectGameServer, ServerList, StartingCity, SupportedFeatures, SwitchServer, Writer, ExtendedCommand, ChangeSeason, SetTime, ExtendedClientVersion};
+use yewoh::protocol::{AccountLogin, AnyPacket, CharacterList, ClientVersion, ClientVersionRequest, CreateCharacterEnhanced, BeginEnterWorld, FeatureFlags, GameServer, GameServerLogin, Reader, EndEnterWorld, Seed, SelectGameServer, ServerList, StartingCity, SupportedFeatures, SwitchServer, Writer, ExtendedCommand, ChangeSeason, SetTime, ExtendedClientVersion, UpsertLocalPlayer, EntityFlags, UpsertEntityCharacter, UpsertEntityStats, Move, MoveConfirm};
 
 pub struct NewConnection {
     pub address: SocketAddr,
@@ -147,6 +147,12 @@ pub fn handle_packets(mut server: ResMut<PlayerServer>, mut clients: Query<&mut 
 
         log::debug!("IN: {:?}", packet);
 
+        let entity_id = EntityId::from_u32(1337);
+        let position = UVec3::new(500, 2000, 0);
+        let direction = Direction::North;
+        let body_type = 0x25e;
+        let hue = 120;
+
         if let Some(seed) = packet.downcast::<Seed>() {
             client.seed = seed.seed;
             client.client_version = seed.client_version;
@@ -169,7 +175,7 @@ pub fn handle_packets(mut server: ResMut<PlayerServer>, mut clients: Query<&mut 
                 port: 2593,
                 token: 7,
             }.into());
-        } else if let Some(game_login) = packet.downcast::<GameServerLogin>() {
+        } else if let Some(_game_login) = packet.downcast::<GameServerLogin>() {
             client.enable_compression();
 
             // HACK: assume new client for now
@@ -200,22 +206,50 @@ pub fn handle_packets(mut server: ResMut<PlayerServer>, mut clients: Query<&mut 
                     index: 0,
                     city: "My City".into(),
                     building: "My Building".into(),
-                    location: UVec3::new(0, 1, 2),
+                    position: UVec3::new(0, 1, 2),
                     map_id: 0,
                     description_id: 0,
                 }],
             }.into());
         } else if let Some(_create_character) = packet.downcast::<CreateCharacterEnhanced>() {
             client.send_packet(BeginEnterWorld {
-                mobile_id: 1234,
-                body: 12,
-                position: Default::default(),
-                direction: Direction::West,
-                map_width: 1000,
-                map_height: 1000,
+                entity_id,
+                body_type,
+                position,
+                direction,
+                map_size: UVec2::new(5000, 5000),
             }.into());
             client.send_packet(ExtendedCommand::ChangeMap(0).into());
             client.send_packet(ChangeSeason { season: 0, play_sound: true }.into());
+
+            /*client.send_packet(UpsertLocalPlayer {
+                id: entity_id,
+                body_type,
+                hue,
+                flags: EntityFlags::empty(),
+                position,
+                direction,
+            }.into());*/
+            client.send_packet(UpsertEntityCharacter{
+                id: entity_id,
+                body_type,
+                position,
+                direction,
+                hue,
+                flags: EntityFlags::empty(),
+                notoriety: Notoriety::Innocent,
+                children: vec![]
+            }.into());
+            client.send_packet(UpsertEntityStats {
+                id: entity_id,
+                name: "CoolGuy".into(),
+                max_info_level: 100,
+                race_and_gender: 1,
+                hp: 100,
+                max_hp: 120,
+                ..Default::default()
+            }.into());
+
             client.send_packet(EndEnterWorld.into());
 
             client.send_packet(SetTime {
@@ -230,6 +264,11 @@ pub fn handle_packets(mut server: ResMut<PlayerServer>, mut clients: Query<&mut 
                     log::warn!("Unable to parse client version '{}': {err}", &version_request.version);
                 }
             }
+        } else if let Some(request) = packet.downcast::<Move>() {
+            client.send_packet(MoveConfirm {
+                sequence: request.sequence,
+                notoriety: Notoriety::Innocent,
+            }.into());
         }
     }
 }

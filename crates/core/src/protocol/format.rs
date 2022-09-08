@@ -1,6 +1,11 @@
-use std::io::{Write};
+use std::io::Write;
+
 use anyhow::anyhow;
-use byteorder::{WriteBytesExt};
+use byteorder::{ReadBytesExt, WriteBytesExt};
+
+use crate::{Direction, EntityId};
+
+use super::Endian;
 
 static ZEROS: [u8; 1024] = [0u8; 1024];
 
@@ -8,6 +13,8 @@ pub trait PacketWriteExt {
     fn write_zeros(&mut self, count: usize) -> anyhow::Result<()>;
     fn write_str_block(&mut self, src: &str, block_size: usize) -> anyhow::Result<()>;
     fn write_str_nul(&mut self, src: &str) -> anyhow::Result<()>;
+    fn write_entity_id(&mut self, src: EntityId) -> anyhow::Result<()>;
+    fn write_direction(&mut self, src: Direction) -> anyhow::Result<()>;
 }
 
 impl<T: Write> PacketWriteExt for T {
@@ -35,12 +42,22 @@ impl<T: Write> PacketWriteExt for T {
         self.write_u8(0)?;
         Ok(())
     }
+
+    fn write_entity_id(&mut self, src: EntityId) -> anyhow::Result<()> {
+        Ok(self.write_u32::<Endian>(src.as_u32())?)
+    }
+
+    fn write_direction(&mut self, src: Direction) -> anyhow::Result<()> {
+        Ok(self.write_u8(src as u8)?)
+    }
 }
 
 pub trait PacketReadExt {
     fn skip(&mut self, count: usize) -> anyhow::Result<()>;
     fn read_str_block(&mut self, block_size: usize) -> anyhow::Result<String>;
     fn read_str_nul(&mut self) -> anyhow::Result<String>;
+    fn read_entity_id(&mut self) -> anyhow::Result<EntityId>;
+    fn read_direction(&mut self) -> anyhow::Result<Direction>;
 }
 
 impl PacketReadExt for &[u8] {
@@ -76,6 +93,14 @@ impl PacketReadExt for &[u8] {
         } else {
             Err(anyhow!("unexpected EOF"))
         }
+    }
+
+    fn read_entity_id(&mut self) -> anyhow::Result<EntityId> {
+        Ok(EntityId::from_u32(self.read_u32::<Endian>()?))
+    }
+
+    fn read_direction(&mut self) -> anyhow::Result<Direction> {
+        Ok(Direction::from_u8(self.read_u8()?).ok_or_else(|| anyhow!("invalid direction"))?)
     }
 }
 
