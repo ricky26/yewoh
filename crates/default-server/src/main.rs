@@ -2,6 +2,7 @@ use std::fs::File;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
+use actix_web::{HttpServer, web};
 
 use anyhow::anyhow;
 use bevy_app::App;
@@ -14,11 +15,11 @@ use tokio::sync::mpsc;
 
 use yewoh::assets::uop::UopBuffer;
 use yewoh_default_game::DefaultGamePlugin;
-use yewoh_server::{accept_player_connections, listen_for_lobby};
+use yewoh_server::game_server::listen_for_game;
+use yewoh_server::http::HttpApi;
+use yewoh_server::lobby::{listen_for_lobby, LocalLobby};
 use yewoh_server::world::client::PlayerServer;
 use yewoh_server::world::ServerPlugin;
-
-mod lobby;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
@@ -74,9 +75,9 @@ fn main() -> anyhow::Result<()> {
         .ok_or_else(|| anyhow!("couldn't resolve {}", &args.advertise_address))?;
 
     let game_port = SocketAddr::from_str(&args.game_bind)?.port();
-    let (tx, _) = mpsc::unbounded_channel();
-    let lobby = lobby::LocalLobby::new(
-        args.server_display_name, external_ip, game_port, 0, tx);
+    let (new_session_requests_tx, new_session_requests) = mpsc::unbounded_channel();
+    let lobby = LocalLobby::new(
+        args.server_display_name, external_ip, game_port, 0, new_session_requests_tx);
 
     let (lobby_listener, game_listener) = rt.block_on(join(
         TcpListener::bind(&args.lobby_bind),
@@ -84,14 +85,25 @@ fn main() -> anyhow::Result<()> {
     ));
 
     let lobby_listener = lobby_listener?;
+    let game_listener = game_listener?;
+
     let lobby_handle = rt.spawn(listen_for_lobby(lobby_listener, move || lobby.clone()));
-    let new_connections = accept_player_connections(game_listener?);
+
+    let (new_session_tx, new_session_rx) = mpsc::unbounded_channel();
+    let game_handle = rt.spawn(listen_for_game(game_listener, new_session_tx));
+
+    let http_server_handle = rt.spawn(HttpServer::new(|| {
+        actix_web::App::new()
+            .service(web::scope("/api").service(HttpApi::new()))
+    })
+        .bind(&args.http_bind)?
+        .run());
 
     let mut app = App::new();
     app
         .add_plugin(ServerPlugin)
         .add_plugin(DefaultGamePlugin)
-        .insert_resource(PlayerServer::new(new_connections));
+        .insert_resource(PlayerServer::new(new_session_requests, new_session_rx));
 
     info!("Listening for http connections on {}", &args.http_bind);
     info!("Listening for lobby connections on {}", &args.lobby_bind);
@@ -100,9 +112,19 @@ fn main() -> anyhow::Result<()> {
     loop {
         app.update();
 
+        if game_handle.is_finished() {
+            rt.block_on(game_handle)??;
+            return Err(anyhow!("failed to serve game connections"));
+        }
+
         if lobby_handle.is_finished() {
-            rt.block_on(lobby_handle)?;
+            rt.block_on(lobby_handle)??;
             return Err(anyhow!("failed to serve lobby"));
+        }
+
+        if http_server_handle.is_finished() {
+            rt.block_on(http_server_handle)??;
+            return Err(anyhow!("failed to serve http API"));
         }
     }
 }

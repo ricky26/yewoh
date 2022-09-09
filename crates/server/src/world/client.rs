@@ -1,21 +1,16 @@
 use std::collections::HashMap;
-use std::net::{Ipv4Addr, SocketAddr};
-use std::str::FromStr;
+use std::net::SocketAddr;
 
 use bevy_ecs::prelude::*;
 use glam::{UVec2, UVec3};
+use log::{info, warn};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 
 use yewoh::{Direction, EntityId, Notoriety};
-use yewoh::protocol::{
-    AccountLogin, AnyPacket, BeginEnterWorld, ChangeSeason, CharacterList, ClientVersion,
-    ClientVersionRequest, CreateCharacterEnhanced, EndEnterWorld, EntityFlags,
-    ExtendedClientVersion, ExtendedCommand, FeatureFlags, GameServer, GameServerLogin, Move,
-    MoveConfirm, Reader, Seed, SelectGameServer, ServerList, SetTime, StartingCity,
-    SupportedFeatures, SwitchServer, UpsertEntityCharacter, UpsertEntityStats, UpsertLocalPlayer,
-    Writer,
-};
+use yewoh::protocol::{AnyPacket, BeginEnterWorld, ChangeSeason, CharacterList, ClientVersion, ClientVersionRequest, CreateCharacterEnhanced, EndEnterWorld, EntityFlags, ExtendedCommand, FeatureFlags, Move, MoveConfirm, Reader, SetTime, StartingCity, SupportedFeatures, UpsertEntityCharacter, UpsertEntityStats, UpsertLocalPlayer, Writer};
+use crate::game_server::NewSessionAttempt;
+use crate::lobby::{NewSession, NewSessionRequest, SessionAllocator};
 
 pub struct NewConnection {
     pub address: SocketAddr,
@@ -38,7 +33,8 @@ pub struct ClientState {
     address: SocketAddr,
     client_version: ClientVersion,
     seed: u32,
-    owns: Vec<Entity>,
+    primary_entity: Option<Entity>,
+    in_world: bool,
     tx: mpsc::UnboundedSender<WriterAction>,
 }
 
@@ -54,10 +50,14 @@ impl ClientState {
 }
 
 pub struct PlayerServer {
-    new_connections: mpsc::UnboundedReceiver<NewConnection>,
-    packet_rx: mpsc::UnboundedReceiver<(Entity, AnyPacket)>,
+    new_session_requests: mpsc::UnboundedReceiver<NewSessionRequest>,
+    new_session_attempts: mpsc::UnboundedReceiver<NewSessionAttempt>,
 
-    internal_tx: mpsc::UnboundedSender<(Entity, AnyPacket)>,
+    session_allocator: SessionAllocator,
+
+    packet_rx: mpsc::UnboundedReceiver<(Entity, AnyPacket)>,
+    packet_tx: mpsc::UnboundedSender<(Entity, AnyPacket)>,
+
     internal_close_tx: mpsc::UnboundedSender<Entity>,
     internal_close_rx: mpsc::UnboundedReceiver<Entity>,
 
@@ -65,14 +65,19 @@ pub struct PlayerServer {
 }
 
 impl PlayerServer {
-    pub fn new(new_connections: mpsc::UnboundedReceiver<NewConnection>) -> PlayerServer {
+    pub fn new(
+        new_session_requests: mpsc::UnboundedReceiver<NewSessionRequest>,
+        new_sessions: mpsc::UnboundedReceiver<NewSessionAttempt>,
+    ) -> PlayerServer {
         let (internal_tx, packet_rx) = mpsc::unbounded_channel();
         let (internal_close_tx, internal_close_rx) = mpsc::unbounded_channel();
 
         Self {
-            new_connections,
+            new_session_requests,
+            new_session_attempts: new_sessions,
+            session_allocator: SessionAllocator::new(),
             packet_rx,
-            internal_tx,
+            packet_tx: internal_tx,
             internal_close_tx,
             internal_close_rx,
             clients: HashMap::new(),
@@ -92,25 +97,40 @@ impl PlayerServer {
     }
 }
 
-impl Default for PlayerServer {
-    fn default() -> Self {
-        let (_, rx) = mpsc::unbounded_channel();
-        PlayerServer::new(rx)
-    }
-}
-
 pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<PlayerServer>,
     connections: Query<&NetClient>, mut commands: Commands) {
-    while let Ok(new_connection) = server.new_connections.try_recv() {
+    while let Ok(new_session_request) = server.new_session_requests.try_recv() {
+        server.session_allocator.allocate_session(new_session_request);
+    }
+
+    while let Ok(session_attempt) = server.new_session_attempts.try_recv() {
+        let new_session = match server.session_allocator.start_session(session_attempt) {
+            Ok(x) => x,
+            Err(err) => {
+                warn!("Failed to start session: {err}");
+                continue;
+            }
+        };
+
+        let NewSession {
+            address,
+            mut reader,
+            mut writer,
+            username,
+            seed,
+            client_version,
+            ..
+        } = new_session;
         let (tx, mut rx) = mpsc::unbounded_channel();
 
-        let mut writer = new_connection.writer;
+        info!("New game session from {} for {} (version {})", &address, &username, client_version);
+
         runtime.spawn(async move {
             while let Some(action) = rx.recv().await {
                 match action {
                     WriterAction::Send(client_version, packet) => {
                         if let Err(err) = writer.send_any(client_version, &packet).await {
-                            log::warn!("Error sending packet {err}");
+                            warn!("Error sending packet {err}");
                         }
                     }
                     WriterAction::EnableCompression => writer.enable_compression(),
@@ -118,42 +138,34 @@ pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<PlayerServer>
             }
         });
 
-        log::info!("New connection from {}", new_connection.address);
-
         let entity = commands.spawn()
-            .insert(NetClient {
-                address: new_connection.address,
-            })
+            .insert(NetClient { address })
             .id();
         let client = ClientState {
-            address: new_connection.address,
-            client_version: Default::default(),
-            seed: 0,
-            owns: vec![],
+            address,
+            client_version,
+            seed,
+            primary_entity: None,
+            in_world: false,
             tx,
         };
         server.clients.insert(entity, client);
 
-        let mut reader = new_connection.reader;
-        let internal_tx = server.internal_tx.clone();
+        let internal_tx = server.packet_tx.clone();
         let internal_close = server.internal_close_tx.clone();
-        runtime.spawn(async move {
-            let mut client_version = ClientVersion::new(0, 0, 0, 0);
+        let client = server.clients.get_mut(&entity).unwrap();
 
+        runtime.spawn(async move {
             loop {
                 match reader.recv(client_version).await {
                     Ok(packet) => {
-                        if let Some(seed) = packet.downcast::<Seed>() {
-                            client_version = seed.client_version;
-                        }
-
                         if let Err(err) = internal_tx.send((entity, packet)) {
-                            log::warn!("Error forwarding packet {err}");
+                            warn!("Error forwarding packet {err}");
                             break;
                         }
                     }
                     Err(err) => {
-                        log::warn!("Error receiving packet {err}");
+                        warn!("Error receiving packet {err}");
                         break;
                     }
                 }
@@ -161,11 +173,13 @@ pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<PlayerServer>
 
             internal_close.send(entity).ok();
         });
+
+        client.send_packet(ClientVersionRequest::default().into());
     }
 
     while let Ok(entity) = server.internal_close_rx.try_recv() {
         if let Ok(connection) = connections.get(entity) {
-            log::info!("Connection from {} disconnected", connection.address);
+            info!("Connection from {} disconnected", connection.address);
         }
 
         commands.entity(entity).despawn();
@@ -174,7 +188,7 @@ pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<PlayerServer>
 
 pub fn handle_packets(mut server: ResMut<PlayerServer>) {
     while let Ok((entity, packet)) = server.packet_rx.try_recv() {
-        let mut client = match server.clients.get_mut(&entity) {
+        let client = match server.clients.get_mut(&entity) {
             Some(x) => x,
             _ => continue,
         };
@@ -187,64 +201,39 @@ pub fn handle_packets(mut server: ResMut<PlayerServer>) {
         let body_type = 0x25e;
         let hue = 120;
 
-        if let Some(seed) = packet.downcast::<Seed>() {
-            client.seed = seed.seed;
-            client.client_version = seed.client_version;
-        } else if let Some(account_login) = packet.downcast::<AccountLogin>() {
-            log::info!("New login attempt for {}", &account_login.username);
-            client.send_packet(ServerList {
-                system_info_flags: 0x5d,
-                game_servers: vec![
-                    GameServer {
-                        server_name: "My Server".into(),
-                        ..Default::default()
-                    },
-                ],
-                ..Default::default()
-            }.into());
-        } else if let Some(_game_server) = packet.downcast::<SelectGameServer>() {
-            // TODO: pass this across using token
-            client.send_packet(SwitchServer {
-                ip: Ipv4Addr::LOCALHOST.into(),
-                port: 2593,
-                token: 7,
-            }.into());
-        } else if let Some(_game_login) = packet.downcast::<GameServerLogin>() {
-            client.enable_compression();
-
-            // HACK: assume new client for now
-            client.client_version = ClientVersion::new(8, 0, 0, 0);
-            client.send_packet(ClientVersionRequest::default().into());
-
-            client.send_packet(SupportedFeatures {
-                feature_flags: FeatureFlags::T2A
-                    | FeatureFlags::UOR
-                    | FeatureFlags::LBR
-                    | FeatureFlags::AOS
-                    | FeatureFlags::SE
-                    | FeatureFlags::ML
-                    | FeatureFlags::NINTH_AGE
-                    | FeatureFlags::LIVE_ACCOUNT
-                    | FeatureFlags::SA
-                    | FeatureFlags::HS
-                    | FeatureFlags::GOTHIC
-                    | FeatureFlags::RUSTIC
-                    | FeatureFlags::JUNGLE
-                    | FeatureFlags::SHADOWGUARD
-                    | FeatureFlags::TOL
-                    | FeatureFlags::EJ,
-            }.into());
-            client.send_packet(CharacterList {
-                characters: vec![None; 5],
-                cities: vec![StartingCity {
-                    index: 0,
-                    city: "My City".into(),
-                    building: "My Building".into(),
-                    position: UVec3::new(0, 1, 2),
-                    map_id: 0,
-                    description_id: 0,
-                }],
-            }.into());
+        if let Some(_version_response) = packet.downcast::<ClientVersionRequest>() {
+            if !client.in_world {
+                client.in_world = true;
+                client.send_packet(SupportedFeatures {
+                    feature_flags: FeatureFlags::T2A
+                        | FeatureFlags::UOR
+                        | FeatureFlags::LBR
+                        | FeatureFlags::AOS
+                        | FeatureFlags::SE
+                        | FeatureFlags::ML
+                        | FeatureFlags::NINTH_AGE
+                        | FeatureFlags::LIVE_ACCOUNT
+                        | FeatureFlags::SA
+                        | FeatureFlags::HS
+                        | FeatureFlags::GOTHIC
+                        | FeatureFlags::RUSTIC
+                        | FeatureFlags::JUNGLE
+                        | FeatureFlags::SHADOWGUARD
+                        | FeatureFlags::TOL
+                        | FeatureFlags::EJ,
+                }.into());
+                client.send_packet(CharacterList {
+                    characters: vec![None; 5],
+                    cities: vec![StartingCity {
+                        index: 0,
+                        city: "My City".into(),
+                        building: "My Building".into(),
+                        position: UVec3::new(0, 1, 2),
+                        map_id: 0,
+                        description_id: 0,
+                    }],
+                }.into())
+            }
         } else if let Some(_create_character) = packet.downcast::<CreateCharacterEnhanced>() {
             client.send_packet(BeginEnterWorld {
                 entity_id,
@@ -292,13 +281,6 @@ pub fn handle_packets(mut server: ResMut<PlayerServer>) {
                 minute: 16,
                 second: 31,
             }.into());
-        } else if let Some(version_request) = packet.downcast::<ClientVersionRequest>() {
-            match ExtendedClientVersion::from_str(&version_request.version) {
-                Ok(client_version) => client.client_version = client_version.client_version,
-                Err(err) => {
-                    log::warn!("Unable to parse client version '{}': {err}", &version_request.version);
-                }
-            }
         } else if let Some(request) = packet.downcast::<Move>() {
             client.send_packet(MoveConfirm {
                 sequence: request.sequence,
