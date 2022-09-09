@@ -31,6 +31,7 @@ pub fn handle_move(
             Ok(x) => x,
             _ => continue,
         };
+        map_position.direction = request.direction;
         map_position.position += request.direction.as_vec2().extend(0);
         log::debug!("Move to {:?}", map_position);
 

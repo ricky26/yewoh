@@ -288,12 +288,12 @@ pub fn send_entity_updates(
         let id = net.id;
         server.broadcast_packet(UpsertEntityWorld {
             id,
-            kind: EntityKind::Single,
+            kind: EntityKind::Item,
             graphic_id: graphic.id,
+            graphic_inc: 0,
             direction: position.direction,
-            quantity: quantity.map_or(0, |q| q.quantity),
+            quantity: quantity.map_or(1, |q| q.quantity),
             position: position.position,
-            slot: EquipmentSlot::Invalid,
             hue: graphic.hue,
             flags: Default::default(),
         }.into());

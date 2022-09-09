@@ -7,6 +7,7 @@ use glam::{IVec2, IVec3};
 use strum_macros::FromRepr;
 
 use crate::{Direction, EntityId, EntityKind, Notoriety};
+use crate::protocol::client_version::VERSION_HIGH_SEAS;
 use crate::protocol::PacketWriteExt;
 
 use super::{ClientVersion, Endian, Packet, PacketReadExt};
@@ -165,10 +166,10 @@ pub struct UpsertEntityWorld {
     pub id: EntityId,
     pub kind: EntityKind,
     pub graphic_id: u16,
+    pub graphic_inc: u8,
     pub direction: Direction,
     pub quantity: u16,
     pub position: IVec3,
-    pub slot: EquipmentSlot,
     pub hue: u16,
     pub flags: EntityFlags,
 }
@@ -176,49 +177,60 @@ pub struct UpsertEntityWorld {
 impl Packet for UpsertEntityWorld {
     fn packet_kind() -> u8 { 0xf3 }
 
-    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(24) }
+    fn fixed_length(client_version: ClientVersion) -> Option<usize> {
+        Some(if client_version >= VERSION_HIGH_SEAS { 28 } else { 24 })
+    }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         payload.skip(2)?;
         let kind = EntityKind::from_repr(payload.read_u8()?)
             .ok_or_else(|| anyhow!("invalid entity kind"))?;
         let id = payload.read_entity_id()?;
         let graphic_id = payload.read_u16::<Endian>()?;
-        let direction = payload.read_direction()?;
+        let graphic_inc = payload.read_u8()?;
         let quantity = payload.read_u16::<Endian>()?;
         payload.skip(2)?;
         let x = payload.read_u16::<Endian>()? as i32;
         let y = payload.read_u16::<Endian>()? as i32;
         let z = payload.read_u8()? as i32;
-        let slot = EquipmentSlot::from_repr(payload.read_u8()?)
-            .unwrap_or(EquipmentSlot::Invalid);
+        let direction = payload.read_direction()?;
         let hue = payload.read_u16::<Endian>()?;
         let flags = EntityFlags::from_bits_truncate(payload.read_u8()?);
+
+        if client_version >= VERSION_HIGH_SEAS {
+            payload.skip(2)?;
+        }
+
         Ok(Self {
             id,
             kind,
             graphic_id,
+            graphic_inc,
             direction,
             quantity,
             position: IVec3::new(x, y, z),
-            slot,
             hue,
             flags,
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u16::<Endian>(1)?;
         writer.write_u8(self.kind as u8)?;
         writer.write_entity_id(self.id)?;
         writer.write_u16::<Endian>(self.graphic_id)?;
-        writer.write_direction(self.direction)?;
+        writer.write_u8(self.graphic_inc)?;
+        writer.write_u16::<Endian>(self.quantity)?;
+        writer.write_u16::<Endian>(self.quantity)?;
         writer.write_u16::<Endian>(self.position.x as u16)?;
         writer.write_u16::<Endian>(self.position.y as u16)?;
         writer.write_u8(self.position.z as u8)?;
-        writer.write_u8(self.slot as u8)?;
+        writer.write_direction(self.direction)?;
         writer.write_u16::<Endian>(self.hue)?;
         writer.write_u8(self.flags.bits())?;
+        if client_version >= VERSION_HIGH_SEAS {
+            writer.write_u16::<Endian>(0)?;
+        }
         Ok(())
     }
 }

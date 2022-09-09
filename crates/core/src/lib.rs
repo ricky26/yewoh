@@ -52,7 +52,8 @@ impl Direction {
 #[derive(Debug, Clone, Copy, Default, FromRepr)]
 pub enum EntityKind {
     #[default]
-    Single = 0,
+    Item = 0,
+    Character = 1,
     Multi = 2,
 }
 

@@ -5,6 +5,8 @@ use std::str::FromStr;
 use anyhow::anyhow;
 use bitflags::bitflags;
 
+pub const VERSION_HIGH_SEAS: ClientVersion = ClientVersion::new(7, 0, 9, 0);
+
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd)]
 pub struct ClientVersion {
     pub major: u8,
