@@ -1,7 +1,10 @@
+use std::ops::{Deref, DerefMut};
+use std::sync::atomic::{AtomicU32, Ordering};
 use bevy_ecs::prelude::*;
 use glam::UVec3;
 
-use yewoh::{Direction, EntityId};
+use yewoh::{Direction, EntityId, Notoriety};
+use yewoh::protocol::UpsertEntityStats;
 
 #[derive(Debug, Clone, Copy, Component)]
 pub struct NetEntity {
@@ -11,6 +14,19 @@ pub struct NetEntity {
 #[derive(Debug, Clone, Copy, Component)]
 pub struct NetOwner {
     pub connection: Entity,
+}
+
+#[derive(Debug, Clone, Copy, Component)]
+pub struct HasNotoriety(pub Notoriety);
+
+impl Deref for HasNotoriety {
+    type Target = Notoriety;
+
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+
+impl DerefMut for HasNotoriety {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
 
 #[derive(Debug, Clone, Copy, Component)]
@@ -39,7 +55,7 @@ pub struct MapPosition {
     pub direction: Direction,
 }
 
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, Default, Component)]
 pub struct Stats {
     pub name: String,
     pub race_and_gender: u8,
@@ -91,3 +107,83 @@ pub struct Stats {
     pub max_stamina_bonus: u16,
     pub max_mana_bonus: u16,
 }
+
+impl Stats {
+    pub fn upsert(&self, id: EntityId, owned: bool) -> UpsertEntityStats {
+        let max_info_level = if owned { 8 } else { 0 };
+        UpsertEntityStats {
+            id,
+            max_info_level,
+            name: self.name.clone(),
+            allow_name_change: owned,
+            race_and_gender: self.race_and_gender,
+            hp: self.hp,
+            max_hp: self.max_hp,
+            str: self.str,
+            dex: self.dex,
+            int: self.int,
+            stamina: self.stamina,
+            max_stamina: self.max_stamina,
+            mana: self.mana,
+            max_mana: self.max_mana,
+            gold: self.gold,
+            armor: self.armor,
+            weight: self.weight,
+            max_weight: self.max_weight,
+            stats_cap: self.stats_cap,
+            pet_count: self.pet_count,
+            max_pets: self.max_pets,
+            fire_resist: self.fire_resist,
+            cold_resist: self.cold_resist,
+            poison_resist: self.poison_resist,
+            energy_resist: self.energy_resist,
+            luck: self.luck,
+            damage_min: self.damage_min,
+            damage_max: self.damage_max,
+            tithing: self.tithing,
+            hit_chance_bonus: self.hit_chance_bonus,
+            swing_speed_bonus: self.swing_speed_bonus,
+            damage_chance_bonus: self.damage_chance_bonus,
+            reagent_cost_bonus: self.reagent_cost_bonus,
+            hp_regen: self.hp_regen,
+            stamina_regen: self.stamina_regen,
+            mana_regen: self.mana_regen,
+            damage_reflect: self.damage_reflect,
+            potion_bonus: self.potion_bonus,
+            defence_chance_bonus: self.defence_chance_bonus,
+            spell_damage_bonus: self.spell_damage_bonus,
+            cooldown_bonus: self.cooldown_bonus,
+            cast_time_bonus: self.cast_time_bonus,
+            mana_cost_bonus: self.mana_cost_bonus,
+            str_bonus: self.str_bonus,
+            dex_bonus: self.dex_bonus,
+            int_bonus: self.int_bonus,
+            hp_bonus: self.hp_bonus,
+            stamina_bonus: self.stamina_bonus,
+            mana_bonus: self.mana_bonus,
+            max_hp_bonus: self.max_hp_bonus,
+            max_stamina_bonus: self.max_stamina_bonus,
+            max_mana_bonus: self.max_mana_bonus,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct NetEntityAllocator {
+    next_id: AtomicU32,
+}
+
+impl Default for NetEntityAllocator {
+    fn default() -> Self {
+        Self {
+            next_id: AtomicU32::new(1),
+        }
+    }
+}
+
+impl NetEntityAllocator {
+    pub fn allocate(&self) -> EntityId {
+        EntityId::from_u32(self.next_id.fetch_add(1, Ordering::Relaxed))
+    }
+}
+

@@ -1,0 +1,37 @@
+cities:
+  - name: New Haven
+    building: New Haven Bank
+    description_id: 1150168
+    position: [3667, 2625, 0]
+  - name: Yew
+    building: The Empath Abbey
+    description_id: 1075072
+    position: [633, 858, 0]
+  - name: Minoc
+    building: The Barnacle
+    description_id: 1075073
+    position: [2476, 413, 15]
+  - name: Britain
+    building: The Wayfarer's Inn
+    description_id: 1075074
+    position: [1602, 1591, 20]
+  - name: Moonglow
+    building: The Scholars Inn
+    description_id: 1075075
+    position: [4408, 1168, 0]
+  - name: Trinsic
+    building: The Traveler's Inn
+    description_id: 1075076
+    position: [1845, 2745, 0]
+  - name: Jhelom
+    building: The Mercenary Inn
+    description_id: 1075078
+    position: [1374, 3826, 0]
+  - name: Skara Brae
+    building: The Falconer's Inn
+    description_id: 1075079
+    position: [618, 2234, 0]
+  - name: Vesper
+    building: The Ironwood Inn
+    description_id: 1075080
+    position: [2771, 976, 0]

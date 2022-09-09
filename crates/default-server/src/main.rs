@@ -14,6 +14,8 @@ use tokio::net::{lookup_host, TcpListener};
 use tokio::sync::mpsc;
 
 use yewoh::assets::uop::UopBuffer;
+use yewoh_default_game::data::static_data;
+use yewoh_default_game::data::static_data::StaticData;
 use yewoh_default_game::DefaultGamePlugin;
 use yewoh_server::game_server::listen_for_game;
 use yewoh_server::http::HttpApi;
@@ -25,8 +27,12 @@ use yewoh_server::world::ServerPlugin;
 #[clap(author, version, about)]
 struct Args {
     /// Path to the Ultima Online Classic data.
-    #[clap(short, long, default_value = "data", env = "UO_DATA")]
+    #[clap(short, long, default_value = "uodata", env = "UO_DATA")]
     uo_data_path: PathBuf,
+
+    /// Path to the Yewoh server data.
+    #[clap(short, long, default_value = "data", env = "YEWOH_DATA")]
+    data_path: PathBuf,
 
     /// The display name of this game server.
     #[clap(short, long, default_value = "Yewoh Server", env = "YEWOH_SERVER_NAME")]
@@ -66,6 +72,8 @@ fn main() -> anyhow::Result<()> {
     let mmap = unsafe { Mmap::map(&art_uop_file)? };
     let _uop = UopBuffer::try_from_backing(mmap)?;
 
+    let static_data = rt.block_on(static_data::load_from_directory(&args.data_path))?;
+
     let external_ip = rt.block_on(lookup_host(format!("{}:0", &args.advertise_address)))?
         .filter_map(|entry| match entry {
             SocketAddr::V4(v4) => Some(*v4.ip()),
@@ -103,7 +111,9 @@ fn main() -> anyhow::Result<()> {
     app
         .add_plugin(ServerPlugin)
         .add_plugin(DefaultGamePlugin)
-        .insert_resource(PlayerServer::new(new_session_requests, new_session_rx));
+        .insert_resource(PlayerServer::new(new_session_requests, new_session_rx))
+        .insert_resource(static_data.maps.map_infos())
+        .insert_resource(static_data);
 
     info!("Listening for http connections on {}", &args.http_bind);
     info!("Listening for lobby connections on {}", &args.lobby_bind);

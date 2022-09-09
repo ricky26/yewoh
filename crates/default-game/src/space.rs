@@ -15,16 +15,13 @@ impl Space {
     pub fn quadtree_for_map(&mut self, map_id: u8) -> &mut Quadtree<u32, Entity> {
         self.quadtrees
             .entry(map_id)
-            .or_insert_with(|| Quadtree::new(10))
+            .or_insert_with(|| Quadtree::new(16))
     }
 }
 
 pub fn update_space(
     mut space: ResMut<Space>,
-    query: Query<
-        (Entity, &MapPosition),
-        Changed<MapPosition>,
-    >,
+    query: Query<(Entity, &MapPosition), Changed<MapPosition>>,
     removals: RemovedComponents<MapPosition>,
 ) {
     for (entity, position) in query.iter() {
