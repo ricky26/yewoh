@@ -212,7 +212,7 @@ pub fn handle_packets(
 
         /*
         let entity_id = EntityId::from_u32(1337);
-        let position = UVec3::new(500, 2000, 0);
+        let position = IVec3::new(500, 2000, 0);
         let direction = Direction::North;
         let body_type = 0x25e;
         let hue = 120;*/

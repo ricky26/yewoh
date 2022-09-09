@@ -3,7 +3,7 @@ use std::io::Write;
 use anyhow::anyhow;
 use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use glam::{UVec2, UVec3};
+use glam::{IVec3, UVec2};
 
 use crate::{Direction, EntityId};
 use crate::protocol::{PacketReadExt, PacketWriteExt};
@@ -308,7 +308,7 @@ pub struct StartingCity {
     pub index: u8,
     pub city: String,
     pub building: String,
-    pub position: UVec3,
+    pub position: IVec3,
     pub map_id: u32,
     pub description_id: u32,
 }
@@ -366,15 +366,15 @@ impl Packet for CharacterList {
             let building = payload.read_str_block(text_length)?;
 
             let (location, map_id, description_id) = if new_character_list {
-                let x = payload.read_u32::<Endian>()?;
-                let y = payload.read_u32::<Endian>()?;
-                let z = payload.read_u32::<Endian>()?;
+                let x = payload.read_i32::<Endian>()?;
+                let y = payload.read_i32::<Endian>()?;
+                let z = payload.read_i32::<Endian>()?;
                 let map_id = payload.read_u32::<Endian>()?;
                 let description_id = payload.read_u32::<Endian>()?;
                 payload.skip(4)?;
-                (UVec3::new(x, y, z), map_id, description_id)
+                (IVec3::new(x, y, z), map_id, description_id)
             } else {
-                (UVec3::new(0, 0, 0), 0, 0)
+                (IVec3::new(0, 0, 0), 0, 0)
             };
 
             cities.push(StartingCity {
@@ -414,9 +414,9 @@ impl Packet for CharacterList {
             writer.write_str_block(&city.building, text_length)?;
 
             if new_character_list {
-                writer.write_u32::<Endian>(city.position.x)?;
-                writer.write_u32::<Endian>(city.position.y)?;
-                writer.write_u32::<Endian>(city.position.z)?;
+                writer.write_i32::<Endian>(city.position.x)?;
+                writer.write_i32::<Endian>(city.position.y)?;
+                writer.write_i32::<Endian>(city.position.z)?;
                 writer.write_u32::<Endian>(city.map_id)?;
                 writer.write_u32::<Endian>(city.description_id)?;
                 writer.write_u32::<Endian>(0)?;
@@ -739,7 +739,7 @@ impl Packet for ClientVersionRequest {
 pub struct BeginEnterWorld {
     pub entity_id: EntityId,
     pub body_type: u16,
-    pub position: UVec3,
+    pub position: IVec3,
     pub direction: Direction,
     pub map_size: UVec2,
 }
@@ -753,9 +753,9 @@ impl Packet for BeginEnterWorld {
         let entity_id = payload.read_entity_id()?;
         payload.skip(4)?;
         let body = payload.read_u16::<Endian>()?;
-        let x = payload.read_u16::<Endian>()? as u32;
-        let y = payload.read_u16::<Endian>()? as u32;
-        let z = payload.read_u16::<Endian>()? as u32;
+        let x = payload.read_u16::<Endian>()? as i32;
+        let y = payload.read_u16::<Endian>()? as i32;
+        let z = payload.read_u16::<Endian>()? as i32;
         let direction = Direction::from_u8(payload.read_u8()?)
             .ok_or_else(|| anyhow!("Invalid direction"))?;
         payload.skip(9)?;
@@ -764,7 +764,7 @@ impl Packet for BeginEnterWorld {
         Ok(BeginEnterWorld {
             entity_id,
             body_type: body,
-            position: UVec3::new(x, y, z),
+            position: IVec3::new(x, y, z),
             direction,
             map_size: UVec2::new(map_width, map_height),
         })

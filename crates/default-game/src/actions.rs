@@ -1,5 +1,4 @@
 use bevy_ecs::prelude::*;
-use yewoh::Notoriety;
 use yewoh::protocol::MoveConfirm;
 use yewoh_server::world::client::PlayerServer;
 use yewoh_server::world::entity::{HasNotoriety, MapPosition};

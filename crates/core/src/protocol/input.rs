@@ -2,7 +2,7 @@ use std::io::Write;
 use anyhow::anyhow;
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use glam::UVec3;
+use glam::IVec3;
 use crate::{Direction, EntityId, Notoriety};
 use crate::protocol::{PacketReadExt, PacketWriteExt};
 
@@ -63,7 +63,7 @@ impl Packet for MoveConfirm {
 #[derive(Debug, Clone, Default)]
 pub struct MoveReject {
     pub sequence: u8,
-    pub position: UVec3,
+    pub position: IVec3,
     pub direction: Direction,
 }
 
@@ -74,13 +74,13 @@ impl Packet for MoveReject {
 
     fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let sequence = payload.read_u8()?;
-        let x = payload.read_u16::<Endian>()? as u32;
-        let y = payload.read_u16::<Endian>()? as u32;
+        let x = payload.read_u16::<Endian>()? as i32;
+        let y = payload.read_u16::<Endian>()? as i32;
         let direction = payload.read_direction()?;
-        let z = payload.read_u8()? as u32;
+        let z = payload.read_u8()? as i32;
         Ok(Self {
             sequence,
-            position: UVec3::new(x, y, z),
+            position: IVec3::new(x, y, z),
             direction
         })
     }

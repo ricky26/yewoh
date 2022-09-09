@@ -3,7 +3,7 @@ use std::io::Write;
 use anyhow::anyhow;
 use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use glam::UVec3;
+use glam::IVec3;
 
 use crate::{Direction, EntityId, EntityKind, Notoriety};
 use crate::protocol::PacketWriteExt;
@@ -57,7 +57,7 @@ pub struct UpsertEntityLegacy {
     pub id: EntityId,
     pub graphic_id: u32,
     pub quantity: u16,
-    pub position: UVec3,
+    pub position: IVec3,
     pub direction: Direction,
     pub dye: u16,
     pub flags: EntityFlags,
@@ -80,14 +80,14 @@ impl Packet for UpsertEntityLegacy {
             graphic_id += payload.read_u8()? as u32;
         }
 
-        let x = payload.read_u16::<Endian>()? as u32;
-        let y = payload.read_u16::<Endian>()? as u32;
+        let x = payload.read_u16::<Endian>()? as i32;
+        let y = payload.read_u16::<Endian>()? as i32;
         let direction = if x & 0x8000 != 0 {
             payload.read_direction()?
         } else {
             Direction::North
         };
-        let z = payload.read_u8()? as u32;
+        let z = payload.read_u8()? as i32;
         let dye = if y & 0x8000 != 0 {
             payload.read_u16::<Endian>()?
         } else {
@@ -103,7 +103,7 @@ impl Packet for UpsertEntityLegacy {
             id: EntityId::from_u32(id & 0x7fffffff),
             graphic_id,
             quantity,
-            position: UVec3::new(x & 0x3fff, y & 0x3fff, z),
+            position: IVec3::new(x & 0x3fff, y & 0x3fff, z),
             direction,
             dye,
             flags,
@@ -167,7 +167,7 @@ pub struct UpsertEntity {
     pub graphic_id: u16,
     pub direction: Direction,
     pub quantity: u16,
-    pub position: UVec3,
+    pub position: IVec3,
     pub layer: u8,
     pub hue: u16,
     pub flags: EntityFlags,
@@ -187,9 +187,9 @@ impl Packet for UpsertEntity {
         let direction = payload.read_direction()?;
         let quantity = payload.read_u16::<Endian>()?;
         payload.skip(2)?;
-        let x = payload.read_u16::<Endian>()? as u32;
-        let y = payload.read_u16::<Endian>()? as u32;
-        let z = payload.read_u8()? as u32;
+        let x = payload.read_u16::<Endian>()? as i32;
+        let y = payload.read_u16::<Endian>()? as i32;
+        let z = payload.read_u8()? as i32;
         let layer = payload.read_u8()?;
         let hue = payload.read_u16::<Endian>()?;
         let flags = EntityFlags::from_bits_truncate(payload.read_u8()?);
@@ -199,7 +199,7 @@ impl Packet for UpsertEntity {
             graphic_id,
             direction,
             quantity,
-            position: UVec3::new(x, y, z),
+            position: IVec3::new(x, y, z),
             layer,
             hue,
             flags,
@@ -249,7 +249,7 @@ pub struct UpsertLocalPlayer {
     pub hue: u16,
     pub server_id: u16,
     pub flags: EntityFlags,
-    pub position: UVec3,
+    pub position: IVec3,
     pub direction: Direction,
 }
 
@@ -263,18 +263,18 @@ impl Packet for UpsertLocalPlayer {
         payload.skip(1)?;
         let hue = payload.read_u16::<Endian>()?;
         let flags = EntityFlags::from_bits_truncate(payload.read_u8()?);
-        let x = payload.read_u16::<Endian>()? as u32;
-        let y = payload.read_u16::<Endian>()? as u32;
+        let x = payload.read_u16::<Endian>()? as i32;
+        let y = payload.read_u16::<Endian>()? as i32;
         let server_id = payload.read_u16::<Endian>()?;
         let direction = payload.read_direction()?;
-        let z = payload.read_u8()? as u32;
+        let z = payload.read_u8()? as i32;
         Ok(Self {
             id,
             body_type,
             hue,
             server_id,
             flags,
-            position: UVec3::new(x, y, z),
+            position: IVec3::new(x, y, z),
             direction
         })
     }
@@ -306,7 +306,7 @@ pub struct CharacterChildEntity {
 pub struct UpsertEntityCharacter {
     pub id: EntityId,
     pub body_type: u16,
-    pub position: UVec3,
+    pub position: IVec3,
     pub direction: Direction,
     pub hue: u16,
     pub flags: EntityFlags,
@@ -321,9 +321,9 @@ impl Packet for UpsertEntityCharacter {
     fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
         let graphic_id = payload.read_u16::<Endian>()?;
-        let x = payload.read_u16::<Endian>()? as u32;
-        let y = payload.read_u16::<Endian>()? as u32;
-        let z = payload.read_u8()? as u32;
+        let x = payload.read_u16::<Endian>()? as i32;
+        let y = payload.read_u16::<Endian>()? as i32;
+        let z = payload.read_u8()? as i32;
         let direction = payload.read_direction()?;
         let hue = payload.read_u16::<Endian>()?;
         let flags = EntityFlags::from_bits_truncate(payload.read_u8()?);
@@ -355,7 +355,7 @@ impl Packet for UpsertEntityCharacter {
         Ok(Self {
             id,
             body_type: graphic_id,
-            position: UVec3::new(x, y, z),
+            position: IVec3::new(x, y, z),
             direction,
             hue,
             flags,

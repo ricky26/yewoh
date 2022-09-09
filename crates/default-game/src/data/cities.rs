@@ -1,4 +1,4 @@
-use glam::UVec3;
+use glam::IVec3;
 use serde::{Deserialize, Serialize};
 
 use yewoh::protocol::StartingCity;
@@ -10,7 +10,7 @@ pub struct City {
     building: String,
     map_id: u32,
     description_id: u32,
-    position: UVec3,
+    position: IVec3,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

@@ -7,12 +7,12 @@ use yewoh_server::world::entity::MapPosition;
 
 #[derive(Default)]
 pub struct Space {
-    quadtrees: HashMap<u8, Quadtree<u32, Entity>>,
+    quadtrees: HashMap<u8, Quadtree<i32, Entity>>,
     entities: HashMap<Entity, (u8, u64)>,
 }
 
 impl Space {
-    pub fn quadtree_for_map(&mut self, map_id: u8) -> &mut Quadtree<u32, Entity> {
+    pub fn quadtree_for_map(&mut self, map_id: u8) -> &mut Quadtree<i32, Entity> {
         self.quadtrees
             .entry(map_id)
             .or_insert_with(|| Quadtree::new(16))

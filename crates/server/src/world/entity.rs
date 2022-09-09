@@ -1,7 +1,7 @@
 use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicU32, Ordering};
 use bevy_ecs::prelude::*;
-use glam::UVec3;
+use glam::IVec3;
 
 use yewoh::{Direction, EntityId, Notoriety};
 use yewoh::protocol::UpsertEntityStats;
@@ -50,7 +50,7 @@ pub struct EntityVisual {
 
 #[derive(Debug, Clone, Copy, Component, Default)]
 pub struct MapPosition {
-    pub position: UVec3,
+    pub position: IVec3,
     pub map_id: u8,
     pub direction: Direction,
 }

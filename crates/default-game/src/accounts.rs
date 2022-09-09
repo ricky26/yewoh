@@ -1,5 +1,5 @@
 use bevy_ecs::prelude::*;
-use glam::UVec3;
+use glam::IVec3;
 use yewoh::{Direction, Notoriety};
 
 use yewoh::protocol::{CharacterFromList, CharacterList};
@@ -70,7 +70,7 @@ pub fn handle_create_character(
             .insert(NetEntity { id: primary_entity_id })
             .insert(MapPosition {
                 map_id: 1,
-                position: UVec3::new(2000, 2000, 0),
+                position: IVec3::new(2000, 2000, 0),
                 direction: Direction::North,
             })
             .insert(EntityVisual {

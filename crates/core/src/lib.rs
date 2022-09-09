@@ -1,4 +1,4 @@
-use glam::UVec2;
+use glam::IVec2;
 
 pub mod assets;
 pub mod protocol;
@@ -47,16 +47,16 @@ impl Direction {
         }
     }
 
-    pub fn as_vec2(self) -> UVec2 {
+    pub fn as_vec2(self) -> IVec2 {
         match self {
-            Direction::North => UVec2::new(1, 0),
-            Direction::Right => UVec2::new(1, 1),
-            Direction::East => UVec2::new(0, 1),
-            Direction::Down => UVec2::new(!1, 1),
-            Direction::South => UVec2::new(!1, 0),
-            Direction::Left => UVec2::new(!1, !1),
-            Direction::West => UVec2::new(0, !1),
-            Direction::Up => UVec2::new(1, !1),
+            Direction::North => IVec2::new(1, 0),
+            Direction::Right => IVec2::new(1, 1),
+            Direction::East => IVec2::new(0, 1),
+            Direction::Down => IVec2::new(-1, 1),
+            Direction::South => IVec2::new(-1, 0),
+            Direction::Left => IVec2::new(-1, -1),
+            Direction::West => IVec2::new(0, -1),
+            Direction::Up => IVec2::new(1, -1),
         }
     }
 }
