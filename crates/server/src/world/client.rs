@@ -20,7 +20,6 @@ pub struct NewConnection {
 
 pub enum WriterAction {
     Send(ClientVersion, AnyPacket),
-    EnableCompression,
 }
 
 #[derive(Debug, Clone, Component)]
@@ -39,10 +38,6 @@ pub struct ClientState {
 }
 
 impl ClientState {
-    pub fn enable_compression(&mut self) {
-        self.tx.send(WriterAction::EnableCompression).ok();
-    }
-
     pub fn send_packet(&mut self, packet: AnyPacket) {
         log::debug!("OUT ({:?}): {:?}", self.address, packet);
         self.tx.send(WriterAction::Send(self.client_version, packet)).ok();
@@ -81,12 +76,6 @@ impl PlayerServer {
             internal_close_tx,
             internal_close_rx,
             clients: HashMap::new(),
-        }
-    }
-
-    pub fn enable_compression(&mut self, entity: Entity) {
-        if let Some(client) = self.clients.get_mut(&entity) {
-            client.enable_compression();
         }
     }
 
@@ -133,7 +122,6 @@ pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<PlayerServer>
                             warn!("Error sending packet {err}");
                         }
                     }
-                    WriterAction::EnableCompression => writer.enable_compression(),
                 }
             }
         });
