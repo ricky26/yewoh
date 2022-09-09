@@ -3,8 +3,8 @@ use glam::IVec3;
 use yewoh::{Direction, Notoriety};
 
 use yewoh::protocol::{CharacterFromList, CharacterList, EquipmentSlot, UnicodeTextMessage};
-use yewoh_server::world::client::{PlayerServer};
-use yewoh_server::world::entity::{Character, Equipment, Graphic, HasNotoriety, MapPosition, NetEntity, NetEntityAllocator, Stats};
+use yewoh_server::world::client::{NetClients};
+use yewoh_server::world::entity::{Character, EquippedBy, Graphic, HasNotoriety, MapPosition, NetEntity, NetEntityAllocator, Stats};
 use yewoh_server::world::events::{CharacterListEvent, CreateCharacterEvent, NewPrimaryEntityEvent};
 
 use crate::data::static_data::StaticData;
@@ -19,7 +19,7 @@ pub trait AccountRepository {
 pub fn handle_list_characters(
     //runtime: Res<Handle>,
     static_data: Res<StaticData>,
-    mut server: ResMut<PlayerServer>,
+    server: Res<NetClients>,
     //account_repository: Res<T>,
     //users: Query<&User>,
     mut events: EventReader<CharacterListEvent>,
@@ -62,7 +62,7 @@ pub fn handle_create_character(
     mut events: EventReader<CreateCharacterEvent>,
     mut out_events: EventWriter<NewPrimaryEntityEvent>,
     mut commands: Commands,
-    mut server: ResMut<PlayerServer>,
+    server: Res<NetClients>,
 ) {
     for event in events.iter() {
         let connection = event.connection;
@@ -84,12 +84,7 @@ pub fn handle_create_character(
             .insert(Character {
                 body_type: 0x25e,
                 hue: 120,
-                equipment: vec![
-                    Equipment {
-                        entity: backpack_entity,
-                        slot: EquipmentSlot::Backpack,
-                    },
-                ],
+                equipment: vec![ backpack_entity ],
             })
             .insert(HasNotoriety(Notoriety::Innocent))
             .insert(Stats {
@@ -99,6 +94,10 @@ pub fn handle_create_character(
                 ..Default::default()
             })
             .id();
+
+        commands.entity(backpack_entity)
+            .insert(EquippedBy { entity: primary_entity, slot: EquipmentSlot::Backpack });
+
         out_events.send(NewPrimaryEntityEvent { connection, primary_entity: Some(primary_entity) });
         server.send_packet(connection, UnicodeTextMessage {
             text: "Avast me hearties".to_string(),

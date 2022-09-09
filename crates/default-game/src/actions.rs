@@ -1,11 +1,11 @@
 use bevy_ecs::prelude::*;
 use yewoh::protocol::{MoveConfirm, OpenPaperDoll};
-use yewoh_server::world::client::{NetClient, PlayerServer};
+use yewoh_server::world::client::{NetClient, NetClients};
 use yewoh_server::world::entity::{HasNotoriety, MapPosition, NetEntity};
 use yewoh_server::world::events::{DoubleClickEvent, MoveEvent};
 
 pub fn handle_move(
-    mut server: ResMut<PlayerServer>,
+    server: Res<NetClients>,
     mut events: EventReader<MoveEvent>,
     connection_query: Query<&NetClient>,
     mut character_query: Query<(&mut MapPosition, &HasNotoriety)>,
@@ -17,7 +17,7 @@ pub fn handle_move(
             _ => continue,
         };
 
-        let client = match server.client_mut(connection) {
+        let client = match server.client(connection) {
             Some(x) => x,
             None => continue,
         };
@@ -43,7 +43,7 @@ pub fn handle_move(
 }
 
 pub fn handle_double_click(
-    mut server: ResMut<PlayerServer>,
+    server: Res<NetClients>,
     mut events: EventReader<DoubleClickEvent>,
     target_query: Query<&NetEntity>,
 ) {

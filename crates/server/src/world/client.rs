@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::ptr::eq;
 
 use bevy_ecs::prelude::*;
 use glam::UVec2;
@@ -8,11 +7,11 @@ use log::{info, warn};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 
-use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, BeginEnterWorld, ChangeSeason, CharacterEquipment, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DoubleClick, EndEnterWorld, EntityFlags, ExtendedCommand, FeatureFlags, Move, Reader, SetTime, SingleClick, SupportedFeatures, UnicodeTextMessageRequest, UpsertEntityCharacter, UpsertLocalPlayer, Writer};
+use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, BeginEnterWorld, ChangeSeason, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DoubleClick, EndEnterWorld, EntityFlags, ExtendedCommand, FeatureFlags, Move, Reader, SetTime, SingleClick, SupportedFeatures, UnicodeTextMessageRequest, UpsertLocalPlayer, Writer};
 
 use crate::game_server::NewSessionAttempt;
 use crate::lobby::{NewSession, NewSessionRequest, SessionAllocator};
-use crate::world::entity::{Character, Graphic, HasNotoriety, MapPosition, NetEntity, NetEntityLookup, NetOwner, Stats};
+use crate::world::entity::{Character, MapPosition, NetEntity, NetEntityLookup, NetOwner, Stats};
 use crate::world::events::{
     CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DoubleClickEvent, MoveEvent,
     NewPrimaryEntityEvent, ReceivedPacketEvent, SentPacketEvent, SingleClickEvent,
@@ -59,13 +58,13 @@ pub struct ClientState {
 }
 
 impl ClientState {
-    pub fn send_packet(&mut self, packet: AnyPacket) {
+    pub fn send_packet(&self, packet: AnyPacket) {
         log::debug!("OUT ({:?}): {:?}", self.address, packet);
         self.tx.send(WriterAction::Send(self.client_version, packet)).ok();
     }
 }
 
-pub struct PlayerServer {
+pub struct NetClients {
     new_session_requests: mpsc::UnboundedReceiver<NewSessionRequest>,
     new_session_attempts: mpsc::UnboundedReceiver<NewSessionAttempt>,
 
@@ -80,11 +79,11 @@ pub struct PlayerServer {
     clients: HashMap<Entity, ClientState>,
 }
 
-impl PlayerServer {
+impl NetClients {
     pub fn new(
         new_session_requests: mpsc::UnboundedReceiver<NewSessionRequest>,
         new_sessions: mpsc::UnboundedReceiver<NewSessionAttempt>,
-    ) -> PlayerServer {
+    ) -> NetClients {
         let (internal_tx, packet_rx) = mpsc::unbounded_channel();
         let (internal_close_tx, internal_close_rx) = mpsc::unbounded_channel();
 
@@ -100,18 +99,28 @@ impl PlayerServer {
         }
     }
 
+    pub fn client(&self, entity: Entity) -> Option<&ClientState> {
+        self.clients.get(&entity)
+    }
+
     pub fn client_mut(&mut self, entity: Entity) -> Option<&mut ClientState> {
         self.clients.get_mut(&entity)
     }
 
-    pub fn send_packet(&mut self, entity: Entity, packet: AnyPacket) {
-        if let Some(client) = self.clients.get_mut(&entity) {
+    pub fn broadcast_packet(&self, packet: AnyPacket) {
+        for client in self.clients.values() {
+            client.send_packet(packet.clone());
+        }
+    }
+
+    pub fn send_packet(&self, entity: Entity, packet: AnyPacket) {
+        if let Some(client) = self.clients.get(&entity) {
             client.send_packet(packet);
         }
     }
 }
 
-pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<PlayerServer>,
+pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<NetClients>,
     connections: Query<&NetClient>, mut commands: Commands) {
     while let Ok(new_session_request) = server.new_session_requests.try_recv() {
         server.session_allocator.allocate_session(new_session_request);
@@ -131,7 +140,6 @@ pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<PlayerServer>
             mut reader,
             mut writer,
             username,
-            seed,
             client_version,
             ..
         } = new_session;
@@ -198,7 +206,7 @@ pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<PlayerServer>
 }
 
 pub fn handle_new_packets(
-    mut server: ResMut<PlayerServer>,
+    mut server: ResMut<NetClients>,
     mut write_events: EventReader<SentPacketEvent>,
     mut read_events: EventWriter<ReceivedPacketEvent>,
 ) {
@@ -218,7 +226,7 @@ pub fn handle_new_packets(
 }
 
 pub fn handle_login_packets(
-    mut server: ResMut<PlayerServer>,
+    mut server: ResMut<NetClients>,
     mut events: EventReader<ReceivedPacketEvent>,
     mut character_list_events: EventWriter<CharacterListEvent>,
     mut character_creation_events: EventWriter<CreateCharacterEvent>,
@@ -311,17 +319,15 @@ pub fn handle_input_packets(
 
 pub fn apply_new_primary_entities(
     maps: Res<MapInfos>,
-    lookup: Res<NetEntityLookup>,
-    mut server: ResMut<PlayerServer>,
+    server: Res<NetClients>,
     mut events: EventReader<NewPrimaryEntityEvent>,
     mut client_query: Query<&mut NetClient>,
-    equipment_query: Query<&Graphic>,
-    query: Query<(&NetEntity, &MapPosition, &Character, &Stats, &HasNotoriety)>,
+    query: Query<(&NetEntity, &MapPosition, &Character, &Stats)>,
     mut commands: Commands,
 ) {
     for event in events.iter() {
         let connection = event.connection;
-        let client = match server.client_mut(connection) {
+        let client = match server.client(connection) {
             Some(v) => v,
             None => continue,
         };
@@ -348,14 +354,13 @@ pub fn apply_new_primary_entities(
 
         commands.entity(primary_entity).insert(NetOwner { connection });
 
-        let (primary_net, map_position, character, stats, notoriety) = match query.get(primary_entity) {
+        let (primary_net, map_position, character, stats) = match query.get(primary_entity) {
             Ok(x) => x,
             Err(_) => {
                 continue;
             }
         };
 
-        let notoriety = **notoriety;
         let MapPosition { position, map_id, direction } = map_position.clone();
         let map = match maps.maps.get(&map_id) {
             Some(v) => v,
@@ -363,26 +368,7 @@ pub fn apply_new_primary_entities(
         };
 
         let entity_id = primary_net.id;
-        let hue = character.hue;
         let body_type = character.body_type;
-        let mut equipment = Vec::new();
-
-        for item in character.equipment.iter() {
-            let net_id = match lookup.ecs_to_net(item.entity) {
-                Some(x) => x,
-                _ => continue,
-            };
-            let graphic = match equipment_query.get(item.entity) {
-                Ok(x) => x,
-                _ => continue,
-            };
-            equipment.push(CharacterEquipment {
-                id: net_id,
-                slot: item.slot,
-                graphic_id: graphic.id,
-                hue: graphic.hue,
-            });
-        }
 
         client.send_packet(BeginEnterWorld {
             entity_id,
@@ -393,33 +379,32 @@ pub fn apply_new_primary_entities(
         }.into());
         client.send_packet(ExtendedCommand::ChangeMap(map_id).into());
         client.send_packet(ChangeSeason { season: map.season, play_sound: true }.into());
-
-        client.send_packet(UpsertLocalPlayer {
-            id: entity_id,
-            body_type,
-            server_id: 0,
-            hue,
-            flags: EntityFlags::empty(),
-            position,
-            direction,
-        }.into());
-        client.send_packet(UpsertEntityCharacter {
-            id: entity_id,
-            body_type,
-            position,
-            direction,
-            hue,
-            flags: EntityFlags::empty(),
-            notoriety,
-            equipment,
-        }.into());
-        client.send_packet(stats.upsert(entity_id, true).into());
         client.send_packet(EndEnterWorld.into());
 
         client.send_packet(SetTime {
             hour: 12,
             minute: 16,
             second: 31,
+        }.into());
+    }
+}
+
+pub fn send_player_updates(
+    clients: Res<NetClients>,
+    query: Query<
+        (&NetOwner, &NetEntity, &Character, &MapPosition),
+        Or<(Changed<Character>, Changed<MapPosition>)>,
+    >,
+) {
+    for (owner, entity, character, position) in query.iter() {
+        clients.send_packet(owner.connection, UpsertLocalPlayer {
+            id: entity.id,
+            body_type: character.body_type,
+            server_id: 0,
+            hue: character.hue,
+            flags: EntityFlags::empty(),
+            position: position.position,
+            direction: position.direction,
         }.into());
     }
 }

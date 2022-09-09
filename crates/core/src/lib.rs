@@ -36,14 +36,14 @@ pub enum Direction {
 impl Direction {
     pub fn as_vec2(self) -> IVec2 {
         match self {
-            Direction::North => IVec2::new(1, 0),
-            Direction::Right => IVec2::new(1, 1),
-            Direction::East => IVec2::new(0, 1),
-            Direction::Down => IVec2::new(-1, 1),
-            Direction::South => IVec2::new(-1, 0),
-            Direction::Left => IVec2::new(-1, -1),
-            Direction::West => IVec2::new(0, -1),
-            Direction::Up => IVec2::new(1, -1),
+            Direction::North => IVec2::new(0, -1),
+            Direction::Right => IVec2::new(1, -1),
+            Direction::East => IVec2::new(1, 0),
+            Direction::Down => IVec2::new(1, 1),
+            Direction::South => IVec2::new(0, 1),
+            Direction::Left => IVec2::new(-1, 1),
+            Direction::West => IVec2::new(-1, 0),
+            Direction::Up => IVec2::new(-1, -1),
         }
     }
 }

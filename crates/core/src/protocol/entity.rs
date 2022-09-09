@@ -160,21 +160,20 @@ impl Packet for UpsertEntityLegacy {
     }
 }
 
-
 #[derive(Debug, Clone, Default)]
-pub struct UpsertEntity {
+pub struct UpsertEntityWorld {
     pub id: EntityId,
     pub kind: EntityKind,
     pub graphic_id: u16,
     pub direction: Direction,
     pub quantity: u16,
     pub position: IVec3,
-    pub layer: u8,
+    pub slot: EquipmentSlot,
     pub hue: u16,
     pub flags: EntityFlags,
 }
 
-impl Packet for UpsertEntity {
+impl Packet for UpsertEntityWorld {
     fn packet_kind() -> u8 { 0xf3 }
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(24) }
@@ -191,7 +190,8 @@ impl Packet for UpsertEntity {
         let x = payload.read_u16::<Endian>()? as i32;
         let y = payload.read_u16::<Endian>()? as i32;
         let z = payload.read_u8()? as i32;
-        let layer = payload.read_u8()?;
+        let slot = EquipmentSlot::from_repr(payload.read_u8()?)
+            .unwrap_or(EquipmentSlot::Invalid);
         let hue = payload.read_u16::<Endian>()?;
         let flags = EntityFlags::from_bits_truncate(payload.read_u8()?);
         Ok(Self {
@@ -201,7 +201,7 @@ impl Packet for UpsertEntity {
             direction,
             quantity,
             position: IVec3::new(x, y, z),
-            layer,
+            slot,
             hue,
             flags,
         })
@@ -216,7 +216,7 @@ impl Packet for UpsertEntity {
         writer.write_u16::<Endian>(self.position.x as u16)?;
         writer.write_u16::<Endian>(self.position.y as u16)?;
         writer.write_u8(self.position.z as u8)?;
-        writer.write_u8(self.layer)?;
+        writer.write_u8(self.slot as u8)?;
         writer.write_u16::<Endian>(self.hue)?;
         writer.write_u8(self.flags.bits())?;
         Ok(())
@@ -426,6 +426,41 @@ impl Packet for UpsertEntityCharacter {
         }
 
         writer.write_entity_id(EntityId::ZERO)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct UpsertEntityEquipped {
+    pub id: EntityId,
+    pub parent_id: EntityId,
+    pub slot: EquipmentSlot,
+    pub graphic_id: u16,
+    pub hue: u16,
+}
+
+impl Packet for UpsertEntityEquipped {
+    fn packet_kind() -> u8 { 0x2e }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(15) }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let id = payload.read_entity_id()?;
+        let graphic_id = payload.read_u16::<Endian>()?;
+        payload.skip(1)?;
+        let slot = EquipmentSlot::from_repr(payload.read_u8()?)
+            .unwrap_or(EquipmentSlot::Invalid);
+        let parent_id = payload.read_entity_id()?;
+        let hue = payload.read_u16::<Endian>()?;
+        Ok(Self { id, parent_id, slot, graphic_id, hue })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_entity_id(self.id)?;
+        writer.write_u16::<Endian>(self.graphic_id)?;
+        writer.write_u8(0)?;
+        writer.write_u8(self.slot as u8)?;
+        writer.write_entity_id(self.parent_id)?;
+        writer.write_u16::<Endian>(self.hue)?;
         Ok(())
     }
 }

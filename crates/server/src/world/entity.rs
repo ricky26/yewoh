@@ -4,8 +4,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use bevy_ecs::prelude::*;
 use glam::IVec3;
 
-use yewoh::{Direction, EntityId, Notoriety};
-use yewoh::protocol::{EquipmentSlot, UpsertEntityStats};
+use yewoh::{Direction, EntityId, EntityKind, Notoriety};
+use yewoh::protocol::{DeleteEntity, EquipmentSlot, UpsertEntityWorld, UpsertEntityStats, CharacterEquipment, UpsertEntityCharacter, EntityFlags, UpsertEntityEquipped};
+use crate::world::client::NetClients;
 
 #[derive(Debug, Clone, Copy, Component)]
 pub struct NetEntity {
@@ -30,17 +31,22 @@ impl DerefMut for HasNotoriety {
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
 
-#[derive(Debug, Clone)]
-pub struct Equipment {
-    pub slot: EquipmentSlot,
-    pub entity: Entity,
-}
-
 #[derive(Debug, Clone, Component)]
 pub struct Character {
     pub body_type: u16,
     pub hue: u16,
-    pub equipment: Vec<Equipment>,
+    pub equipment: Vec<Entity>,
+}
+
+#[derive(Debug, Clone, Component)]
+pub struct EquippedBy {
+    pub entity: Entity,
+    pub slot: EquipmentSlot,
+}
+
+#[derive(Debug, Clone, Component)]
+pub struct Quantity {
+    pub quantity: u16,
 }
 
 #[derive(Debug, Clone, Copy, Component)]
@@ -240,5 +246,107 @@ pub fn update_entity_lookup(
 
     for entity in removals.iter() {
         lookup.remove(entity);
+    }
+}
+
+pub fn send_entity_updates(
+    server: Res<NetClients>,
+    lookup: Res<NetEntityLookup>,
+    world_items_query: Query<
+        (&NetEntity, &Graphic, Option<&Quantity>, &MapPosition),
+        Or<(Changed<Graphic>, Changed<MapPosition>)>,
+    >,
+    characters_query: Query<
+        (&NetEntity, &Character, &MapPosition, &HasNotoriety),
+        Or<(Changed<Character>, Changed<MapPosition>, Changed<HasNotoriety>)>,
+    >,
+    equipment_query: Query<(&NetEntity, &Graphic, &EquippedBy), Or<(Changed<Graphic>, Changed<EquippedBy>)>>,
+    all_equipment_query: Query<(&NetEntity, &Graphic, &EquippedBy)>,
+) {
+    // TODO: implement an interest system
+
+    for (net, graphic, quantity, position) in world_items_query.iter() {
+        let id = net.id;
+        server.broadcast_packet(UpsertEntityWorld {
+            id,
+            kind: EntityKind::Single,
+            graphic_id: graphic.id,
+            direction: position.direction,
+            quantity: quantity.map_or(0, |q| q.quantity),
+            position: position.position,
+            slot: EquipmentSlot::Invalid,
+            hue: graphic.hue,
+            flags: Default::default(),
+        }.into());
+    }
+
+    for (net, character, position, notoriety) in characters_query.iter() {
+        let entity_id = net.id;
+        let hue = character.hue;
+        let body_type = character.body_type;
+        let mut equipment = Vec::new();
+
+        for child_entity in character.equipment.iter().copied() {
+            let (net, graphic, equipped_by) = match all_equipment_query.get(child_entity) {
+                Ok(x) => x,
+                _ => continue,
+            };
+            equipment.push(CharacterEquipment {
+                id: net.id,
+                slot: equipped_by.slot,
+                graphic_id: graphic.id,
+                hue: graphic.hue,
+            });
+        }
+
+        server.broadcast_packet(UpsertEntityCharacter {
+            id: entity_id,
+            body_type,
+            position: position.position,
+            direction: position.direction,
+            hue,
+            flags: EntityFlags::empty(),
+            notoriety: notoriety.0,
+            equipment,
+        }.into());
+    }
+
+    for (net, graphic, equipped_by) in equipment_query.iter() {
+        let parent_id = match lookup.ecs_to_net(equipped_by.entity) {
+            Some(x) => x,
+            None => continue,
+        };
+
+        server.broadcast_packet(UpsertEntityEquipped {
+            id: net.id,
+            parent_id,
+            slot: equipped_by.slot,
+            graphic_id: graphic.id,
+            hue: graphic.hue,
+        }.into());
+    }
+}
+
+pub fn send_remove_entity(
+    server: Res<NetClients>,
+    lookup: Res<NetEntityLookup>,
+    removals: RemovedComponents<NetEntity>,
+) {
+    for entity in removals.iter() {
+        let id = match lookup.ecs_to_net(entity) {
+            Some(x) => x,
+            None => continue,
+        };
+
+        server.broadcast_packet(DeleteEntity { id }.into());
+    }
+}
+
+pub fn send_updated_stats(
+    server: Res<NetClients>,
+    query: Query<(&NetEntity, &Stats), Changed<Stats>>,
+) {
+    for (net, stats) in query.iter() {
+        server.broadcast_packet(stats.upsert(net.id, true).into());
     }
 }

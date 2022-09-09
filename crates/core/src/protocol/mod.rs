@@ -176,10 +176,11 @@ fn packet_registry() -> &'static PacketRegistry {
             // Entity
             PacketRegistration::for_type::<EntityRequest>(),
             PacketRegistration::for_type::<UpsertEntityLegacy>(),
-            PacketRegistration::for_type::<UpsertEntity>(),
+            PacketRegistration::for_type::<UpsertEntityWorld>(),
             PacketRegistration::for_type::<DeleteEntity>(),
             PacketRegistration::for_type::<UpsertLocalPlayer>(),
             PacketRegistration::for_type::<UpsertEntityCharacter>(),
+            PacketRegistration::for_type::<UpsertEntityEquipped>(),
             PacketRegistration::for_type::<UpsertEntityStats>(),
         ].into_iter() {
             max_size = registration.size.max(max_size);
