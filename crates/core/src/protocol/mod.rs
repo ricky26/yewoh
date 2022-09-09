@@ -262,32 +262,12 @@ impl<T: Packet> From<T> for AnyPacket {
 pub struct Reader {
     reader: BufReader<OwnedReadHalf>,
     buffer: Vec<u8>,
-    has_received: bool,
 }
 
 impl Reader {
-    pub async fn receive(&mut self, client_version: ClientVersion)
+    pub async fn recv(&mut self, client_version: ClientVersion)
         -> anyhow::Result<AnyPacket> {
-        let packet_kind = if self.has_received {
-            self.has_received = false;
-
-            // Legacy clients send their address immediately.
-            // Newer clients send everything framed.
-            // However, the packet ID of the new hello packet is 239, which is within the multicast
-            // IP range, so it's safe to assume that seeing that byte means we're a new client.
-            let first_byte = self.reader.read_u8().await?;
-            if first_byte != 0xef {
-                let mut seed_bytes = [first_byte, 0u8, 0u8, 0u8];
-                self.reader.read_exact(&mut seed_bytes[1..]).await?;
-                let seed = Endian::read_u32(&seed_bytes);
-                return Ok(AnyPacket::from_packet(Seed { seed, ..Default::default() }));
-            }
-
-            first_byte
-        } else {
-            self.reader.read_u8().await?
-        };
-
+        let packet_kind = self.reader.read_u8().await?;
         let registry = packet_registry();
         let registration = match registry.registrations[packet_kind as usize].as_ref() {
             Some(r) => r,
@@ -432,7 +412,6 @@ pub fn new_io(stream: TcpStream, is_server: bool) -> (Reader, Writer) {
     (Reader {
         reader: BufReader::new(reader),
         buffer: Vec::with_capacity(4096),
-        has_received: is_server,
     }, Writer {
         writer: BufWriter::new(writer),
         buffer: Vec::with_capacity(4096),

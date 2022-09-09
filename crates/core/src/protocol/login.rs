@@ -149,7 +149,7 @@ impl Packet for ServerList {
 
 #[derive(Debug, Clone, Default)]
 pub struct SelectGameServer {
-    server_id: u8,
+    pub server_id: u16,
 }
 
 impl Packet for SelectGameServer {
@@ -158,16 +158,14 @@ impl Packet for SelectGameServer {
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(3) }
 
     fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
-        payload.skip(1)?;
-        let server_id = payload.read_u8()?;
+        let server_id = payload.read_u16::<Endian>()?;
         Ok(Self {
             server_id,
         })
     }
 
     fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
-        writer.write_u8(0)?;
-        writer.write_u8(self.server_id)?;
+        writer.write_u16::<Endian>(self.server_id)?;
         Ok(())
     }
 }

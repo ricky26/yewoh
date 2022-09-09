@@ -6,6 +6,8 @@ edition = "2021"
 [dependencies]
 yewoh = { path = "../core" }
 tokio = { version = "1.21.0", default_features = false, features = ["net"] }
+anyhow = "1.0.64"
+async-trait = "0.1.57"
 log = "0.4.17"
 bevy_ecs = "0.8.1"
 bevy_app = "0.8.1"

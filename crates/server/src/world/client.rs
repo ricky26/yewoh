@@ -141,7 +141,7 @@ pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<PlayerServer>
             let mut client_version = ClientVersion::new(0, 0, 0, 0);
 
             loop {
-                match reader.receive(client_version).await {
+                match reader.recv(client_version).await {
                     Ok(packet) => {
                         if let Some(seed) = packet.downcast::<Seed>() {
                             client_version = seed.client_version;

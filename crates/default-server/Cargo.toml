@@ -10,6 +10,8 @@ yewoh-server = { path = "../server" }
 yewoh-default-game = { path = "../default-game" }
 tokio = { version = "1.21.0", default_features = false, features = ["net", "rt-multi-thread"] }
 clap = { version = "3.2.20", features = ["derive", "env"] }
+async-trait = "0.1.57"
+futures = "0.3.24"
 actix-web = "4.1.0"
 anyhow = "1.0.64"
 memmap2 = "0.5.7"

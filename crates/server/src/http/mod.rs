@@ -1,16 +1,16 @@
 use actix_web::dev::{AppService, HttpServiceFactory};
 
-pub struct AdminHttpApi {
+pub struct HttpApi {
 
 }
 
-impl AdminHttpApi {
-    pub fn new() -> AdminHttpApi {
+impl HttpApi {
+    pub fn new() -> HttpApi {
         Self {}
     }
 }
 
-impl HttpServiceFactory for AdminHttpApi {
+impl HttpServiceFactory for HttpApi {
     fn register(self, _config: &mut AppService) {
 
     }

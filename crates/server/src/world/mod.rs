@@ -20,9 +20,9 @@ impl Plugin for ServerPlugin {
             .init_resource::<TickRate>()
             .init_resource::<PlayerServer>()
             .insert_resource(Handle::current())
-            .add_system_to_stage(CoreStage::Last, limit_tick_rate)
             .add_system(accept_new_clients)
-            .add_system(handle_packets.after(accept_new_clients));
+            .add_system(handle_packets.after(accept_new_clients))
+            .add_system_to_stage(CoreStage::Last, limit_tick_rate);
     }
 
     fn name(&self) -> &str { "Yewoh Server" }
