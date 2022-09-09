@@ -1,5 +1,5 @@
 use bevy_ecs::prelude::*;
-use yewoh::protocol::{CreateCharacter, Move};
+use yewoh::protocol::{CreateCharacter, Move, UnicodeTextMessageRequest};
 
 #[derive(Debug, Clone)]
 pub struct CharacterListEvent {
@@ -23,4 +23,10 @@ pub struct MoveEvent {
 pub struct NewPrimaryEntityEvent {
     pub connection: Entity,
     pub primary_entity: Entity,
+}
+
+#[derive(Debug, Clone)]
+pub struct ChatRequestEvent {
+    pub connection: Entity,
+    pub request: UnicodeTextMessageRequest,
 }

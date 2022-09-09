@@ -4,7 +4,7 @@ use tokio::runtime::Handle;
 
 use crate::world::client::{accept_new_clients, apply_new_primary_entities, handle_packets, MapInfos};
 use crate::world::entity::NetEntityAllocator;
-use crate::world::events::{CharacterListEvent, CreateCharacterEvent, MoveEvent, NewPrimaryEntityEvent};
+use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, MoveEvent, NewPrimaryEntityEvent};
 use crate::world::time::{limit_tick_rate, TickRate};
 
 pub mod time;
@@ -29,6 +29,7 @@ impl Plugin for ServerPlugin {
             .add_event::<CreateCharacterEvent>()
             .add_event::<MoveEvent>()
             .add_event::<NewPrimaryEntityEvent>()
+            .add_event::<ChatRequestEvent>()
             .add_system(accept_new_clients)
             .add_system(handle_packets.after(accept_new_clients))
             .add_system(apply_new_primary_entities)

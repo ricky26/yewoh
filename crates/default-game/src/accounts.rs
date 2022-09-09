@@ -2,7 +2,7 @@ use bevy_ecs::prelude::*;
 use glam::IVec3;
 use yewoh::{Direction, Notoriety};
 
-use yewoh::protocol::{CharacterFromList, CharacterList};
+use yewoh::protocol::{CharacterFromList, CharacterList, UnicodeTextMessage};
 use yewoh_server::world::client::{PlayerServer};
 use yewoh_server::world::entity::{EntityVisual, EntityVisualKind, HasNotoriety, MapPosition, NetEntity, NetEntityAllocator, Stats};
 use yewoh_server::world::events::{CharacterListEvent, CreateCharacterEvent, NewPrimaryEntityEvent};
@@ -62,6 +62,7 @@ pub fn handle_create_character(
     mut events: EventReader<CreateCharacterEvent>,
     mut out_events: EventWriter<NewPrimaryEntityEvent>,
     mut commands: Commands,
+    mut server: ResMut<PlayerServer>,
 ) {
     for event in events.iter() {
         let connection = event.connection;
@@ -86,6 +87,12 @@ pub fn handle_create_character(
             })
             .id();
         out_events.send(NewPrimaryEntityEvent { connection, primary_entity });
+        server.send_packet(connection, UnicodeTextMessage {
+            text: "Avast me hearties".to_string(),
+            hue: 120,
+            font: 3,
+            ..Default::default()
+        }.into());
         log::info!("Spawned character for {:?} = {:?}", connection, primary_entity);
     }
 }

@@ -19,6 +19,7 @@ pub use map::*;
 pub use extended::*;
 pub use input::*;
 pub use entity::*;
+pub use chat::*;
 
 use crate::protocol::compression::{HuffmanVecWriter};
 use crate::protocol::sound::PlayMusic;
@@ -43,6 +44,8 @@ mod entity;
 mod ui;
 
 mod sound;
+
+mod chat;
 
 pub trait Packet where Self: Sized {
     fn packet_kind() -> u8;
@@ -145,6 +148,12 @@ fn packet_registry() -> &'static PacketRegistry {
 
             // UI
             PacketRegistration::for_type::<OpenChatWindow>(),
+
+            // Chat
+            PacketRegistration::for_type::<AsciiTextMessage>(),
+            PacketRegistration::for_type::<UnicodeTextMessage>(),
+            PacketRegistration::for_type::<AsciiTextMessageRequest>(),
+            PacketRegistration::for_type::<UnicodeTextMessageRequest>(),
 
             // Sound
             PacketRegistration::for_type::<PlayMusic>(),

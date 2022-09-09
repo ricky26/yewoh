@@ -7,12 +7,12 @@ use log::{info, warn};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 
-use yewoh::protocol::{AnyPacket, BeginEnterWorld, ChangeSeason, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, EndEnterWorld, EntityFlags, ExtendedCommand, FeatureFlags, Move, Reader, SetTime, SupportedFeatures, UpsertEntityCharacter, UpsertLocalPlayer, Writer};
+use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, BeginEnterWorld, ChangeSeason, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, EndEnterWorld, EntityFlags, ExtendedCommand, FeatureFlags, Move, Reader, SetTime, SupportedFeatures, UnicodeTextMessageRequest, UpsertEntityCharacter, UpsertLocalPlayer, Writer};
 
 use crate::game_server::NewSessionAttempt;
 use crate::lobby::{NewSession, NewSessionRequest, SessionAllocator};
 use crate::world::entity::{EntityVisual, EntityVisualKind, HasNotoriety, MapPosition, NetEntity, Stats};
-use crate::world::events::{CharacterListEvent, CreateCharacterEvent, MoveEvent, NewPrimaryEntityEvent};
+use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, MoveEvent, NewPrimaryEntityEvent};
 
 pub struct NewConnection {
     pub address: SocketAddr,
@@ -201,6 +201,7 @@ pub fn handle_packets(
     mut character_list_events: EventWriter<CharacterListEvent>,
     mut character_creation_events: EventWriter<CreateCharacterEvent>,
     mut move_events: EventWriter<MoveEvent>,
+    mut chat_events: EventWriter<ChatRequestEvent>,
 ) {
     while let Ok((connection, packet)) = server.packet_rx.try_recv() {
         let client = match server.client_mut(connection) {
@@ -251,6 +252,19 @@ pub fn handle_packets(
                 primary_entity: client.primary_entity,
                 request,
             });
+        } else if let Some(request) = packet.downcast::<AsciiTextMessageRequest>() {
+            chat_events.send(ChatRequestEvent {
+                connection,
+                request: UnicodeTextMessageRequest {
+                    kind: request.kind,
+                    hue: request.hue,
+                    font: request.font,
+                    text: request.text.clone(),
+                    ..Default::default()
+                },
+            });
+        } else if let Some(request) = packet.downcast::<UnicodeTextMessageRequest>().cloned() {
+            chat_events.send(ChatRequestEvent { connection, request });
         }
     }
 }
@@ -262,21 +276,17 @@ pub fn apply_new_primary_entities(
     query: Query<(&NetEntity, &MapPosition, &EntityVisual, &Stats, &HasNotoriety)>,
 ) {
     for event in events.iter() {
-        log::info!("New Pri");
         let client = match server.client_mut(event.connection) {
             Some(v) => v,
             None => continue,
         };
 
-        log::info!("New Pri2 {:?}", event.primary_entity);
         let (primary_net, map_position, visual, stats, notoriety) = match query.get(event.primary_entity) {
             Ok(x) => x,
             Err(err) => {
-                log::info!("ax {err}");
                 continue;
             }
         };
-        log::info!("New Pri3");
 
         let notoriety = **notoriety;
         let MapPosition { position, map_id, direction } = map_position.clone();
@@ -285,7 +295,6 @@ pub fn apply_new_primary_entities(
             None => continue,
         };
 
-        log::info!("New Pri5");
         client.primary_entity = Some(event.primary_entity);
         let entity_id = primary_net.id;
 
