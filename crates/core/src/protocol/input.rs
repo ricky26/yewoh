@@ -21,7 +21,7 @@ impl Packet for Move {
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(7) }
 
     fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
-        let direction = Direction::from_u8(payload.read_u8()?)
+        let direction = Direction::from_repr(payload.read_u8()?)
             .ok_or_else(|| anyhow!("Invalid direction"))?;
         let sequence = payload.read_u8()?;
         let fast_walk = payload.read_u32::<Endian>()?;
@@ -48,7 +48,7 @@ impl Packet for MoveConfirm {
 
     fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let sequence = payload.read_u8()?;
-        let notoriety = Notoriety::from_u8(payload.read_u8()?)
+        let notoriety = Notoriety::from_repr(payload.read_u8()?)
             .ok_or_else(|| anyhow!("invalid notoriety"))?;
         Ok(Self { sequence, notoriety })
     }

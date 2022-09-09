@@ -756,7 +756,7 @@ impl Packet for BeginEnterWorld {
         let x = payload.read_u16::<Endian>()? as i32;
         let y = payload.read_u16::<Endian>()? as i32;
         let z = payload.read_u16::<Endian>()? as i32;
-        let direction = Direction::from_u8(payload.read_u8()?)
+        let direction = Direction::from_repr(payload.read_u8()?)
             .ok_or_else(|| anyhow!("Invalid direction"))?;
         payload.skip(9)?;
         let map_width = payload.read_u16::<Endian>()? as u32;

@@ -1,4 +1,5 @@
 use glam::IVec2;
+use strum_macros::FromRepr;
 
 pub mod assets;
 pub mod protocol;
@@ -19,7 +20,7 @@ impl EntityId {
 }
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, FromRepr)]
 pub enum Direction {
     #[default]
     North = 0,
@@ -33,20 +34,6 @@ pub enum Direction {
 }
 
 impl Direction {
-    pub fn from_u8(src: u8) -> Option<Direction> {
-        match src {
-            0 => Some(Direction::North),
-            1 => Some(Direction::Right),
-            2 => Some(Direction::East),
-            3 => Some(Direction::Down),
-            4 => Some(Direction::South),
-            5 => Some(Direction::Left),
-            6 => Some(Direction::West),
-            7 => Some(Direction::Up),
-            _ => None,
-        }
-    }
-
     pub fn as_vec2(self) -> IVec2 {
         match self {
             Direction::North => IVec2::new(1, 0),
@@ -62,25 +49,15 @@ impl Direction {
 }
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, FromRepr)]
 pub enum EntityKind {
     #[default]
     Single = 0,
     Multi = 2,
 }
 
-impl EntityKind {
-    pub fn from_u8(value: u8) -> Option<EntityKind> {
-        match value {
-            0 => Some(EntityKind::Single),
-            2 => Some(EntityKind::Multi),
-            _ => None,
-        }
-    }
-}
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, FromRepr)]
 pub enum Notoriety {
     #[default]
     Innocent = 1,
@@ -90,19 +67,4 @@ pub enum Notoriety {
     Enemy = 5,
     Murderer = 6,
     Invulnerable = 7,
-}
-
-impl Notoriety {
-    pub fn from_u8(value: u8) -> Option<Notoriety> {
-        match value {
-            1 => Some(Notoriety::Innocent),
-            2 => Some(Notoriety::Friend),
-            3 => Some(Notoriety::Neutral),
-            4 => Some(Notoriety::Criminal),
-            5 => Some(Notoriety::Enemy),
-            6 => Some(Notoriety::Murderer),
-            7 => Some(Notoriety::Invulnerable),
-            _ => None,
-        }
-    }
 }

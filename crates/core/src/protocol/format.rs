@@ -100,7 +100,7 @@ impl PacketReadExt for &[u8] {
     }
 
     fn read_direction(&mut self) -> anyhow::Result<Direction> {
-        Ok(Direction::from_u8(self.read_u8()?).ok_or_else(|| anyhow!("invalid direction"))?)
+        Ok(Direction::from_repr(self.read_u8()?).ok_or_else(|| anyhow!("invalid direction"))?)
     }
 }
 

@@ -180,7 +180,7 @@ impl Packet for UpsertEntity {
 
     fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         payload.skip(2)?;
-        let kind = EntityKind::from_u8(payload.read_u8()?)
+        let kind = EntityKind::from_repr(payload.read_u8()?)
             .ok_or_else(|| anyhow!("invalid entity kind"))?;
         let id = payload.read_entity_id()?;
         let graphic_id = payload.read_u16::<Endian>()?;
@@ -327,7 +327,7 @@ impl Packet for UpsertEntityCharacter {
         let direction = payload.read_direction()?;
         let hue = payload.read_u16::<Endian>()?;
         let flags = EntityFlags::from_bits_truncate(payload.read_u8()?);
-        let notoriety = Notoriety::from_u8(payload.read_u8()?)
+        let notoriety = Notoriety::from_repr(payload.read_u8()?)
             .ok_or_else(|| anyhow!("invalid notoriety"))?;
         let mut children = Vec::new();
 
