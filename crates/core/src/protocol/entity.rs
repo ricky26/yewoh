@@ -350,11 +350,15 @@ pub struct UpsertEntityCharacter {
     pub equipment: Vec<CharacterEquipment>,
 }
 
+impl UpsertEntityCharacter {
+    const MIN_VERSION_HUE: ClientVersion = ClientVersion::new(7, 0, 33, 1);
+}
+
 impl Packet for UpsertEntityCharacter {
     fn packet_kind() -> u8 { 0x78 }
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
         let body_type = payload.read_u16::<Endian>()?;
         let x = payload.read_u16::<Endian>()? as i32;
@@ -373,17 +377,21 @@ impl Packet for UpsertEntityCharacter {
                 break;
             }
 
-            let graphic_id = payload.read_u16::<Endian>()?;
+            let mut graphic_id = payload.read_u16::<Endian>()?;
             let slot = EquipmentSlot::from_repr(payload.read_u8()?)
                 .unwrap_or(EquipmentSlot::Invalid);
-            let hue = if graphic_id & 0x8000 != 0 {
+            let hue = if client_version >= Self::MIN_VERSION_HUE {
+                payload.read_u16::<Endian>()?
+            } else if graphic_id & 0x8000 != 0 {
+                graphic_id &= 0x7fff;
                 payload.read_u16::<Endian>()?
             } else {
                 0
             };
+
             equipment.push(CharacterEquipment {
                 id: child_id,
-                graphic_id,
+                graphic_id: graphic_id & 0x7fff,
                 slot,
                 hue,
             });
@@ -401,7 +409,7 @@ impl Packet for UpsertEntityCharacter {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.id)?;
         writer.write_u16::<Endian>(self.body_type)?;
         writer.write_u16::<Endian>(self.position.x as u16)?;
@@ -414,13 +422,14 @@ impl Packet for UpsertEntityCharacter {
 
         for item in self.equipment.iter() {
             writer.write_entity_id(item.id)?;
-            writer.write_u16::<Endian>(item.graphic_id | if item.hue != 0 {
-                0x8000
-            } else {
-                0
-            })?;
+            if client_version >= Self::MIN_VERSION_HUE || item.hue == 0 {
+                writer.write_u16::<Endian>(item.graphic_id)?;
+            } else if item.hue != 0 {
+                writer.write_u16::<Endian>(item.graphic_id | 0x8000)?;
+            }
             writer.write_u8(item.slot as u8)?;
-            if item.hue != 0 {
+
+            if client_version >= Self::MIN_VERSION_HUE || item.hue != 0 {
                 writer.write_u16::<Endian>(item.hue)?;
             }
         }

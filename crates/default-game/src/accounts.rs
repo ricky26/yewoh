@@ -67,13 +67,13 @@ pub fn handle_create_character(
     for event in events.iter() {
         let connection = event.connection;
 
-        let backpack_id = entity_allocator.allocate();
+        let backpack_id = entity_allocator.allocate_item();
         let backpack_entity = commands.spawn()
             .insert(NetEntity { id: backpack_id })
             .insert(Graphic { id: 0x9b2, hue: 120 })
             .id();
 
-        let primary_entity_id = entity_allocator.allocate();
+        let primary_entity_id = entity_allocator.allocate_character();
         let primary_entity = commands.spawn()
             .insert(NetEntity { id: primary_entity_id })
             .insert(MapPosition {

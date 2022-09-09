@@ -322,7 +322,7 @@ pub fn apply_new_primary_entities(
     server: Res<NetClients>,
     mut events: EventReader<NewPrimaryEntityEvent>,
     mut client_query: Query<&mut NetClient>,
-    query: Query<(&NetEntity, &MapPosition, &Character, &Stats)>,
+    query: Query<(&NetEntity, &MapPosition, &Character)>,
     mut commands: Commands,
 ) {
     for event in events.iter() {
@@ -354,7 +354,7 @@ pub fn apply_new_primary_entities(
 
         commands.entity(primary_entity).insert(NetOwner { connection });
 
-        let (primary_net, map_position, character, stats) = match query.get(primary_entity) {
+        let (primary_net, map_position, character) = match query.get(primary_entity) {
             Ok(x) => x,
             Err(_) => {
                 continue;

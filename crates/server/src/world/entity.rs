@@ -182,20 +182,26 @@ impl Stats {
 
 #[derive(Debug)]
 pub struct NetEntityAllocator {
-    next_id: AtomicU32,
+    next_character: AtomicU32,
+    next_item: AtomicU32,
 }
 
 impl Default for NetEntityAllocator {
     fn default() -> Self {
         Self {
-            next_id: AtomicU32::new(1),
+            next_character: AtomicU32::new(1),
+            next_item: AtomicU32::new(0x40000001),
         }
     }
 }
 
 impl NetEntityAllocator {
-    pub fn allocate(&self) -> EntityId {
-        EntityId::from_u32(self.next_id.fetch_add(1, Ordering::Relaxed))
+    pub fn allocate_character(&self) -> EntityId {
+        EntityId::from_u32(self.next_character.fetch_add(1, Ordering::Relaxed))
+    }
+
+    pub fn allocate_item(&self) -> EntityId {
+        EntityId::from_u32(self.next_item.fetch_add(1, Ordering::Relaxed))
     }
 }
 
