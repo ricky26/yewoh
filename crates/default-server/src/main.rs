@@ -15,7 +15,6 @@ use tokio::sync::mpsc;
 
 use yewoh::assets::uop::UopBuffer;
 use yewoh_default_game::data::static_data;
-use yewoh_default_game::data::static_data::StaticData;
 use yewoh_default_game::DefaultGamePlugin;
 use yewoh_server::game_server::listen_for_game;
 use yewoh_server::http::HttpApi;

@@ -210,13 +210,6 @@ pub fn handle_packets(
 
         log::debug!("IN ({:?}): {:?}", client.address, packet);
 
-        /*
-        let entity_id = EntityId::from_u32(1337);
-        let position = IVec3::new(500, 2000, 0);
-        let direction = Direction::North;
-        let body_type = 0x25e;
-        let hue = 120;*/
-
         if let Some(_version_response) = packet.downcast::<ClientVersionRequest>() {
             if !client.in_world {
                 client.in_world = true;
@@ -258,7 +251,6 @@ pub fn handle_packets(
                 primary_entity: client.primary_entity,
                 request,
             });
-
         }
     }
 }
