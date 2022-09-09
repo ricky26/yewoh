@@ -1,0 +1,322 @@
+skills:
+  0:
+    name: Alchemy
+    noun: Alchemist
+    dex_scale: 5
+    int_scale: 5
+    dex_gain: 0.5
+    int_gain: 0.5
+  1:
+    name: Anatomy
+    noun: Biologist
+    str_gain: 0.15
+    dex_gain: 0.15
+    int_gain: 0.7
+  2:
+    name: Animal Lore
+    noun: Naturalist
+    int_gain: 1
+  3:
+    name: Item Identification
+    noun: Merchant
+    int_gain: 1
+  4:
+    name: Arms Lore
+    noun: Weapon Master
+    str_gain: 0.75
+    dex_gain: 0.15
+    int_gain: 0.1
+  5:
+    name: Parrying
+    noun: Duelist
+    str_scale: 7.5
+    dex_scale: 2.5
+    str_gain: 0.75
+    dex_gain: 0.25
+  6:
+    name: Begging
+    noun: Beggar
+  7:
+    name: Blacksmithy
+    noun: Blacksmith
+    str_scale: 10
+    str_gain: 1
+  8:
+    name: Bowcraft/Fletching
+    noun: Bowyer
+    str_scale: 6.0
+    dex_scale: 16.0
+    str_gain: 0.6
+    dex_gain: 1.6
+    gain_scale: 1.0
+  9:
+    name: Peacemaking
+    noun: Pacifier
+  10:
+    name: Camping
+    noun: Explorer
+    str_scale: 20.0
+    dex_scale: 15.0
+    int_scale: 15.0
+    str_gain: 2.0
+    dex_gain: 1.5
+    int_gain: 1.5
+  11:
+    name: Carpentry
+    noun: Carpenter
+    str_scale: 20.0
+    dex_scale: 5.0
+    str_gain: 2.0
+    dex_gain: 0.5
+  12:
+    name: Cartography
+    noun: Cartographer
+    dex_scale: 7.5
+    int_scale: 7.5
+    dex_gain: 0.75
+    int_gain: 0.75
+  13:
+    name: Cooking
+    noun: Chef
+    dex_scale: 20.0
+    int_scale: 30.0
+    dex_gain: 2.0
+    int_gain: 3.0
+  14:
+    name: Detecting Hidden
+    noun: Scout
+    dex_gain: 0.4
+    int_gain: 0.6
+  15:
+    name: Discordance
+    noun: Demoralizer
+    dex_scale: 2.5
+    int_scale: 2.5
+    dex_gain: 0.25
+    int_gain: 0.25
+  16:
+    name: Evaluating Intelligence
+    noun: Scholar
+    int_gain: 1.0
+  17:
+    name: Healing
+    noun: Healer
+    str_scale: 6.0
+    dex_scale: 6.0
+    int_scale: 8.0
+    str_gain: 0.6
+    dex_gain: 0.6
+    int_gain: 0.8
+  18:
+    name: Fishing
+    noun: Fisherman
+    str_gain: 0.5
+    dex_gain: 0.5
+  19:
+    name: Forensic Evaluation
+    noun: Detective
+    dex_gain: 0.2
+    int_gain: 0.8
+  20:
+    name: Herding
+    noun: Shepherd
+    str_scale: 16.25
+    dex_scale: 6.25
+    int_scale: 2.5
+    str_gain: 1.625
+    dex_gain: 0.625
+    int_gain: 0.25
+  21:
+    name: Hiding
+    noun: Shade
+    dex_gain: 0.8
+    int_gain: 0.2
+  22:
+    name: Provocation
+    noun: Rouser
+    dex_scale: 4.5
+    int_scale: 0.5
+    dex_gain: 0.45
+    int_gain: 0.05
+  23:
+    name: Inscription
+    noun: Scribe
+    dex_scale: 2.0
+    int_scale: 8.0
+    dex_gain: 0.2
+    int_gain: 0.8
+  24:
+    name: Lockpicking
+    noun: Infiltrator
+    dex_scale: 25.0
+    dex_gain: 2.0
+  25:
+    name: Magery
+    noun: Mage
+    int_scale: 15.0
+    int_gain: 1.5
+  26:
+    name: Resisting Spells
+    noun: Warder
+    str_gain: 0.25
+    dex_gain: 0.25
+    int_gain: 0.5
+  27:
+    name: Tactics
+    noun: Tactician
+  28:
+    name: Snooping
+    noun: Spy
+    dex_scale: 25.0
+    dex_gain: 2.5
+  29:
+    name: Musicianship
+    noun: Bard
+    dex_gain: 0.8
+    int_gain: 0.2
+  30:
+    name: Poisoning
+    noun: Assassin
+    dex_scale: 4.0
+    int_scale: 16.0
+    dex_gain: 0.4
+    int_gain: 1.6
+  31:
+    name: Archery
+    noun: Archer
+    str_scale: 2.5
+    dex_scale: 7.5
+    str_gain: 0.25
+    dex_gain: 0.75
+  32:
+    name: Spirit Speak
+    noun: Medium
+    int_gain: 1.0
+  33:
+    name: Stealing
+    noun: Pickpocket
+    dex_scale: 10.0
+    dex_gain: 1.0
+  34:
+    name: Tailoring
+    noun: Tailor
+    str_scale: 3.75
+    dex_scale: 16.25
+    int_scale: 5.0
+    str_gain: 0.38
+    dex_gain: 1.63
+    int_gain: 0.5
+  35:
+    name: Animal Taming
+    noun: Tamer
+    str_scale: 14.0
+    dex_scale: 2.0
+    int_scale: 4.0
+    str_gain: 1.4
+    dex_gain: 0.2
+    int_gain: 0.4
+  36:
+    name: Taste Identification
+    noun: Praegustator
+    str_gain: 0.2
+    int_gain: 0.8
+    gain_scale: 1.0
+  37:
+    name: Tinkering
+    noun: Tinker
+    str_scale: 5.0
+    dex_scale: 2.0
+    int_scale: 3.0
+    str_gain: 0.5
+    dex_gain: 0.2
+    int_gain: 0.3
+  38:
+    name: Tracking
+    noun: Ranger
+    dex_scale: 12.5
+    int_scale: 12.5
+    dex_gain: 1.25
+    int_gain: 1.25
+  39:
+    name: Veterinary
+    noun: Veterinarian
+    str_scale: 8.0
+    dex_scale: 4.0
+    int_scale: 8.0
+    str_gain: 0.8
+    dex_gain: 0.4
+    int_gain: 0.8
+  40:
+    name: Swordsmanship
+    noun: Swordsman
+    str_scale: 7.5
+    dex_scale: 2.5
+    str_gain: 0.75
+    dex_gain: 0.25
+  41:
+    name: Mace Fighting
+    noun: Armsman
+    str_scale: 9.0
+    dex_scale: 1.0
+    str_gain: 0.9
+    dex_gain: 0.1
+  42:
+    name: Fencing
+    noun: Fencer
+    str_scale: 4.5
+    dex_scale: 5.5
+    str_gain: 0.45
+    dex_gain: 0.55
+  43:
+    name: Wrestling
+    noun: Wrestler
+    str_scale: 9.0
+    dex_scale: 1.0
+    str_gain: 0.9
+    dex_gain: 0.1
+  44:
+    name: Lumberjacking
+    noun: Lumberjack
+    str_scale: 20.0
+    str_gain: 2.0
+  45:
+    name: Mining
+    noun: Miner
+    str_scale: 20.0
+    str_gain: 2.0
+  46:
+    name: Meditation
+    noun: Stoic
+  47:
+    name: Stealth
+    noun: Rogue
+  48:
+    name: Remove Trap
+    noun: Trap Specialist
+  49:
+    name: Necromancy
+    noun: Necromancer
+  50:
+    name: Focus
+    noun: Driven
+  51:
+    name: Chivalry
+    noun: Paladin
+  52:
+    name: Bushido
+    noun: Samurai
+  53:
+    name: Ninjitsu
+    noun: Ninja
+  54:
+    name: Spellweaving
+    noun: Arcanist
+  55:
+    name: Mysticism
+    noun: Mystic
+  56:
+    name: Imbuing
+    noun: Artificer
+  57:
+    name: Throwing
+    noun: Bladeweaver
