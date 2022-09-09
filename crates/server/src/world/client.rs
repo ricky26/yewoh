@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::ptr::eq;
 
 use bevy_ecs::prelude::*;
 use glam::UVec2;
@@ -7,12 +8,15 @@ use log::{info, warn};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 
-use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, BeginEnterWorld, ChangeSeason, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, EndEnterWorld, EntityFlags, ExtendedCommand, FeatureFlags, Move, Reader, SetTime, SupportedFeatures, UnicodeTextMessageRequest, UpsertEntityCharacter, UpsertLocalPlayer, Writer};
+use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, BeginEnterWorld, ChangeSeason, CharacterEquipment, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DoubleClick, EndEnterWorld, EntityFlags, ExtendedCommand, FeatureFlags, Move, Reader, SetTime, SingleClick, SupportedFeatures, UnicodeTextMessageRequest, UpsertEntityCharacter, UpsertLocalPlayer, Writer};
 
 use crate::game_server::NewSessionAttempt;
 use crate::lobby::{NewSession, NewSessionRequest, SessionAllocator};
-use crate::world::entity::{EntityVisual, EntityVisualKind, HasNotoriety, MapPosition, NetEntity, Stats};
-use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, MoveEvent, NewPrimaryEntityEvent};
+use crate::world::entity::{Character, Graphic, HasNotoriety, MapPosition, NetEntity, NetEntityLookup, NetOwner, Stats};
+use crate::world::events::{
+    CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DoubleClickEvent, MoveEvent,
+    NewPrimaryEntityEvent, ReceivedPacketEvent, SentPacketEvent, SingleClickEvent,
+};
 
 pub struct NewConnection {
     pub address: SocketAddr,
@@ -27,6 +31,7 @@ pub enum WriterAction {
 #[derive(Debug, Clone, Component)]
 pub struct NetClient {
     pub address: SocketAddr,
+    pub primary_entity: Option<Entity>,
 }
 
 #[derive(Debug, Clone, Component)]
@@ -49,8 +54,6 @@ pub struct MapInfos {
 pub struct ClientState {
     address: SocketAddr,
     client_version: ClientVersion,
-    seed: u32,
-    primary_entity: Option<Entity>,
     in_world: bool,
     tx: mpsc::UnboundedSender<WriterAction>,
 }
@@ -149,13 +152,11 @@ pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<PlayerServer>
         });
 
         let entity = commands.spawn()
-            .insert(NetClient { address })
+            .insert(NetClient { address, primary_entity: None })
             .id();
         let client = ClientState {
             address,
             client_version,
-            seed,
-            primary_entity: None,
             in_world: false,
             tx,
         };
@@ -196,12 +197,10 @@ pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<PlayerServer>
     }
 }
 
-pub fn handle_packets(
+pub fn handle_new_packets(
     mut server: ResMut<PlayerServer>,
-    mut character_list_events: EventWriter<CharacterListEvent>,
-    mut character_creation_events: EventWriter<CreateCharacterEvent>,
-    mut move_events: EventWriter<MoveEvent>,
-    mut chat_events: EventWriter<ChatRequestEvent>,
+    mut write_events: EventReader<SentPacketEvent>,
+    mut read_events: EventWriter<ReceivedPacketEvent>,
 ) {
     while let Ok((connection, packet)) = server.packet_rx.try_recv() {
         let client = match server.client_mut(connection) {
@@ -210,6 +209,26 @@ pub fn handle_packets(
         };
 
         log::debug!("IN ({:?}): {:?}", client.address, packet);
+        read_events.send(ReceivedPacketEvent { connection, packet });
+    }
+
+    for SentPacketEvent { connection, packet } in write_events.iter() {
+        server.send_packet(*connection, packet.clone());
+    }
+}
+
+pub fn handle_login_packets(
+    mut server: ResMut<PlayerServer>,
+    mut events: EventReader<ReceivedPacketEvent>,
+    mut character_list_events: EventWriter<CharacterListEvent>,
+    mut character_creation_events: EventWriter<CreateCharacterEvent>,
+) {
+    for ReceivedPacketEvent { connection, packet } in events.iter() {
+        let connection = *connection;
+        let client = match server.client_mut(connection) {
+            Some(x) => x,
+            None => continue,
+        };
 
         if let Some(_version_response) = packet.downcast::<ClientVersionRequest>() {
             if !client.in_world {
@@ -246,11 +265,32 @@ pub fn handle_packets(
                 connection,
                 request: create_character.0.clone(),
             });
-        } else if let Some(request) = packet.downcast::<Move>().cloned() {
-            move_events.send(MoveEvent {
+        }
+    }
+}
+
+pub fn handle_input_packets(
+    lookup: Res<NetEntityLookup>,
+    mut events: EventReader<ReceivedPacketEvent>,
+    mut move_events: EventWriter<MoveEvent>,
+    mut chat_events: EventWriter<ChatRequestEvent>,
+    mut single_click_events: EventWriter<SingleClickEvent>,
+    mut double_click_events: EventWriter<DoubleClickEvent>,
+) {
+    for ReceivedPacketEvent { connection, packet } in events.iter() {
+        let connection = *connection;
+
+        if let Some(request) = packet.downcast::<Move>().cloned() {
+            move_events.send(MoveEvent { connection, request });
+        } else if let Some(request) = packet.downcast::<SingleClick>() {
+            single_click_events.send(SingleClickEvent {
                 connection,
-                primary_entity: client.primary_entity,
-                request,
+                target: lookup.net_to_ecs(request.target_id),
+            });
+        } else if let Some(request) = packet.downcast::<DoubleClick>() {
+            double_click_events.send(DoubleClickEvent {
+                connection,
+                target: lookup.net_to_ecs(request.target_id),
             });
         } else if let Some(request) = packet.downcast::<AsciiTextMessageRequest>() {
             chat_events.send(ChatRequestEvent {
@@ -271,19 +311,46 @@ pub fn handle_packets(
 
 pub fn apply_new_primary_entities(
     maps: Res<MapInfos>,
+    lookup: Res<NetEntityLookup>,
     mut server: ResMut<PlayerServer>,
     mut events: EventReader<NewPrimaryEntityEvent>,
-    query: Query<(&NetEntity, &MapPosition, &EntityVisual, &Stats, &HasNotoriety)>,
+    mut client_query: Query<&mut NetClient>,
+    equipment_query: Query<&Graphic>,
+    query: Query<(&NetEntity, &MapPosition, &Character, &Stats, &HasNotoriety)>,
+    mut commands: Commands,
 ) {
     for event in events.iter() {
-        let client = match server.client_mut(event.connection) {
+        let connection = event.connection;
+        let client = match server.client_mut(connection) {
             Some(v) => v,
             None => continue,
         };
 
-        let (primary_net, map_position, visual, stats, notoriety) = match query.get(event.primary_entity) {
+        let mut component = match client_query.get_mut(connection) {
             Ok(x) => x,
-            Err(err) => {
+            _ => continue,
+        };
+
+        if component.primary_entity == event.primary_entity {
+            continue;
+        }
+
+        if let Some(old_primary) = component.primary_entity {
+            commands.entity(old_primary).remove::<NetOwner>();
+        }
+
+        component.primary_entity = event.primary_entity;
+
+        let primary_entity = match component.primary_entity {
+            Some(x) => x,
+            None => continue,
+        };
+
+        commands.entity(primary_entity).insert(NetOwner { connection });
+
+        let (primary_net, map_position, character, stats, notoriety) = match query.get(primary_entity) {
+            Ok(x) => x,
+            Err(_) => {
                 continue;
             }
         };
@@ -295,14 +362,27 @@ pub fn apply_new_primary_entities(
             None => continue,
         };
 
-        client.primary_entity = Some(event.primary_entity);
         let entity_id = primary_net.id;
+        let hue = character.hue;
+        let body_type = character.body_type;
+        let mut equipment = Vec::new();
 
-        let hue = visual.hue;
-        let body_type = match visual.kind {
-            EntityVisualKind::Body(body_type) => body_type,
-            _ => 0,
-        };
+        for item in character.equipment.iter() {
+            let net_id = match lookup.ecs_to_net(item.entity) {
+                Some(x) => x,
+                _ => continue,
+            };
+            let graphic = match equipment_query.get(item.entity) {
+                Ok(x) => x,
+                _ => continue,
+            };
+            equipment.push(CharacterEquipment {
+                id: net_id,
+                slot: item.slot,
+                graphic_id: graphic.id,
+                hue: graphic.hue,
+            });
+        }
 
         client.send_packet(BeginEnterWorld {
             entity_id,
@@ -331,7 +411,7 @@ pub fn apply_new_primary_entities(
             hue,
             flags: EntityFlags::empty(),
             notoriety,
-            children: vec![],
+            equipment,
         }.into());
         client.send_packet(stats.upsert(entity_id, true).into());
         client.send_packet(EndEnterWorld.into());

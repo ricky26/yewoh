@@ -1,10 +1,11 @@
+use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicU32, Ordering};
 use bevy_ecs::prelude::*;
 use glam::IVec3;
 
 use yewoh::{Direction, EntityId, Notoriety};
-use yewoh::protocol::UpsertEntityStats;
+use yewoh::protocol::{EquipmentSlot, UpsertEntityStats};
 
 #[derive(Debug, Clone, Copy, Component)]
 pub struct NetEntity {
@@ -29,23 +30,28 @@ impl DerefMut for HasNotoriety {
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
 
-#[derive(Debug, Clone, Copy, Component)]
-pub enum EntityVisualKind {
-    Graphic(u16),
-    Body(u16),
-    Multi(u16),
+#[derive(Debug, Clone)]
+pub struct Equipment {
+    pub slot: EquipmentSlot,
+    pub entity: Entity,
 }
 
-impl Default for EntityVisualKind {
-    fn default() -> Self {
-        EntityVisualKind::Graphic(0)
-    }
-}
-
-#[derive(Debug, Clone, Copy, Component, Default)]
-pub struct EntityVisual {
-    pub kind: EntityVisualKind,
+#[derive(Debug, Clone, Component)]
+pub struct Character {
+    pub body_type: u16,
     pub hue: u16,
+    pub equipment: Vec<Equipment>,
+}
+
+#[derive(Debug, Clone, Copy, Component)]
+pub struct Graphic {
+    pub id: u16,
+    pub hue: u16,
+}
+
+#[derive(Debug, Clone, Copy, Component)]
+pub struct Multi {
+    pub id: u16,
 }
 
 #[derive(Debug, Clone, Copy, Component, Default)]
@@ -187,3 +193,52 @@ impl NetEntityAllocator {
     }
 }
 
+
+#[derive(Debug, Default)]
+pub struct NetEntityLookup {
+    net_to_ecs: HashMap<EntityId, Entity>,
+    ecs_to_net: HashMap<Entity, EntityId>,
+}
+
+impl NetEntityLookup {
+    pub fn net_to_ecs(&self, id: EntityId) -> Option<Entity> {
+        self.net_to_ecs.get(&id).copied()
+    }
+
+    pub fn ecs_to_net(&self, entity: Entity) -> Option<EntityId> {
+        self.ecs_to_net.get(&entity).copied()
+    }
+
+    pub fn insert(&mut self, entity: Entity, id: EntityId) {
+        if let Some(old_id) = self.ecs_to_net.get(&entity) {
+            if id == *old_id {
+                return;
+            }
+
+            self.net_to_ecs.remove(old_id);
+        }
+
+        self.net_to_ecs.insert(id, entity);
+        self.ecs_to_net.insert(entity, id);
+    }
+
+    pub fn remove(&mut self, entity: Entity) {
+        if let Some(id) = self.ecs_to_net.remove(&entity) {
+            self.net_to_ecs.remove(&id);
+        }
+    }
+}
+
+pub fn update_entity_lookup(
+    mut lookup: ResMut<NetEntityLookup>,
+    query: Query<(Entity, &NetEntity), Or<(Added<NetEntity>, Changed<NetEntity>)>>,
+    removals: RemovedComponents<NetEntity>,
+) {
+    for (entity, net_entity) in query.iter() {
+        lookup.insert(entity, net_entity.id);
+    }
+
+    for entity in removals.iter() {
+        lookup.remove(entity);
+    }
+}

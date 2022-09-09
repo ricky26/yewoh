@@ -1,26 +1,33 @@
 use bevy_ecs::prelude::*;
-use yewoh::protocol::MoveConfirm;
-use yewoh_server::world::client::PlayerServer;
-use yewoh_server::world::entity::{HasNotoriety, MapPosition};
-use yewoh_server::world::events::MoveEvent;
+use yewoh::protocol::{MoveConfirm, OpenPaperDoll};
+use yewoh_server::world::client::{NetClient, PlayerServer};
+use yewoh_server::world::entity::{HasNotoriety, MapPosition, NetEntity};
+use yewoh_server::world::events::{DoubleClickEvent, MoveEvent};
 
 pub fn handle_move(
     mut server: ResMut<PlayerServer>,
     mut events: EventReader<MoveEvent>,
-    mut query: Query<(&mut MapPosition, &HasNotoriety)>,
+    connection_query: Query<&NetClient>,
+    mut character_query: Query<(&mut MapPosition, &HasNotoriety)>,
 ) {
-    for MoveEvent { connection, primary_entity, request } in events.iter() {
-        let client = match server.client_mut(*connection) {
+    for MoveEvent { connection, request } in events.iter() {
+        let connection = *connection;
+        let client_component = match connection_query.get(connection) {
+            Ok(x) => x,
+            _ => continue,
+        };
+
+        let client = match server.client_mut(connection) {
             Some(x) => x,
             None => continue,
         };
 
-        let primary_entity = match primary_entity {
-            Some(x) => *x,
+        let primary_entity = match client_component.primary_entity {
+            Some(x) => x,
             None => continue,
         };
 
-        let (mut map_position, notoriety) = match query.get_mut(primary_entity) {
+        let (mut map_position, notoriety) = match character_query.get_mut(primary_entity) {
             Ok(x) => x,
             _ => continue,
         };
@@ -31,6 +38,31 @@ pub fn handle_move(
         client.send_packet(MoveConfirm {
             sequence: request.sequence,
             notoriety,
+        }.into());
+    }
+}
+
+pub fn handle_double_click(
+    mut server: ResMut<PlayerServer>,
+    mut events: EventReader<DoubleClickEvent>,
+    target_query: Query<&NetEntity>,
+) {
+    for DoubleClickEvent { connection, target } in events.iter() {
+        let connection = *connection;
+        let target = match target {
+            Some(x) => *x,
+            None => continue,
+        };
+
+        let id = match target_query.get(target) {
+            Ok(e) => e.id,
+            _ => continue,
+        };
+
+        server.send_packet(connection, OpenPaperDoll {
+            id,
+            text: "Me, Myself and I".into(),
+            flags: Default::default()
         }.into());
     }
 }

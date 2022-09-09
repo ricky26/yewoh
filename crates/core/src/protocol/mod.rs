@@ -20,10 +20,10 @@ pub use extended::*;
 pub use input::*;
 pub use entity::*;
 pub use chat::*;
+pub use sound::*;
+pub use ui::*;
 
 use crate::protocol::compression::{HuffmanVecWriter};
-use crate::protocol::sound::PlayMusic;
-use crate::protocol::ui::OpenChatWindow;
 
 mod format;
 
@@ -51,8 +51,8 @@ pub trait Packet where Self: Sized {
     fn packet_kind() -> u8;
     fn fixed_length(client_version: ClientVersion) -> Option<usize>;
 
-    fn decode(client_version: ClientVersion, payload: &[u8]) -> anyhow::Result<Self>;
-    fn encode(&self, client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()>;
+    fn decode(client_version: ClientVersion, from_client: bool, payload: &[u8]) -> anyhow::Result<Self>;
+    fn encode(&self, client_version: ClientVersion, to_client: bool, writer: &mut impl Write) -> anyhow::Result<()>;
 }
 
 #[derive(Clone)]
@@ -61,31 +61,38 @@ struct PacketRegistration {
     size: usize,
     drop: fn(*mut ()),
     fixed_length: fn(client_version: ClientVersion) -> Option<usize>,
-    decode: fn(client_version: ClientVersion, payload: &[u8]) -> anyhow::Result<AnyPacket>,
-    encode: fn(client_version: ClientVersion, writer: &mut dyn Write, ptr: *mut ()) -> anyhow::Result<()>,
+    decode: fn(client_version: ClientVersion, from_client: bool, payload: &[u8]) -> anyhow::Result<AnyPacket>,
+    encode: fn(client_version: ClientVersion, to_client: bool, writer: &mut dyn Write, ptr: *mut ()) -> anyhow::Result<()>,
+    clone: fn(ptr: *mut ()) -> AnyPacket,
     debug: fn(ptr: *mut (), f: &mut fmt::Formatter<'_>) -> fmt::Result,
 }
 
 impl PacketRegistration {
-    pub fn for_type<T: Packet + Debug>() -> PacketRegistration {
+    pub fn for_type<T: Packet + Debug + Clone>() -> PacketRegistration {
         fn drop_packet<T: Packet>(ptr: *mut ()) {
             unsafe { std::ptr::drop_in_place(ptr as *mut T) }
         }
 
-        fn decode_packet<T: Packet>(client_version: ClientVersion, payload: &[u8]) -> anyhow::Result<AnyPacket> {
+        fn decode_packet<T: Packet>(client_version: ClientVersion, from_client: bool,
+            payload: &[u8]) -> anyhow::Result<AnyPacket> {
             log::debug!("Decoding {}", type_name::<T>());
-            Ok(AnyPacket::from_packet(T::decode(client_version, payload)?))
+            Ok(AnyPacket::from_packet(T::decode(client_version, from_client, payload)?))
         }
 
-        fn encode_packet<T: Packet>(client_version: ClientVersion,
+        fn encode_packet<T: Packet>(client_version: ClientVersion, to_client: bool,
             mut writer: &mut dyn Write, ptr: *mut ()) -> anyhow::Result<()> {
             let packet = unsafe { &*(ptr as *const T) };
-            packet.encode(client_version, &mut writer)
+            packet.encode(client_version, to_client, &mut writer)
         }
 
         fn debug<T: Debug>(ptr: *mut (), f: &mut fmt::Formatter<'_>) -> fmt::Result {
             let packet = unsafe { &*(ptr as *const T) };
             packet.fmt(f)
+        }
+
+        fn clone<T: Packet + Clone>(ptr: *mut ()) -> AnyPacket {
+            let packet = unsafe { &*(ptr as *const T) };
+            AnyPacket::from_packet(packet.clone())
         }
 
         PacketRegistration {
@@ -96,6 +103,7 @@ impl PacketRegistration {
             decode: decode_packet::<T>,
             encode: encode_packet::<T>,
             debug: debug::<T>,
+            clone: clone::<T>,
         }
     }
 }
@@ -138,6 +146,7 @@ fn packet_registry() -> &'static PacketRegistry {
 
             // Extended
             PacketRegistration::for_type::<ExtendedCommand>(),
+            PacketRegistration::for_type::<ExtendedCommandAos>(),
 
             // Input
             PacketRegistration::for_type::<Move>(),
@@ -148,6 +157,7 @@ fn packet_registry() -> &'static PacketRegistry {
 
             // UI
             PacketRegistration::for_type::<OpenChatWindow>(),
+            PacketRegistration::for_type::<OpenPaperDoll>(),
 
             // Chat
             PacketRegistration::for_type::<AsciiTextMessage>(),
@@ -239,8 +249,17 @@ impl AnyPacket {
         }
     }
 
-    pub fn encode(&self, client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
-        (self.registration().encode)(client_version, writer, unsafe { transmute(&self.buffer) })
+    pub fn encode(&self, client_version: ClientVersion, to_client: bool, writer: &mut impl Write)
+        -> anyhow::Result<()> {
+        (self.registration().encode)(client_version, to_client, writer, unsafe { transmute(&self.buffer) })
+    }
+}
+
+impl Clone for AnyPacket {
+    fn clone(&self) -> Self {
+        unsafe {
+            (self.registration().clone)(transmute(&self.buffer))
+        }
     }
 }
 
@@ -271,6 +290,7 @@ impl<T: Packet> From<T> for AnyPacket {
 pub struct Reader {
     reader: BufReader<OwnedReadHalf>,
     buffer: Vec<u8>,
+    from_client: bool,
 }
 
 impl Reader {
@@ -296,7 +316,7 @@ impl Reader {
         self.buffer.resize(length, 0u8);
         self.reader.read_exact(&mut self.buffer[..]).await?;
 
-        let decoded = (registration.decode)(client_version, &self.buffer)?;
+        let decoded = (registration.decode)(client_version, self.from_client, &self.buffer)?;
         self.buffer.clear();
         Ok(decoded)
     }
@@ -306,6 +326,7 @@ pub struct Writer {
     writer: BufWriter<OwnedWriteHalf>,
     buffer: Vec<u8>,
     has_sent: bool,
+    to_client: bool,
     compress: bool,
     compress_buffer: Vec<u8>,
 }
@@ -336,20 +357,20 @@ impl Writer {
             (Some(_), true) => {
                 let mut writer = HuffmanVecWriter::new(&mut self.buffer);
                 writer.write_u8(T::packet_kind())?;
-                packet.encode(client_version, &mut writer)?;
+                packet.encode(client_version, self.to_client, &mut writer)?;
                 writer.finish();
             }
             (Some(length), false) => {
                 self.buffer.reserve(length);
                 self.buffer.push(T::packet_kind());
-                packet.encode(client_version, &mut self.buffer)?;
+                packet.encode(client_version, self.to_client, &mut self.buffer)?;
                 assert_eq!(length, self.buffer.len(), "Fixed length packet wrote wrong size");
             }
             (None, true) => {
                 self.compress_buffer.clear();
                 self.compress_buffer.reserve(4096);
                 self.compress_buffer.extend([T::packet_kind(), 0, 0]);
-                packet.encode(client_version, &mut self.compress_buffer)?;
+                packet.encode(client_version, self.to_client, &mut self.compress_buffer)?;
                 let packet_len = self.compress_buffer.len() as u16;
                 Endian::write_u16(&mut self.compress_buffer[1..3], packet_len);
                 let mut writer = HuffmanVecWriter::new(&mut self.buffer);
@@ -359,7 +380,7 @@ impl Writer {
             }
             (None, false) => {
                 self.buffer.extend([T::packet_kind(), 0, 0]);
-                packet.encode(client_version, &mut self.buffer)?;
+                packet.encode(client_version, self.to_client, &mut self.buffer)?;
                 let packet_len = self.buffer.len() as u16;
                 Endian::write_u16(&mut self.buffer[1..3], packet_len);
             }
@@ -380,20 +401,20 @@ impl Writer {
             (Some(_), true) => {
                 let mut writer = HuffmanVecWriter::new(&mut self.buffer);
                 writer.write_u8(kind)?;
-                packet.encode(client_version, &mut writer)?;
+                packet.encode(client_version, self.to_client, &mut writer)?;
                 writer.finish();
             }
             (Some(length), false) => {
                 self.buffer.reserve(length);
                 self.buffer.push(kind);
-                packet.encode(client_version, &mut self.buffer)?;
+                packet.encode(client_version, self.to_client, &mut self.buffer)?;
                 assert_eq!(length, self.buffer.len(), "Fixed length packet wrote wrong size");
             }
             (None, true) => {
                 self.compress_buffer.clear();
                 self.compress_buffer.reserve(4096);
                 self.compress_buffer.extend([kind, 0, 0]);
-                packet.encode(client_version, &mut self.compress_buffer)?;
+                packet.encode(client_version, self.to_client, &mut self.compress_buffer)?;
                 let packet_len = self.compress_buffer.len() as u16;
                 Endian::write_u16(&mut self.compress_buffer[1..3], packet_len);
                 let mut writer = HuffmanVecWriter::new(&mut self.buffer);
@@ -403,7 +424,7 @@ impl Writer {
             }
             (None, false) => {
                 self.buffer.extend([kind, 0, 0]);
-                packet.encode(client_version, &mut self.buffer)?;
+                packet.encode(client_version, self.to_client, &mut self.buffer)?;
                 let packet_len = self.buffer.len() as u16;
                 Endian::write_u16(&mut self.buffer[1..3], packet_len);
             }
@@ -421,10 +442,12 @@ pub fn new_io(stream: TcpStream, is_server: bool) -> (Reader, Writer) {
     (Reader {
         reader: BufReader::new(reader),
         buffer: Vec::with_capacity(4096),
+        from_client: is_server,
     }, Writer {
         writer: BufWriter::new(writer),
         buffer: Vec::with_capacity(4096),
         has_sent: is_server,
+        to_client: is_server,
         compress: false,
         compress_buffer: Vec::new(),
     })

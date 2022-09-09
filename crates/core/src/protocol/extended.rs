@@ -46,7 +46,7 @@ impl Packet for ExtendedCommand {
     fn packet_kind() -> u8 { 0xbf }
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let kind = payload.read_u16::<Endian>()?;
         match kind {
             Self::SCREEN_SIZE => Ok(ExtendedCommand::ScreenSize(ScreenSize {
@@ -66,7 +66,7 @@ impl Packet for ExtendedCommand {
         }
     }
 
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u16::<Endian>(self.kind())?;
         match self {
             ExtendedCommand::Unknown => return Err(anyhow!("tried to send unknown extended command")),
@@ -83,6 +83,24 @@ impl Packet for ExtendedCommand {
             ExtendedCommand::ClientType(client_type) =>
                 writer.write_u32::<Endian>(client_type.bits())?,
         }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ExtendedCommandAos {
+    Unknown,
+}
+
+impl Packet for ExtendedCommandAos {
+    fn packet_kind() -> u8 { 0xd7 }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, _payload: &[u8]) -> anyhow::Result<Self> {
+        Ok(Self::Unknown)
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, _writer: &mut impl Write) -> anyhow::Result<()> {
         Ok(())
     }
 }

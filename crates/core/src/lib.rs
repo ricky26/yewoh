@@ -4,7 +4,7 @@ use strum_macros::FromRepr;
 pub mod assets;
 pub mod protocol;
 
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Copy, Default, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct EntityId(u32);
 
 impl EntityId {

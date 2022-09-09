@@ -21,7 +21,7 @@ impl Packet for Seed {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(21) }
 
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let seed = payload.read_u32::<Endian>()?;
         let major = payload.read_u32::<Endian>()? as u8;
         let minor = payload.read_u32::<Endian>()? as u8;
@@ -33,7 +33,7 @@ impl Packet for Seed {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u32::<Endian>(self.seed)?;
         writer.write_u32::<Endian>(self.client_version.major as u32)?;
         writer.write_u32::<Endian>(self.client_version.minor as u32)?;
@@ -65,7 +65,7 @@ impl Packet for AccountLogin {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(62) }
 
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let username = payload.read_str_block(30)?;
         let password = payload.read_str_block(30)?;
         let next_login_key = payload.read_u8()?;
@@ -77,7 +77,7 @@ impl Packet for AccountLogin {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_str_block(&self.username, 30)?;
         writer.write_str_block(&self.password, 30)?;
         writer.write_u8(self.next_login_key)?;
@@ -105,7 +105,7 @@ impl Packet for ServerList {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let system_info_flags = payload.read_u8()?;
         let game_server_count = payload.read_u16::<Endian>()? as usize;
         let mut game_servers = Vec::with_capacity(game_server_count);
@@ -131,7 +131,7 @@ impl Packet for ServerList {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u8(self.system_info_flags)?;
         writer.write_u16::<Endian>(self.game_servers.len() as u16)?;
 
@@ -157,14 +157,14 @@ impl Packet for SelectGameServer {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(3) }
 
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let server_id = payload.read_u16::<Endian>()?;
         Ok(Self {
             server_id,
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u16::<Endian>(self.server_id)?;
         Ok(())
     }
@@ -182,14 +182,14 @@ impl Packet for SwitchServer {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(11) }
 
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let ip = payload.read_u32::<Endian>()?;
         let port = payload.read_u16::<Endian>()?;
         let token = payload.read_u32::<Endian>()?;
         Ok(Self { ip, port, token })
     }
 
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u32::<Endian>(self.ip)?;
         writer.write_u16::<Endian>(self.port)?;
         writer.write_u32::<Endian>(self.token)?;
@@ -209,7 +209,7 @@ impl Packet for GameServerLogin {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(0x41) }
 
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let token = payload.read_u32::<Endian>()?;
         let username = payload.read_str_block(30)?;
         let password = payload.read_str_block(30)?;
@@ -220,7 +220,7 @@ impl Packet for GameServerLogin {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u32::<Endian>(self.token)?;
         writer.write_str_block(&self.username, 30)?;
         writer.write_str_block(&self.password, 30)?;
@@ -274,7 +274,7 @@ impl Packet for SupportedFeatures {
         Some(if client_version >= Self::EXTENDED_MIN_VERSION { 5 } else { 3 })
     }
 
-    fn decode(client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let extended = client_version >= Self::EXTENDED_MIN_VERSION;
         let feature_flags = FeatureFlags::from_bits_truncate(if extended {
             payload.read_u32::<Endian>()?
@@ -286,7 +286,7 @@ impl Packet for SupportedFeatures {
         })
     }
 
-    fn encode(&self, client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         let extended = client_version >= Self::EXTENDED_MIN_VERSION;
         if extended {
             writer.write_u32::<Endian>(self.feature_flags.bits())?;
@@ -336,7 +336,7 @@ impl Packet for CharacterList {
     fn packet_kind() -> u8 { 0xa9 }
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let new_character_list = client_version >= Self::NEW_CHARACTER_LIST;
         let text_length = if new_character_list { 32 } else { 31 };
 
@@ -393,7 +393,7 @@ impl Packet for CharacterList {
         })
     }
 
-    fn encode(&self, client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         let new_character_list = client_version >= Self::NEW_CHARACTER_LIST;
         let text_length = if new_character_list { 32 } else { 31 };
 
@@ -616,11 +616,11 @@ impl Packet for CreateCharacterClassic {
     fn packet_kind() -> u8 { 0 }
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(104) }
 
-    fn decode(client_version: ClientVersion, payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(client_version: ClientVersion, _from_client: bool, payload: &[u8]) -> anyhow::Result<Self> {
         CreateCharacter::decode(false, client_version, payload).map(Self)
     }
 
-    fn encode(&self, client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         self.0.encode(false, client_version, writer)
     }
 }
@@ -632,11 +632,11 @@ impl Packet for CreateCharacterEnhanced {
     fn packet_kind() -> u8 { 0xf8 }
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(106) }
 
-    fn decode(client_version: ClientVersion, payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(client_version: ClientVersion, _from_client: bool, payload: &[u8]) -> anyhow::Result<Self> {
         CreateCharacter::decode(true, client_version, payload).map(Self)
     }
 
-    fn encode(&self, client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         self.0.encode(true, client_version, writer)
     }
 }
@@ -652,7 +652,7 @@ impl Packet for DeleteCharacter {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(39) }
 
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         payload.skip(30)?;
         let character_index = payload.read_u32::<Endian>()?;
         let ip = payload.read_u32::<Endian>()?;
@@ -662,7 +662,7 @@ impl Packet for DeleteCharacter {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_zeros(30)?;
         writer.write_u32::<Endian>(self.character_index)?;
         writer.write_u32::<Endian>(self.ip)?;
@@ -683,7 +683,7 @@ impl Packet for SelectCharacter {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(73) }
 
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         if payload.read_u32::<Endian>()? != CREATE_CHARACTER_MAGIC_1 {
             return Err(anyhow!("Invalid character select magic"));
         }
@@ -703,7 +703,7 @@ impl Packet for SelectCharacter {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u32::<Endian>(CREATE_CHARACTER_MAGIC_1)?;
         writer.write_str_block(&self.name, 30)?;
         writer.write_zeros(2)?;
@@ -724,13 +724,13 @@ impl Packet for ClientVersionRequest {
     fn packet_kind() -> u8 { 0xbd }
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         Ok(ClientVersionRequest {
             version: payload.read_str_nul()?,
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_str_nul(&self.version)
     }
 }
@@ -749,7 +749,7 @@ impl Packet for BeginEnterWorld {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(37) }
 
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let entity_id = payload.read_entity_id()?;
         payload.skip(4)?;
         let body = payload.read_u16::<Endian>()?;
@@ -770,7 +770,7 @@ impl Packet for BeginEnterWorld {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.entity_id)?;
         writer.write_u32::<Endian>(0)?;
         writer.write_u16::<Endian>(self.body_type)?;
@@ -795,11 +795,11 @@ impl Packet for EndEnterWorld {
     fn packet_kind() -> u8 { 0x55 }
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(1) }
 
-    fn decode(_client_version: ClientVersion, _payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, _payload: &[u8]) -> anyhow::Result<Self> {
         Ok(EndEnterWorld)
     }
 
-    fn encode(&self, _client_version: ClientVersion, _writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, _writer: &mut impl Write) -> anyhow::Result<()> {
         Ok(())
     }
 }
@@ -814,12 +814,12 @@ impl Packet for ShowPublicHouses {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
 
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let show = payload.read_u8()? != 0;
         Ok(Self { show })
     }
 
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u8(if self.show { 1 } else { 0 })?;
         Ok(())
     }
@@ -832,11 +832,11 @@ impl Packet for Ping {
     fn packet_kind() -> u8 { 0x73 }
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
 
-    fn decode(_client_version: ClientVersion, _payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, _payload: &[u8]) -> anyhow::Result<Self> {
         Ok(Self)
     }
 
-    fn encode(&self, _client_version: ClientVersion, _writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, _writer: &mut impl Write) -> anyhow::Result<()> {
         Ok(())
     }
 }
@@ -848,11 +848,11 @@ impl Packet for Logout {
     fn packet_kind() -> u8 { 0x01 }
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(5) }
 
-    fn decode(_client_version: ClientVersion, _payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, _payload: &[u8]) -> anyhow::Result<Self> {
         Ok(Logout)
     }
 
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u32::<Endian>(0xffffffff)?;
         Ok(())
     }
@@ -868,13 +868,13 @@ impl Packet for WarMode {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(5) }
 
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let war = payload.read_u8()? != 0;
         payload.skip(3)?;
         Ok(Self { war })
     }
 
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u8(if self.war { 1 } else { 0 })?;
         writer.write_all(&[0, 0x32, 0])?;
         Ok(())

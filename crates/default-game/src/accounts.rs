@@ -2,9 +2,9 @@ use bevy_ecs::prelude::*;
 use glam::IVec3;
 use yewoh::{Direction, Notoriety};
 
-use yewoh::protocol::{CharacterFromList, CharacterList, UnicodeTextMessage};
+use yewoh::protocol::{CharacterFromList, CharacterList, EquipmentSlot, UnicodeTextMessage};
 use yewoh_server::world::client::{PlayerServer};
-use yewoh_server::world::entity::{EntityVisual, EntityVisualKind, HasNotoriety, MapPosition, NetEntity, NetEntityAllocator, Stats};
+use yewoh_server::world::entity::{Character, Equipment, Graphic, HasNotoriety, MapPosition, NetEntity, NetEntityAllocator, Stats};
 use yewoh_server::world::events::{CharacterListEvent, CreateCharacterEvent, NewPrimaryEntityEvent};
 
 use crate::data::static_data::StaticData;
@@ -66,6 +66,13 @@ pub fn handle_create_character(
 ) {
     for event in events.iter() {
         let connection = event.connection;
+
+        let backpack_id = entity_allocator.allocate();
+        let backpack_entity = commands.spawn()
+            .insert(NetEntity { id: backpack_id })
+            .insert(Graphic { id: 0x9b2, hue: 120 })
+            .id();
+
         let primary_entity_id = entity_allocator.allocate();
         let primary_entity = commands.spawn()
             .insert(NetEntity { id: primary_entity_id })
@@ -74,9 +81,15 @@ pub fn handle_create_character(
                 position: IVec3::new(2000, 2000, 0),
                 direction: Direction::North,
             })
-            .insert(EntityVisual {
-                kind: EntityVisualKind::Body(0x25e),
+            .insert(Character {
+                body_type: 0x25e,
                 hue: 120,
+                equipment: vec![
+                    Equipment {
+                        entity: backpack_entity,
+                        slot: EquipmentSlot::Backpack,
+                    },
+                ],
             })
             .insert(HasNotoriety(Notoriety::Innocent))
             .insert(Stats {
@@ -86,7 +99,7 @@ pub fn handle_create_character(
                 ..Default::default()
             })
             .id();
-        out_events.send(NewPrimaryEntityEvent { connection, primary_entity });
+        out_events.send(NewPrimaryEntityEvent { connection, primary_entity: Some(primary_entity) });
         server.send_packet(connection, UnicodeTextMessage {
             text: "Avast me hearties".to_string(),
             hue: 120,

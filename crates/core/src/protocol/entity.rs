@@ -4,6 +4,7 @@ use anyhow::anyhow;
 use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use glam::IVec3;
+use strum_macros::FromRepr;
 
 use crate::{Direction, EntityId, EntityKind, Notoriety};
 use crate::protocol::PacketWriteExt;
@@ -24,14 +25,14 @@ impl Packet for EntityRequest {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(10) }
 
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         payload.skip(4)?;
         let kind = payload.read_u8()?;
         let target = payload.read_entity_id()?;
         Ok(EntityRequest { kind, target })
     }
 
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u32::<Endian>(0xedededed)?;
         writer.write_u8(self.kind)?;
         writer.write_entity_id(self.target)?;
@@ -67,7 +68,7 @@ impl Packet for UpsertEntityLegacy {
     fn packet_kind() -> u8 { 0x1a }
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?.as_u32();
         let mut graphic_id = payload.read_u16::<Endian>()? as u32;
         let quantity = if id & 0x80000000 != 0 {
@@ -110,7 +111,7 @@ impl Packet for UpsertEntityLegacy {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u32::<Endian>(self.id.as_u32() | if self.quantity > 1 {
             0x80000000
         } else {
@@ -178,7 +179,7 @@ impl Packet for UpsertEntity {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(24) }
 
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         payload.skip(2)?;
         let kind = EntityKind::from_repr(payload.read_u8()?)
             .ok_or_else(|| anyhow!("invalid entity kind"))?;
@@ -206,7 +207,7 @@ impl Packet for UpsertEntity {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u16::<Endian>(1)?;
         writer.write_u8(self.kind as u8)?;
         writer.write_entity_id(self.id)?;
@@ -231,12 +232,12 @@ impl Packet for DeleteEntity {
     fn packet_kind() -> u8 { 0x1d }
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(5) }
 
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
         Ok(Self { id })
     }
 
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.id)?;
         Ok(())
     }
@@ -257,7 +258,7 @@ impl Packet for UpsertLocalPlayer {
     fn packet_kind() -> u8 { 0x20 }
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(19) }
 
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
         let body_type = payload.read_u16::<Endian>()?;
         payload.skip(1)?;
@@ -275,11 +276,11 @@ impl Packet for UpsertLocalPlayer {
             server_id,
             flags,
             position: IVec3::new(x, y, z),
-            direction
+            direction,
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.id)?;
         writer.write_u16::<Endian>(self.body_type)?;
         writer.write_u8(0)?;
@@ -294,11 +295,46 @@ impl Packet for UpsertLocalPlayer {
     }
 }
 
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, Default, Ord, PartialOrd, Eq, PartialEq, FromRepr)]
+pub enum EquipmentSlot {
+    #[default]
+    Invalid = 0,
+    MainHand = 1,
+    BothHands = 2,
+    Shoes = 3,
+    Bottom = 4,
+    Top = 5,
+    Head = 6,
+    Hands = 7,
+    Ring = 8,
+    Talisman = 9,
+    Neck = 10,
+    Hair = 11,
+    Waist = 12,
+    InnerTorso = 13,
+    Bracelet = 14,
+    FacialHair = 16,
+    MiddleTorso = 17,
+    Earrings = 18,
+    Arms = 19,
+    Cloak = 20,
+    Backpack = 21,
+    OuterTorso = 22,
+    OuterLegs = 23,
+    InnerLegs = 24,
+    Mount = 25,
+    ShopBuy = 26,
+    ShopBuyback = 27,
+    ShopSell = 28,
+    Bank = 29,
+}
+
 #[derive(Debug, Clone, Default)]
-pub struct CharacterChildEntity {
+pub struct CharacterEquipment {
     pub id: EntityId,
     pub graphic_id: u16,
-    pub layer: u8,
+    pub slot: EquipmentSlot,
     pub hue: u16,
 }
 
@@ -311,16 +347,16 @@ pub struct UpsertEntityCharacter {
     pub hue: u16,
     pub flags: EntityFlags,
     pub notoriety: Notoriety,
-    pub children: Vec<CharacterChildEntity>,
+    pub equipment: Vec<CharacterEquipment>,
 }
 
 impl Packet for UpsertEntityCharacter {
     fn packet_kind() -> u8 { 0x78 }
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
-        let graphic_id = payload.read_u16::<Endian>()?;
+        let body_type = payload.read_u16::<Endian>()?;
         let x = payload.read_u16::<Endian>()? as i32;
         let y = payload.read_u16::<Endian>()? as i32;
         let z = payload.read_u8()? as i32;
@@ -329,7 +365,7 @@ impl Packet for UpsertEntityCharacter {
         let flags = EntityFlags::from_bits_truncate(payload.read_u8()?);
         let notoriety = Notoriety::from_repr(payload.read_u8()?)
             .ok_or_else(|| anyhow!("invalid notoriety"))?;
-        let mut children = Vec::new();
+        let mut equipment = Vec::new();
 
         loop {
             let child_id = payload.read_entity_id()?;
@@ -338,33 +374,34 @@ impl Packet for UpsertEntityCharacter {
             }
 
             let graphic_id = payload.read_u16::<Endian>()?;
-            let layer = payload.read_u8()?;
+            let slot = EquipmentSlot::from_repr(payload.read_u8()?)
+                .unwrap_or(EquipmentSlot::Invalid);
             let hue = if graphic_id & 0x8000 != 0 {
                 payload.read_u16::<Endian>()?
             } else {
                 0
             };
-            children.push(CharacterChildEntity {
+            equipment.push(CharacterEquipment {
                 id: child_id,
                 graphic_id,
-                layer,
+                slot,
                 hue,
             });
         }
 
         Ok(Self {
             id,
-            body_type: graphic_id,
+            body_type,
             position: IVec3::new(x, y, z),
             direction,
             hue,
             flags,
             notoriety,
-            children
+            equipment,
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.id)?;
         writer.write_u16::<Endian>(self.body_type)?;
         writer.write_u16::<Endian>(self.position.x as u16)?;
@@ -375,15 +412,16 @@ impl Packet for UpsertEntityCharacter {
         writer.write_u8(self.flags.bits())?;
         writer.write_u8(self.notoriety as u8)?;
 
-        for child in self.children.iter() {
-            writer.write_entity_id(child.id)?;
-            writer.write_u16::<Endian>(child.graphic_id | if child.hue != 0 {
+        for item in self.equipment.iter() {
+            writer.write_entity_id(item.id)?;
+            writer.write_u16::<Endian>(item.graphic_id | if item.hue != 0 {
                 0x8000
             } else {
                 0
             })?;
-            if child.hue != 0 {
-                writer.write_u16::<Endian>(child.hue)?;
+            writer.write_u8(item.slot as u8)?;
+            if item.hue != 0 {
+                writer.write_u16::<Endian>(item.hue)?;
             }
         }
 
@@ -453,7 +491,7 @@ impl Packet for UpsertEntityStats {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
         let name = payload.read_str_block(30)?;
         let hp = payload.read_u16::<Endian>()?;
@@ -469,7 +507,7 @@ impl Packet for UpsertEntityStats {
                 max_hp,
                 allow_name_change,
                 ..Default::default()
-            })
+            });
         }
 
         let race_and_gender = payload.read_u8()?;
@@ -572,11 +610,11 @@ impl Packet for UpsertEntityStats {
             mana_bonus,
             max_hp_bonus,
             max_stamina_bonus,
-            max_mana_bonus
+            max_mana_bonus,
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         let level = self.max_info_level;
 
         writer.write_entity_id(self.id)?;
