@@ -158,6 +158,7 @@ fn packet_registry() -> &'static PacketRegistry {
             // UI
             PacketRegistration::for_type::<OpenChatWindow>(),
             PacketRegistration::for_type::<OpenPaperDoll>(),
+            PacketRegistration::for_type::<OpenContainer>(),
 
             // Chat
             PacketRegistration::for_type::<AsciiTextMessage>(),
@@ -181,6 +182,7 @@ fn packet_registry() -> &'static PacketRegistry {
             PacketRegistration::for_type::<UpsertLocalPlayer>(),
             PacketRegistration::for_type::<UpsertEntityCharacter>(),
             PacketRegistration::for_type::<UpsertEntityEquipped>(),
+            PacketRegistration::for_type::<UpsertContainerContents>(),
             PacketRegistration::for_type::<UpsertEntityStats>(),
         ].into_iter() {
             max_size = registration.size.max(max_size);

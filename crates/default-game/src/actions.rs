@@ -1,7 +1,7 @@
 use bevy_ecs::prelude::*;
-use yewoh::protocol::{MoveConfirm, OpenPaperDoll};
+use yewoh::protocol::{MoveConfirm, OpenContainer, OpenPaperDoll};
 use yewoh_server::world::client::{NetClient, NetClients};
-use yewoh_server::world::entity::{HasNotoriety, MapPosition, NetEntity};
+use yewoh_server::world::entity::{Character, Container, HasNotoriety, MapPosition, NetEntity};
 use yewoh_server::world::events::{DoubleClickEvent, MoveEvent};
 
 pub fn handle_move(
@@ -45,7 +45,7 @@ pub fn handle_move(
 pub fn handle_double_click(
     server: Res<NetClients>,
     mut events: EventReader<DoubleClickEvent>,
-    target_query: Query<&NetEntity>,
+    target_query: Query<(&NetEntity, Option<&Character>, Option<&Container>)>,
 ) {
     for DoubleClickEvent { connection, target } in events.iter() {
         let connection = *connection;
@@ -54,15 +54,24 @@ pub fn handle_double_click(
             None => continue,
         };
 
-        let id = match target_query.get(target) {
-            Ok(e) => e.id,
+        let (net, character, container) = match target_query.get(target) {
+            Ok(e) => e,
             _ => continue,
         };
 
-        server.send_packet(connection, OpenPaperDoll {
-            id,
-            text: "Me, Myself and I".into(),
-            flags: Default::default()
-        }.into());
+        if character.is_some() {
+            server.send_packet(connection, OpenPaperDoll {
+                id: net.id,
+                text: "Me, Myself and I".into(),
+                flags: Default::default()
+            }.into());
+        }
+
+        if let Some(container) = container {
+            server.send_packet(connection, OpenContainer {
+                id: net.id,
+                gump_id: container.gump_id,
+            }.into());
+        }
     }
 }

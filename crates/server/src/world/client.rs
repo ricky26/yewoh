@@ -11,7 +11,7 @@ use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, BeginEnterWorld, Chang
 
 use crate::game_server::NewSessionAttempt;
 use crate::lobby::{NewSession, NewSessionRequest, SessionAllocator};
-use crate::world::entity::{Character, MapPosition, NetEntity, NetEntityLookup, NetOwner, Stats};
+use crate::world::entity::{Character, MapPosition, NetEntity, NetEntityLookup, NetOwner};
 use crate::world::events::{
     CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DoubleClickEvent, MoveEvent,
     NewPrimaryEntityEvent, ReceivedPacketEvent, SentPacketEvent, SingleClickEvent,

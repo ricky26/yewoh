@@ -1,10 +1,10 @@
 use bevy_ecs::prelude::*;
-use glam::IVec3;
+use glam::{IVec2, IVec3};
 use yewoh::{Direction, Notoriety};
 
 use yewoh::protocol::{CharacterFromList, CharacterList, EquipmentSlot, UnicodeTextMessage};
 use yewoh_server::world::client::{NetClients};
-use yewoh_server::world::entity::{Character, EquippedBy, Graphic, HasNotoriety, MapPosition, NetEntity, NetEntityAllocator, Stats};
+use yewoh_server::world::entity::{Character, Container, EquippedBy, Graphic, HasNotoriety, MapPosition, NetEntity, NetEntityAllocator, ParentContainer, Stats};
 use yewoh_server::world::events::{CharacterListEvent, CreateCharacterEvent, NewPrimaryEntityEvent};
 
 use crate::data::static_data::StaticData;
@@ -67,11 +67,25 @@ pub fn handle_create_character(
     for event in events.iter() {
         let connection = event.connection;
 
+        let child_backpack_id = entity_allocator.allocate_item();
+        let child_entity = commands.spawn()
+            .insert(NetEntity {id: child_backpack_id})
+            .insert(Graphic {id: 0x9b2, hue: 120})
+            .id();
+
         let backpack_id = entity_allocator.allocate_item();
         let backpack_entity = commands.spawn()
             .insert(NetEntity { id: backpack_id })
             .insert(Graphic { id: 0x9b2, hue: 120 })
+            .insert(Container { gump_id: 7, items: vec![child_entity] })
             .id();
+
+        commands.entity(child_entity)
+            .insert(ParentContainer {
+                container: backpack_entity,
+                position: IVec2::new(1, 0),
+                grid_index: 1,
+            });
 
         let primary_entity_id = entity_allocator.allocate_character();
         let primary_entity = commands.spawn()

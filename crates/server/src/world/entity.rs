@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicU32, Ordering};
 use bevy_ecs::prelude::*;
-use glam::IVec3;
+use glam::{IVec2, IVec3};
 
 use yewoh::{Direction, EntityId, EntityKind, Notoriety};
-use yewoh::protocol::{DeleteEntity, EquipmentSlot, UpsertEntityWorld, UpsertEntityStats, CharacterEquipment, UpsertEntityCharacter, EntityFlags, UpsertEntityEquipped};
+use yewoh::protocol::{DeleteEntity, EquipmentSlot, UpsertEntityWorld, UpsertEntityStats, CharacterEquipment, UpsertEntityCharacter, EntityFlags, UpsertEntityEquipped, ContainedItem, UpsertContainerContents};
 use crate::world::client::NetClients;
 
 #[derive(Debug, Clone, Copy, Component)]
@@ -65,6 +65,19 @@ pub struct MapPosition {
     pub position: IVec3,
     pub map_id: u8,
     pub direction: Direction,
+}
+
+#[derive(Debug, Clone, Default, Component)]
+pub struct Container {
+    pub gump_id: u16,
+    pub items: Vec<Entity>,
+}
+
+#[derive(Debug, Clone, Component)]
+pub struct ParentContainer {
+    pub container: Entity,
+    pub position: IVec2,
+    pub grid_index: u8,
 }
 
 #[derive(Debug, Clone, Default, Component)]
@@ -243,7 +256,7 @@ impl NetEntityLookup {
 
 pub fn update_entity_lookup(
     mut lookup: ResMut<NetEntityLookup>,
-    query: Query<(Entity, &NetEntity), Or<(Added<NetEntity>, Changed<NetEntity>)>>,
+    query: Query<(Entity, &NetEntity), Changed<NetEntity>>,
     removals: RemovedComponents<NetEntity>,
 ) {
     for (entity, net_entity) in query.iter() {
@@ -330,6 +343,55 @@ pub fn send_entity_updates(
             graphic_id: graphic.id,
             hue: graphic.hue,
         }.into());
+    }
+}
+
+pub fn update_containers_with_updated_items(
+    item_query: Query<&ParentContainer, Or<(Changed<Graphic>, Changed<Quantity>, Changed<ParentContainer>)>>,
+    containers: Query<&mut Container>,
+) {
+    for parent_container in item_query.iter() {
+        // Just accessing this is enough to trigger change detection.
+        let _ = containers.get(parent_container.container);
+    }
+}
+
+pub fn send_updated_container_contents(
+    clients: Res<NetClients>,
+    container_query: Query<(&NetEntity, &Container), Changed<Container>>,
+    content_query: Query<(&NetEntity, &ParentContainer, &Graphic, Option<&Quantity>)>,
+) {
+    for (net, container) in container_query.iter() {
+        clients.broadcast_packet(make_container_contents_packet(net.id, container, &content_query).into());
+    }
+}
+
+pub fn make_container_contents_packet(
+    id: EntityId, container: &Container,
+    content_query: &Query<(&NetEntity, &ParentContainer, &Graphic, Option<&Quantity>)>,
+) -> UpsertContainerContents {
+    let mut items = Vec::with_capacity(container.items.len());
+
+    for item in container.items.iter() {
+        let item = *item;
+        let (net_id, parent, graphic, quantity) = match content_query.get(item) {
+            Ok(x) => x,
+            _ => continue,
+        };
+
+        items.push(ContainedItem {
+            id: net_id.id,
+            graphic_id: graphic.id,
+            quantity: quantity.map_or(1, |q| q.quantity),
+            position: parent.position,
+            grid_index: parent.grid_index,
+            container_id: id,
+            hue: graphic.hue,
+        });
+    }
+
+    UpsertContainerContents {
+        items,
     }
 }
 

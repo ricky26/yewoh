@@ -3,7 +3,7 @@ use std::io::Write;
 use anyhow::anyhow;
 use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use glam::IVec3;
+use glam::{IVec2, IVec3};
 use strum_macros::FromRepr;
 
 use crate::{Direction, EntityId, EntityKind, Notoriety};
@@ -470,6 +470,86 @@ impl Packet for UpsertEntityEquipped {
         writer.write_u8(self.slot as u8)?;
         writer.write_entity_id(self.parent_id)?;
         writer.write_u16::<Endian>(self.hue)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ContainedItem {
+    pub id: EntityId,
+    pub graphic_id: u16,
+    pub quantity: u16,
+    pub position: IVec2,
+    pub grid_index: u8,
+    pub container_id: EntityId,
+    pub hue: u16,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpsertContainerContents {
+    pub items: Vec<ContainedItem>,
+}
+
+impl UpsertContainerContents {
+    const MIN_VERSION_GRID: ClientVersion = ClientVersion::new(6, 0, 1, 7);
+}
+
+impl Packet for UpsertContainerContents {
+    fn packet_kind() -> u8 { 0x3c }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
+
+    fn decode(client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let count = payload.read_u16::<Endian>()? as usize;
+        let mut items = Vec::with_capacity(count);
+
+        for _ in 0..count {
+            let id = payload.read_entity_id()?;
+            let graphic_id = payload.read_u16::<Endian>()?;
+            payload.skip(1)?;
+            let quantity = payload.read_u16::<Endian>()?;
+            let x = payload.read_u16::<Endian>()? as i32;
+            let y = payload.read_u16::<Endian>()? as i32;
+            let grid_index = if client_version >= Self::MIN_VERSION_GRID {
+                payload.read_u8()?
+            } else {
+                0
+            };
+            let container_id = payload.read_entity_id()?;
+            let hue = payload.read_u16::<Endian>()?;
+            items.push(ContainedItem {
+                id,
+                graphic_id,
+                quantity,
+                position: IVec2::new(x, y),
+                grid_index,
+                container_id,
+                hue
+            });
+        }
+
+        Ok(Self { items })
+    }
+
+    fn encode(&self, client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_u16::<Endian>(self.items.len() as u16)?;
+
+        for item in self.items.iter() {
+            writer.write_entity_id(item.id)?;
+            writer.write_u16::<Endian>(item.graphic_id)?;
+            writer.write_u8(0)?;
+            writer.write_u16::<Endian>(item.quantity)?;
+            writer.write_u16::<Endian>(item.position.x as u16)?;
+            writer.write_u16::<Endian>(item.position.y as u16)?;
+
+            if client_version >= Self::MIN_VERSION_GRID {
+                writer.write_u8(item.grid_index)?;
+            }
+
+            writer.write_entity_id(item.container_id)?;
+            writer.write_u16::<Endian>(item.hue)?;
+        }
+
         Ok(())
     }
 }

@@ -3,7 +3,7 @@ use bevy_ecs::prelude::*;
 use tokio::runtime::Handle;
 
 use crate::world::client::{accept_new_clients, apply_new_primary_entities, handle_input_packets, handle_login_packets, handle_new_packets, MapInfos, send_player_updates};
-use crate::world::entity::{NetEntityAllocator, NetEntityLookup, send_entity_updates, send_remove_entity, send_updated_stats, update_entity_lookup};
+use crate::world::entity::{NetEntityAllocator, NetEntityLookup, send_entity_updates, send_remove_entity, send_updated_container_contents, send_updated_stats, update_containers_with_updated_items, update_entity_lookup};
 use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DoubleClickEvent, MoveEvent, NewPrimaryEntityEvent, ReceivedPacketEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::time::{limit_tick_rate, TickRate};
 
@@ -39,6 +39,8 @@ impl Plugin for ServerPlugin {
             .add_system_to_stage(CoreStage::First, send_player_updates.before(handle_new_packets))
             .add_system_to_stage(CoreStage::First, send_updated_stats.before(handle_new_packets))
             .add_system_to_stage(CoreStage::First, send_entity_updates.before(handle_new_packets))
+            .add_system_to_stage(CoreStage::First, update_containers_with_updated_items.before(send_updated_container_contents))
+            .add_system_to_stage(CoreStage::First, send_updated_container_contents.before(handle_new_packets))
             .add_system_to_stage(CoreStage::First, handle_new_packets.after(accept_new_clients))
             .add_system_to_stage(CoreStage::PreUpdate, apply_new_primary_entities)
             .add_system_to_stage(CoreStage::PreUpdate, handle_login_packets)
