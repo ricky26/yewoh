@@ -36,7 +36,7 @@ impl Plugin for ServerPlugin {
             .add_event::<NewPrimaryEntityEvent>()
             .add_event::<ChatRequestEvent>()
             .add_system_to_stage(CoreStage::First, accept_new_clients)
-            .add_system_to_stage(CoreStage::First, send_player_updates.before(handle_new_packets))
+            .add_system_to_stage(CoreStage::First, send_player_updates.before(send_entity_updates))
             .add_system_to_stage(CoreStage::First, send_updated_stats.before(handle_new_packets))
             .add_system_to_stage(CoreStage::First, send_entity_updates.before(handle_new_packets))
             .add_system_to_stage(CoreStage::First, update_containers_with_updated_items.before(send_updated_container_contents))

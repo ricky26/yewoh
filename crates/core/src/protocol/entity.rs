@@ -7,7 +7,7 @@ use glam::{IVec2, IVec3};
 use strum_macros::FromRepr;
 
 use crate::{Direction, EntityId, EntityKind, Notoriety};
-use crate::protocol::client_version::VERSION_HIGH_SEAS;
+use crate::protocol::client_version::{VERSION_GRID_INVENTORY, VERSION_HIGH_SEAS};
 use crate::protocol::PacketWriteExt;
 
 use super::{ClientVersion, Endian, Packet, PacketReadExt};
@@ -503,7 +503,6 @@ pub struct UpsertContainerContents {
 }
 
 impl UpsertContainerContents {
-    const MIN_VERSION_GRID: ClientVersion = ClientVersion::new(6, 0, 1, 7);
 }
 
 impl Packet for UpsertContainerContents {
@@ -522,7 +521,7 @@ impl Packet for UpsertContainerContents {
             let quantity = payload.read_u16::<Endian>()?;
             let x = payload.read_u16::<Endian>()? as i32;
             let y = payload.read_u16::<Endian>()? as i32;
-            let grid_index = if client_version >= Self::MIN_VERSION_GRID {
+            let grid_index = if client_version >= VERSION_GRID_INVENTORY {
                 payload.read_u8()?
             } else {
                 0
@@ -554,7 +553,7 @@ impl Packet for UpsertContainerContents {
             writer.write_u16::<Endian>(item.position.x as u16)?;
             writer.write_u16::<Endian>(item.position.y as u16)?;
 
-            if client_version >= Self::MIN_VERSION_GRID {
+            if client_version >= VERSION_GRID_INVENTORY {
                 writer.write_u8(item.grid_index)?;
             }
 

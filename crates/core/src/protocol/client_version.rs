@@ -6,6 +6,7 @@ use anyhow::anyhow;
 use bitflags::bitflags;
 
 pub const VERSION_HIGH_SEAS: ClientVersion = ClientVersion::new(7, 0, 9, 0);
+pub const VERSION_GRID_INVENTORY: ClientVersion = ClientVersion::new(6, 0, 1, 7);
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd)]
 pub struct ClientVersion {
