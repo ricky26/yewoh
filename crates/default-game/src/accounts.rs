@@ -92,7 +92,7 @@ pub fn handle_create_character(
             .insert(NetEntity { id: primary_entity_id })
             .insert(MapPosition {
                 map_id: 1,
-                position: IVec3::new(2000, 2000, 0),
+                position: IVec3::new(1325, 1624, 55),
                 direction: Direction::North,
             })
             .insert(Character {
