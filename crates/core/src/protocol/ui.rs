@@ -278,3 +278,52 @@ impl Packet for OpenGumpCompressed {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct GumpResult {
+    pub id: u32,
+    pub type_id: u32,
+    pub button_id: u32,
+    pub on_switches: Vec<u32>,
+    pub text_fields: Vec<String>,
+}
+
+impl Packet for GumpResult {
+    fn packet_kind() -> u8 { 0xb1 }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let id = payload.read_u32::<Endian>()?;
+        let type_id = payload.read_u32::<Endian>()?;
+        let button_id = payload.read_u32::<Endian>()?;
+        let switch_count = payload.read_u32::<Endian>()? as usize;
+        let mut on_switches = Vec::with_capacity(switch_count);
+        for _ in 0..switch_count {
+            on_switches.push(payload.read_u32::<Endian>()?);
+        }
+
+        let text_field_count = payload.read_u32::<Endian>()? as usize;
+        let mut text_fields = Vec::with_capacity(text_field_count);
+        for _ in 0..text_field_count {
+            text_fields.push(payload.read_utf16_pascal()?);
+        }
+
+        Ok(Self { id, type_id, button_id, on_switches, text_fields })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_u32::<Endian>(self.id)?;
+        writer.write_u32::<Endian>(self.type_id)?;
+        writer.write_u32::<Endian>(self.button_id)?;
+        writer.write_u32::<Endian>(self.on_switches.len() as u32)?;
+        for id in self.on_switches.iter() {
+            writer.write_u32::<Endian>(*id)?;
+        }
+        writer.write_u32::<Endian>(self.text_fields.len() as u32)?;
+        for content in self.text_fields.iter() {
+            writer.write_utf16_pascal(content)?;
+        }
+        Ok(())
+    }
+}
