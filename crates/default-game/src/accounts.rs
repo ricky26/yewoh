@@ -2,8 +2,8 @@ use bevy_ecs::prelude::*;
 use glam::{IVec2, IVec3};
 use yewoh::{Direction, Notoriety};
 
-use yewoh::protocol::{CharacterFromList, CharacterList, EquipmentSlot, UnicodeTextMessage};
-use yewoh_server::world::entity::{Character, Container, EquippedBy, Graphic, Notorious, KnownPosition, MapPosition, ParentContainer, Stats};
+use yewoh::protocol::{CharacterFromList, CharacterList, EntityFlags, EquipmentSlot, UnicodeTextMessage};
+use yewoh_server::world::entity::{Character, Container, EquippedBy, Graphic, Notorious, MapPosition, ParentContainer, Stats, Flags};
 use yewoh_server::world::events::{CharacterListEvent, CreateCharacterEvent, NewPrimaryEntityEvent};
 use yewoh_server::world::net::{NetClient, NetEntity, NetEntityAllocator};
 
@@ -76,19 +76,21 @@ pub fn handle_create_character(
         let child_backpack_id = entity_allocator.allocate_item();
         let child_entity = commands.spawn()
             .insert(NetEntity {id: child_backpack_id})
+            .insert(Flags { flags: EntityFlags::default() })
             .insert(Graphic {id: 0x9b2, hue: 120})
             .id();
 
         let backpack_id = entity_allocator.allocate_item();
         let backpack_entity = commands.spawn()
             .insert(NetEntity { id: backpack_id })
+            .insert(Flags { flags: EntityFlags::default() })
             .insert(Graphic { id: 0x9b2, hue: 120 })
             .insert(Container { gump_id: 7, items: vec![child_entity] })
             .id();
 
         commands.entity(child_entity)
             .insert(ParentContainer {
-                container: backpack_entity,
+                parent: backpack_entity,
                 position: IVec2::new(1, 0),
                 grid_index: 1,
             });
@@ -96,12 +98,12 @@ pub fn handle_create_character(
         let primary_entity_id = entity_allocator.allocate_character();
         let primary_entity = commands.spawn()
             .insert(NetEntity { id: primary_entity_id })
+            .insert(Flags { flags: EntityFlags::default() })
             .insert(MapPosition {
                 map_id: 1,
                 position: IVec3::new(1325, 1624, 55),
                 direction: Direction::North,
             })
-            .insert(KnownPosition::default())
             .insert(Character {
                 body_type: 0x25e,
                 hue: 120,
@@ -117,7 +119,7 @@ pub fn handle_create_character(
             .id();
 
         commands.entity(backpack_entity)
-            .insert(EquippedBy { entity: primary_entity, slot: EquipmentSlot::Backpack });
+            .insert(EquippedBy { parent: primary_entity, slot: EquipmentSlot::Backpack });
 
         out_events.send(NewPrimaryEntityEvent { client: client_entity, primary_entity: Some(primary_entity) });
         client.send_packet(UnicodeTextMessage {

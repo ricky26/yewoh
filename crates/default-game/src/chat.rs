@@ -2,8 +2,8 @@ use bevy_ecs::prelude::*;
 use glam::IVec3;
 
 use yewoh::Direction;
-use yewoh::protocol::AsciiTextMessage;
-use yewoh_server::world::entity::{Graphic, MapPosition};
+use yewoh::protocol::{AsciiTextMessage, EntityFlags};
+use yewoh_server::world::entity::{Flags, Graphic, MapPosition};
 use yewoh_server::world::events::ChatRequestEvent;
 use yewoh_server::world::net::{NetClient, NetEntity, NetEntityAllocator, NetOwned};
 
@@ -36,9 +36,10 @@ pub fn handle_incoming_chat(
         let id = allocator.allocate_item();
         commands.spawn()
             .insert(NetEntity { id })
+            .insert(Flags { flags: EntityFlags::default() })
             .insert(MapPosition {
                 map_id: 1,
-                position: position.position + IVec3::new(5, -4, 0),
+                position: position.position,
                 direction: Direction::North,
             })
             .insert(Graphic {

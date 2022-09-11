@@ -21,12 +21,20 @@ pub use entity::{
     update_entity_lookup,
 };
 pub use update::{
-    send_player_updates,
+    PlayerState,
+    WorldItemState,
+    ContainedItemState,
+    EquippedItemState,
+    CharacterState,
     send_remove_entity,
-    send_entity_updates,
     make_container_contents_packet,
-    send_updated_container_contents,
+    update_containers,
     send_updated_stats,
+    update_items_in_world,
+    update_equipped_items,
+    update_items_in_containers,
+    update_characters,
+    update_players,
 };
 
 mod connection;

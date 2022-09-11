@@ -4,9 +4,14 @@ use bevy_ecs::prelude::*;
 use glam::{IVec2, IVec3};
 
 use yewoh::{Direction, EntityId, Notoriety};
-use yewoh::protocol::{EquipmentSlot, UpsertEntityStats};
+use yewoh::protocol::{EntityFlags, EquipmentSlot, UpsertEntityStats};
 
-#[derive(Debug, Clone, Copy, Component)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Component)]
+pub struct Flags {
+    pub flags: EntityFlags,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Component)]
 pub struct Notorious(pub Notoriety);
 
 impl Deref for Notorious {
@@ -19,25 +24,25 @@ impl DerefMut for Notorious {
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
 
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, Eq, PartialEq, Component)]
 pub struct Character {
     pub body_type: u16,
     pub hue: u16,
     pub equipment: Vec<Entity>,
 }
 
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, Eq, PartialEq, Component)]
 pub struct EquippedBy {
-    pub entity: Entity,
+    pub parent: Entity,
     pub slot: EquipmentSlot,
 }
 
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, Eq, PartialEq, Component)]
 pub struct Quantity {
     pub quantity: u16,
 }
 
-#[derive(Debug, Clone, Copy, Component)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Component)]
 pub struct Graphic {
     pub id: u16,
     pub hue: u16,
@@ -55,20 +60,15 @@ pub struct MapPosition {
     pub direction: Direction,
 }
 
-#[derive(Debug, Clone, Copy, Default, Component)]
-pub struct KnownPosition {
-    pub expected_position: Option<MapPosition>,
-}
-
 #[derive(Debug, Clone, Default, Component)]
 pub struct Container {
     pub gump_id: u16,
     pub items: Vec<Entity>,
 }
 
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, Eq, PartialEq, Component)]
 pub struct ParentContainer {
-    pub container: Entity,
+    pub parent: Entity,
     pub position: IVec2,
     pub grid_index: u8,
 }

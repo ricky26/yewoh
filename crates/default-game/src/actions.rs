@@ -1,14 +1,14 @@
 use bevy_ecs::prelude::*;
 
 use yewoh::protocol::{MoveConfirm, OpenContainer, OpenPaperDoll};
-use yewoh_server::world::entity::{Character, Container, KnownPosition, MapPosition, Notorious};
+use yewoh_server::world::entity::{Character, Container, MapPosition, Notorious};
 use yewoh_server::world::events::{DoubleClickEvent, MoveEvent};
-use yewoh_server::world::net::{NetClient, NetEntity, NetOwned};
+use yewoh_server::world::net::{NetClient, NetEntity, NetOwned, PlayerState};
 
 pub fn handle_move(
     mut events: EventReader<MoveEvent>,
     connection_query: Query<(&NetClient, &NetOwned)>,
-    mut character_query: Query<(&mut MapPosition, &mut KnownPosition, &Notorious)>,
+    mut character_query: Query<(&mut MapPosition, &mut PlayerState, &Notorious)>,
 ) {
     for MoveEvent { client: connection, request } in events.iter() {
         let connection = *connection;
@@ -18,18 +18,18 @@ pub fn handle_move(
         };
 
         let primary_entity = owned.primary_entity;
-        let (mut map_position, mut known_position, notoriety) = match character_query.get_mut(primary_entity) {
+        let (mut map_position, mut state, notoriety) = match character_query.get_mut(primary_entity) {
             Ok(x) => x,
             _ => continue,
         };
-        map_position.direction = request.direction;
 
-        if request.sequence > 0 {
+        if map_position.direction != request.direction {
+            map_position.direction = request.direction;
+        } else {
             map_position.position += request.direction.as_vec2().extend(0);
-            log::debug!("Move to {:?}", map_position);
         }
 
-        known_position.expected_position = Some(map_position.clone());
+        state.position = *map_position;
 
         let notoriety = **notoriety;
         client.send_packet(MoveConfirm {
@@ -63,7 +63,7 @@ pub fn handle_double_click(
             client.send_packet(OpenPaperDoll {
                 id: net.id,
                 text: "Me, Myself and I".into(),
-                flags: Default::default()
+                flags: Default::default(),
             }.into());
         }
 
