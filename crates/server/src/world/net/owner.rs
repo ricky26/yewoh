@@ -20,6 +20,12 @@ pub struct NetOwner {
     pub client: Entity,
 }
 
+#[derive(Debug, Clone, Copy, Component)]
+pub struct NetSynchronizing;
+
+#[derive(Debug, Clone, Copy, Component)]
+pub struct NetSynchronized;
+
 #[derive(Debug, Clone)]
 pub struct MapInfo {
     pub size: UVec2,
@@ -31,7 +37,7 @@ pub struct MapInfos {
     pub maps: HashMap<u8, MapInfo>,
 }
 
-pub fn apply_new_primary_entities(
+pub fn start_synchronizing(
     maps: Res<MapInfos>,
     clients: Query<(&NetClient, Option<&NetOwned>)>,
     characters: Query<(&NetEntity, &MapPosition, &Character)>,
@@ -63,7 +69,10 @@ pub fn apply_new_primary_entities(
         };
 
         commands.entity(primary_entity).insert(NetOwner { client: entity });
-        commands.entity(entity).insert(NetOwned { primary_entity });
+        commands.entity(entity)
+            .insert(NetOwned { primary_entity })
+            .remove::<NetSynchronized>()
+            .insert(NetSynchronizing);
 
         let (primary_net, map_position, character) = match characters.get(primary_entity) {
             Ok(x) => x,
@@ -90,8 +99,18 @@ pub fn apply_new_primary_entities(
         }.into());
         client.send_packet(ExtendedCommand::ChangeMap(map_id).into());
         client.send_packet(ChangeSeason { season: map.season, play_sound: true }.into());
-        client.send_packet(EndEnterWorld.into());
+    }
+}
 
+pub fn finish_synchronizing(
+    clients: Query<(Entity, &NetClient), With<NetSynchronizing>>,
+    mut commands: Commands,
+) {
+    for (entity, client) in clients.iter() {
+        commands.entity(entity)
+            .remove::<NetSynchronizing>()
+            .insert(NetSynchronized);
+        client.send_packet(EndEnterWorld.into());
         client.send_packet(SetTime {
             hour: 12,
             minute: 16,

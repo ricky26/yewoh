@@ -12,7 +12,8 @@ pub use owner::{
     NetOwned,
     MapInfo,
     MapInfos,
-    apply_new_primary_entities,
+    start_synchronizing,
+    finish_synchronizing,
 };
 pub use entity::{
     NetEntity,
@@ -35,6 +36,7 @@ pub use update::{
     update_items_in_containers,
     update_characters,
     update_players,
+    sync_entities,
 };
 
 mod connection;

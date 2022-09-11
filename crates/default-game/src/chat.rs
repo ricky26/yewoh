@@ -1,5 +1,4 @@
 use bevy_ecs::prelude::*;
-use glam::IVec3;
 
 use yewoh::Direction;
 use yewoh::protocol::{AsciiTextMessage, EntityFlags};

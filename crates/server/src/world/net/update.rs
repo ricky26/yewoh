@@ -5,7 +5,8 @@ use yewoh::{EntityId, EntityKind, Notoriety};
 use yewoh::protocol::{CharacterEquipment, DeleteEntity, EntityFlags, EquipmentSlot, Packet, UpsertContainerContents, UpsertEntityCharacter, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityWorld, UpsertLocalPlayer};
 
 use crate::world::entity::{Character, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer, Quantity, Stats};
-use crate::world::net::{broadcast, NetClient, NetEntity, NetEntityLookup, NetOwner};
+use crate::world::net::{broadcast, NetClient, NetEntity, NetEntityLookup, NetOwned, NetOwner};
+use crate::world::net::owner::NetSynchronizing;
 
 #[derive(Debug, Clone, Eq, PartialEq, Component)]
 pub struct PlayerState {
@@ -72,8 +73,8 @@ pub fn update_players(
         if new_state == *state {
             continue;
         }
-        client.send_packet(state.to_update(net.id).into());
         *state = new_state;
+        client.send_packet(state.to_update(net.id).into());
     }
 
     for entity in removed.iter() {
@@ -402,8 +403,8 @@ pub fn update_characters(
         if *state == new_state {
             continue;
         }
-        broadcast(clients.iter(), state.to_update(net.id, &all_equipment_query).into_arc());
         *state = new_state;
+        broadcast(clients.iter(), state.to_update(net.id, &all_equipment_query).into_arc());
     }
 
     for entity in removed_characters.iter() {
@@ -472,5 +473,30 @@ pub fn send_updated_stats(
 ) {
     for (net, stats) in query.iter() {
         broadcast(clients.iter(), stats.upsert(net.id, true).into_arc());
+    }
+}
+
+pub fn sync_entities(
+    clients: Query<&NetClient, With<NetSynchronizing>>,
+    characters: Query<(&NetEntity, &CharacterState)>,
+    world_items: Query<(&NetEntity, &WorldItemState)>,
+    contained_items: Query<(&NetEntity, &ContainedItemState)>,
+    equipped_items: Query<(&NetEntity, &EquippedItemState)>,
+    all_equipment_query: Query<(&NetEntity, &Graphic, &EquippedBy)>,
+) {
+    for (net, state) in characters.iter() {
+        broadcast(clients.iter(), state.to_update(net.id, &all_equipment_query).into_arc());
+    }
+
+    for (net, state) in equipped_items.iter() {
+        broadcast(clients.iter(), state.to_update(net.id).into_arc());
+    }
+
+    for (net, state) in world_items.iter() {
+        broadcast(clients.iter(), state.to_update(net.id).into_arc());
+    }
+
+    for (net, state) in contained_items.iter() {
+        broadcast(clients.iter(), state.to_update(net.id).into_arc());
     }
 }
