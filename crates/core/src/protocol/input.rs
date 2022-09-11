@@ -1,8 +1,10 @@
 use std::io::Write;
-use anyhow::anyhow;
 
+use anyhow::anyhow;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use glam::IVec3;
+use strum_macros::FromRepr;
+
 use crate::{Direction, EntityId, Notoriety};
 use crate::protocol::{PacketReadExt, PacketWriteExt};
 use crate::protocol::client_version::VERSION_GRID_INVENTORY;
@@ -82,7 +84,7 @@ impl Packet for MoveReject {
         Ok(Self {
             sequence,
             position: IVec3::new(x, y, z),
-            direction
+            direction,
         })
     }
 
@@ -242,25 +244,26 @@ impl Packet for PickTarget {
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let target_ground = payload.read_u8()? != 0;
         let id = payload.read_u32::<Endian>()?;
-        let target_type = TargetType::from_repr(payload.read_u8()?);
+        let target_type = TargetType::from_repr(payload.read_u8()?)
+            .ok_or_else(|| anyhow!("invalid target type"))?;
         let target_id = Some(payload.read_entity_id()?);
         let x = payload.read_u16::<Endian>()? as i32;
         let y = payload.read_u16::<Endian>()? as i32;
         let z = payload.read_u16::<Endian>()? as i32;
         let graphic_id = payload.read_u16::<Endian>()?;
-        Ok(Self{
+        Ok(Self {
             target_ground,
             target_type,
             id,
             target_id,
             position: IVec3::new(x, y, z),
-            graphic_id
+            graphic_id,
         })
     }
 
     fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u8(if self.target_ground { 1 } else { 0 })?;
-        writer.write_u32(self.id)?;
+        writer.write_u32::<Endian>(self.id)?;
         writer.write_u8(self.target_type as u8)?;
         if let Some(target_id) = self.target_id {
             writer.write_entity_id(target_id)?;
@@ -268,7 +271,7 @@ impl Packet for PickTarget {
             writer.write_u32::<Endian>(0)?;
         }
         writer.write_u16::<Endian>(self.position.x as u16)?;
-        writer.write_u16::<Endian>(self.position.y as u16)?
+        writer.write_u16::<Endian>(self.position.y as u16)?;
         writer.write_u16::<Endian>(self.position.z as u16)?;
         writer.write_u16::<Endian>(self.graphic_id)?;
         Ok(())

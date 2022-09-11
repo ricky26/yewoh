@@ -134,11 +134,7 @@ impl PacketReadExt for &[u8] {
     fn read_utf16_pascal(&mut self) -> anyhow::Result<String> {
         let len = self.read_u16::<Endian>()? as usize;
         let bytes = &self[..len * 2];
-        let result = bytes.chunks_exact(2)
-            .map(|c| Endian::read_u16(c))
-            .to_utf16chars()
-            .map(|r| r.unwrap_or(Utf16Char::from('\u{fffd}')))
-            .collect();
+        let result = utf16_slice_to_string(bytes);
         *self = &self[len * 2..];
         Ok(result)
     }
@@ -150,5 +146,13 @@ impl PacketReadExt for &[u8] {
     fn read_direction(&mut self) -> anyhow::Result<Direction> {
         Ok(Direction::from_repr(self.read_u8()?).ok_or_else(|| anyhow!("invalid direction"))?)
     }
+}
+
+pub fn utf16_slice_to_string(bytes: &[u8]) -> String {
+    bytes.chunks_exact(2)
+        .map(|c| Endian::read_u16(c))
+        .to_utf16chars()
+        .map(|r| r.unwrap_or(Utf16Char::from('\u{fffd}')))
+        .collect()
 }
 

@@ -165,6 +165,8 @@ fn packet_registry() -> &'static PacketRegistry {
             PacketRegistration::for_type::<OpenChatWindow>(),
             PacketRegistration::for_type::<OpenPaperDoll>(),
             PacketRegistration::for_type::<OpenContainer>(),
+            PacketRegistration::for_type::<OpenGump>(),
+            PacketRegistration::for_type::<OpenGumpCompressed>(),
 
             // Chat
             PacketRegistration::for_type::<AsciiTextMessage>(),
