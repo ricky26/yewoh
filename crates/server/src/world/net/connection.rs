@@ -1,28 +1,24 @@
-use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 use bevy_ecs::prelude::*;
-use glam::UVec2;
 use log::{info, warn};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 
 use yewoh::protocol::{
     AnyPacket, AsciiTextMessageRequest, ClientVersion, ClientVersionRequest, CreateCharacterClassic,
-    CreateCharacterEnhanced, DoubleClick, EntityFlags, FeatureFlags, Move, SingleClick, SupportedFeatures,
-    UnicodeTextMessageRequest, UpsertLocalPlayer,
+    CreateCharacterEnhanced, DoubleClick, FeatureFlags, Move, SingleClick, SupportedFeatures,
+    UnicodeTextMessageRequest,
 };
 
 use crate::game_server::NewSessionAttempt;
 use crate::lobby::{NewSession, NewSessionRequest, SessionAllocator};
-use crate::world::entity::{Character, MapPosition};
 use crate::world::events::{
     CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DoubleClickEvent, MoveEvent,
     ReceivedPacketEvent, SentPacketEvent, SingleClickEvent,
 };
-use crate::world::net::entity::{NetEntity, NetEntityLookup};
-use crate::world::net::owner::NetOwner;
+use crate::world::net::entity::NetEntityLookup;
 
 pub enum WriterAction {
     Send(ClientVersion, AnyPacket),
@@ -55,17 +51,6 @@ impl NetClient {
 
 #[derive(Debug, Clone, Component)]
 pub struct NetInWorld;
-
-#[derive(Debug, Clone)]
-pub struct MapInfo {
-    pub size: UVec2,
-    pub season: u8,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct MapInfos {
-    pub maps: HashMap<u8, MapInfo>,
-}
 
 pub struct NetServer {
     new_session_requests: mpsc::UnboundedReceiver<NewSessionRequest>,
@@ -100,7 +85,7 @@ impl NetServer {
     }
 }
 
-pub fn broadcast<'a>(clients: impl Iterator<Item = &'a NetClient>, packet: Arc<AnyPacket>) {
+pub fn broadcast<'a>(clients: impl Iterator<Item=&'a NetClient>, packet: Arc<AnyPacket>) {
     for client in clients {
         client.send_packet_arc(packet.clone());
     }
@@ -303,28 +288,6 @@ pub fn handle_input_packets(
             });
         } else if let Some(request) = packet.downcast::<UnicodeTextMessageRequest>().cloned() {
             chat_events.send(ChatRequestEvent { client: connection, request });
-        }
-    }
-}
-
-pub fn send_player_updates(
-    clients: Query<&NetClient>,
-    query: Query<
-        (&NetOwner, &NetEntity, &Character, &MapPosition),
-        Or<(Changed<Character>, Changed<MapPosition>)>,
-    >,
-) {
-    for (owner, entity, character, position) in query.iter() {
-        if let Ok(client) = clients.get(owner.client) {
-            client.send_packet(UpsertLocalPlayer {
-                id: entity.id,
-                body_type: character.body_type,
-                server_id: 0,
-                hue: character.hue,
-                flags: EntityFlags::empty(),
-                position: position.position,
-                direction: position.direction,
-            }.into());
         }
     }
 }

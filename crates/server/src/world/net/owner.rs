@@ -1,8 +1,13 @@
+use std::collections::HashMap;
+
 use bevy_ecs::prelude::*;
+use glam::UVec2;
+
 use yewoh::protocol::{BeginEnterWorld, ChangeSeason, EndEnterWorld, ExtendedCommand, SetTime};
+
 use crate::world::entity::{Character, MapPosition};
 use crate::world::events::NewPrimaryEntityEvent;
-use crate::world::net::connection::{MapInfos, NetClient};
+use crate::world::net::connection::NetClient;
 use crate::world::net::entity::NetEntity;
 
 #[derive(Debug, Clone, Component)]
@@ -13,6 +18,17 @@ pub struct NetOwned {
 #[derive(Debug, Clone, Copy, Component)]
 pub struct NetOwner {
     pub client: Entity,
+}
+
+#[derive(Debug, Clone)]
+pub struct MapInfo {
+    pub size: UVec2,
+    pub season: u8,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct MapInfos {
+    pub maps: HashMap<u8, MapInfo>,
 }
 
 pub fn apply_new_primary_entities(
