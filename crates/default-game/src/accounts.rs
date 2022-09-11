@@ -3,9 +3,9 @@ use glam::{IVec2, IVec3};
 use yewoh::{Direction, Notoriety};
 
 use yewoh::protocol::{CharacterFromList, CharacterList, EquipmentSlot, UnicodeTextMessage};
-use yewoh_server::world::client::{NetClients};
-use yewoh_server::world::entity::{Character, Container, EquippedBy, Graphic, HasNotoriety, MapPosition, NetEntity, NetEntityAllocator, ParentContainer, Stats};
+use yewoh_server::world::entity::{Character, Container, EquippedBy, Graphic, Notorious, KnownPosition, MapPosition, ParentContainer, Stats};
 use yewoh_server::world::events::{CharacterListEvent, CreateCharacterEvent, NewPrimaryEntityEvent};
+use yewoh_server::world::net::{NetClient, NetEntity, NetEntityAllocator};
 
 use crate::data::static_data::StaticData;
 
@@ -19,9 +19,9 @@ pub trait AccountRepository {
 pub fn handle_list_characters(
     //runtime: Res<Handle>,
     static_data: Res<StaticData>,
-    server: Res<NetClients>,
     //account_repository: Res<T>,
     //users: Query<&User>,
+    clients: Query<&NetClient>,
     mut events: EventReader<CharacterListEvent>,
 ) {
     for event in events.iter() {
@@ -30,9 +30,11 @@ pub fn handle_list_characters(
             Err(_) => continue,
         };*/
 
-        let connection = event.connection;
-
-        server.send_packet(connection, CharacterList {
+        let client = match clients.get(event.client) {
+            Ok(x) => x,
+            _ => continue,
+        };
+        client.send_packet(CharacterList {
             characters: vec![
                 Some(CharacterFromList {
                     name: "test".to_string(),
@@ -59,13 +61,17 @@ pub fn handle_list_characters(
 
 pub fn handle_create_character(
     entity_allocator: Res<NetEntityAllocator>,
+    clients: Query<&NetClient>,
     mut events: EventReader<CreateCharacterEvent>,
     mut out_events: EventWriter<NewPrimaryEntityEvent>,
     mut commands: Commands,
-    server: Res<NetClients>,
 ) {
     for event in events.iter() {
-        let connection = event.connection;
+        let client_entity = event.client;
+        let client = match clients.get(event.client) {
+            Ok(x) => x,
+            _ => continue,
+        };
 
         let child_backpack_id = entity_allocator.allocate_item();
         let child_entity = commands.spawn()
@@ -95,12 +101,13 @@ pub fn handle_create_character(
                 position: IVec3::new(1325, 1624, 55),
                 direction: Direction::North,
             })
+            .insert(KnownPosition::default())
             .insert(Character {
                 body_type: 0x25e,
                 hue: 120,
                 equipment: vec![ backpack_entity ],
             })
-            .insert(HasNotoriety(Notoriety::Innocent))
+            .insert(Notorious(Notoriety::Innocent))
             .insert(Stats {
                 name: "Wise Dave".into(),
                 hp: 500,
@@ -112,13 +119,13 @@ pub fn handle_create_character(
         commands.entity(backpack_entity)
             .insert(EquippedBy { entity: primary_entity, slot: EquipmentSlot::Backpack });
 
-        out_events.send(NewPrimaryEntityEvent { connection, primary_entity: Some(primary_entity) });
-        server.send_packet(connection, UnicodeTextMessage {
+        out_events.send(NewPrimaryEntityEvent { client: client_entity, primary_entity: Some(primary_entity) });
+        client.send_packet(UnicodeTextMessage {
             text: "Avast me hearties".to_string(),
             hue: 120,
             font: 3,
             ..Default::default()
         }.into());
-        log::info!("Spawned character for {:?} = {:?}", connection, primary_entity);
+        log::info!("Spawned character for {:?} = {:?}", client_entity, primary_entity);
     }
 }

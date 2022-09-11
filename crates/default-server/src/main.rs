@@ -2,8 +2,8 @@ use std::fs::File;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
-use actix_web::{HttpServer, web};
 
+use actix_web::{HttpServer, web};
 use anyhow::anyhow;
 use bevy_app::App;
 use clap::Parser;
@@ -19,7 +19,7 @@ use yewoh_default_game::DefaultGamePlugin;
 use yewoh_server::game_server::listen_for_game;
 use yewoh_server::http::HttpApi;
 use yewoh_server::lobby::{listen_for_lobby, LocalLobby};
-use yewoh_server::world::client::NetClients;
+use yewoh_server::world::net::NetServer;
 use yewoh_server::world::ServerPlugin;
 
 #[derive(Parser, Debug)]
@@ -110,7 +110,7 @@ fn main() -> anyhow::Result<()> {
     app
         .add_plugin(ServerPlugin)
         .add_plugin(DefaultGamePlugin)
-        .insert_resource(NetClients::new(new_session_requests, new_session_rx))
+        .insert_resource(NetServer::new(new_session_requests, new_session_rx))
         .insert_resource(static_data.maps.map_infos())
         .insert_resource(static_data);
 

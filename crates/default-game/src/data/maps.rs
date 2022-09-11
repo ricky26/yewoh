@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use glam::UVec2;
 use serde::{Deserialize, Serialize};
 
-use yewoh_server::world::client::{MapInfo, MapInfos};
+use yewoh_server::world::net::{MapInfo, MapInfos};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
