@@ -5,7 +5,7 @@ use yewoh::{EntityId, EntityKind, Notoriety};
 use yewoh::protocol::{CharacterEquipment, DeleteEntity, EntityFlags, EquipmentSlot, Packet, UpsertContainerContents, UpsertEntityCharacter, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityWorld, UpsertLocalPlayer};
 
 use crate::world::entity::{Character, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer, Quantity, Stats};
-use crate::world::net::{broadcast, NetClient, NetEntity, NetEntityLookup, NetOwned, NetOwner};
+use crate::world::net::{broadcast, NetClient, NetEntity, NetEntityLookup, NetOwner};
 use crate::world::net::owner::NetSynchronizing;
 
 #[derive(Debug, Clone, Eq, PartialEq, Component)]
