@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::mem::size_of;
 
 use anyhow::anyhow;
 use bitflags::bitflags;
@@ -486,23 +487,168 @@ impl Packet for UpsertEntityEquipped {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct EntityTooltipVersion {
+    pub id: EntityId,
+    pub revision: u32,
+}
+
+impl Packet for EntityTooltipVersion {
+    fn packet_kind() -> u8 { 0xdc }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(9) }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let id = payload.read_entity_id()?;
+        let revision = payload.read_u32::<Endian>()?;
+        Ok(Self { id, revision })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_entity_id(self.id)?;
+        writer.write_u32::<Endian>(self.revision)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum EntityTooltip {
+    Request(Vec<EntityId>),
+    Response { id: EntityId, entries: Vec<(u32, String)> },
+}
+
+impl Packet for EntityTooltip {
+    fn packet_kind() -> u8 { 0xd6 }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(15) }
+
+    fn decode(_client_version: ClientVersion, from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        if from_client {
+            let mut ids = Vec::with_capacity(payload.len() / size_of::<EntityId>());
+            while !payload.is_empty() {
+                let id = payload.read_entity_id()?;
+                ids.push(id);
+            }
+            Ok(Self::Request(ids))
+        } else {
+            payload.skip(2)?;
+            let id = payload.read_entity_id()?;
+            payload.skip(6)?;
+            let mut entries = Vec::new();
+
+            loop {
+                let text_id = payload.read_u32::<Endian>()?;
+                if text_id == 0 {
+                    break
+                }
+
+                let params = payload.read_utf16_pascal()?;
+                entries.push((text_id, params));
+            }
+
+            Ok(Self::Response { id, entries })
+        }
+    }
+
+    fn encode(&self, _client_version: ClientVersion, to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        match self {
+            EntityTooltip::Request(ids) => {
+                if to_client {
+                    return Err(anyhow!("can't send tooltip request to client"));
+                }
+
+                for id in ids.iter() {
+                    writer.write_entity_id(*id)?;
+                }
+            }
+            EntityTooltip::Response { id, entries } => {
+                if !to_client {
+                    return Err(anyhow!("can't send tooltip response to server"));
+                }
+
+                writer.write_u16::<Endian>(1)?;
+                writer.write_entity_id(*id)?;
+                writer.write_u16::<Endian>(0)?;
+                writer.write_entity_id(*id)?;
+
+                for (loc_id, params) in entries.iter() {
+                    writer.write_u32::<Endian>(*loc_id)?;
+                    writer.write_utf16_pascal(params)?;
+
+                }
+
+                writer.write_u32::<Endian>(0)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Default)]
-pub struct ContainedItem {
+pub struct UpsertEntityContained {
     pub id: EntityId,
     pub graphic_id: u16,
+    pub graphic_inc: u8,
     pub quantity: u16,
     pub position: IVec2,
     pub grid_index: u8,
-    pub container_id: EntityId,
+    pub parent_id: EntityId,
     pub hue: u16,
+}
+
+impl Packet for UpsertEntityContained {
+    fn packet_kind() -> u8 { 0x25 }
+
+    fn fixed_length(client_version: ClientVersion) -> Option<usize> {
+        Some(if client_version >= VERSION_GRID_INVENTORY { 21 } else { 20 })
+    }
+
+    fn decode(client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let id = payload.read_entity_id()?;
+        let graphic_id = payload.read_u16::<Endian>()?;
+        let graphic_inc = payload.read_u8()?;
+        let quantity = payload.read_u16::<Endian>()?;
+        let x = payload.read_u16::<Endian>()? as i32;
+        let y = payload.read_u16::<Endian>()? as i32;
+        let grid_index = if client_version >= VERSION_GRID_INVENTORY {
+            payload.read_u8()?
+        } else {
+            0
+        };
+        let container_id = payload.read_entity_id()?;
+        let hue = payload.read_u16::<Endian>()?;
+        Ok(UpsertEntityContained {
+            id,
+            graphic_id,
+            graphic_inc,
+            quantity,
+            position: IVec2::new(x, y),
+            grid_index,
+            parent_id: container_id,
+            hue
+        })
+    }
+
+    fn encode(&self, client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_entity_id(self.id)?;
+        writer.write_u16::<Endian>(self.graphic_id)?;
+        writer.write_u8(self.graphic_inc)?;
+        writer.write_u16::<Endian>(self.quantity)?;
+        writer.write_u16::<Endian>(self.position.x as u16)?;
+        writer.write_u16::<Endian>(self.position.y as u16)?;
+
+        if client_version >= VERSION_GRID_INVENTORY {
+            writer.write_u8(self.grid_index)?;
+        }
+
+        writer.write_entity_id(self.parent_id)?;
+        writer.write_u16::<Endian>(self.hue)?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct UpsertContainerContents {
-    pub items: Vec<ContainedItem>,
-}
-
-impl UpsertContainerContents {
+    pub items: Vec<UpsertEntityContained>,
 }
 
 impl Packet for UpsertContainerContents {
@@ -510,55 +656,24 @@ impl Packet for UpsertContainerContents {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(client_version: ClientVersion, from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let count = payload.read_u16::<Endian>()? as usize;
         let mut items = Vec::with_capacity(count);
 
         for _ in 0..count {
-            let id = payload.read_entity_id()?;
-            let graphic_id = payload.read_u16::<Endian>()?;
-            payload.skip(1)?;
-            let quantity = payload.read_u16::<Endian>()?;
-            let x = payload.read_u16::<Endian>()? as i32;
-            let y = payload.read_u16::<Endian>()? as i32;
-            let grid_index = if client_version >= VERSION_GRID_INVENTORY {
-                payload.read_u8()?
-            } else {
-                0
-            };
-            let container_id = payload.read_entity_id()?;
-            let hue = payload.read_u16::<Endian>()?;
-            items.push(ContainedItem {
-                id,
-                graphic_id,
-                quantity,
-                position: IVec2::new(x, y),
-                grid_index,
-                container_id,
-                hue
-            });
+            items.push(UpsertEntityContained::decode(
+                client_version, from_client, &payload[..19])?);
+            payload = &payload[19..];
         }
 
         Ok(Self { items })
     }
 
-    fn encode(&self, client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, client_version: ClientVersion, to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u16::<Endian>(self.items.len() as u16)?;
 
         for item in self.items.iter() {
-            writer.write_entity_id(item.id)?;
-            writer.write_u16::<Endian>(item.graphic_id)?;
-            writer.write_u8(0)?;
-            writer.write_u16::<Endian>(item.quantity)?;
-            writer.write_u16::<Endian>(item.position.x as u16)?;
-            writer.write_u16::<Endian>(item.position.y as u16)?;
-
-            if client_version >= VERSION_GRID_INVENTORY {
-                writer.write_u8(item.grid_index)?;
-            }
-
-            writer.write_entity_id(item.container_id)?;
-            writer.write_u16::<Endian>(item.hue)?;
+            item.encode(client_version, to_client, writer)?;
         }
 
         Ok(())
@@ -813,3 +928,4 @@ impl Packet for UpsertEntityStats {
         Ok(())
     }
 }
+

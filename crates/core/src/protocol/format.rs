@@ -15,6 +15,7 @@ pub trait PacketWriteExt {
     fn write_str_block(&mut self, src: &str, block_size: usize) -> anyhow::Result<()>;
     fn write_str_nul(&mut self, src: &str) -> anyhow::Result<()>;
     fn write_utf16_nul(&mut self, src: &str) -> anyhow::Result<()>;
+    fn write_utf16_pascal(&mut self, src: &str) -> anyhow::Result<()>;
     fn write_entity_id(&mut self, src: EntityId) -> anyhow::Result<()>;
     fn write_direction(&mut self, src: Direction) -> anyhow::Result<()>;
 }
@@ -52,6 +53,15 @@ impl<T: Write> PacketWriteExt for T {
         Ok(())
     }
 
+    fn write_utf16_pascal(&mut self, src: &str) -> anyhow::Result<()> {
+        let len = src.encode_utf16().count();
+        self.write_u16::<Endian>(len as u16)?;
+        for c in src.encode_utf16() {
+            self.write_u16::<Endian>(c)?;
+        }
+        Ok(())
+    }
+
     fn write_entity_id(&mut self, src: EntityId) -> anyhow::Result<()> {
         Ok(self.write_u32::<Endian>(src.as_u32())?)
     }
@@ -66,6 +76,7 @@ pub trait PacketReadExt {
     fn read_str_block(&mut self, block_size: usize) -> anyhow::Result<String>;
     fn read_str_nul(&mut self) -> anyhow::Result<String>;
     fn read_utf16_nul(&mut self) -> anyhow::Result<String>;
+    fn read_utf16_pascal(&mut self) -> anyhow::Result<String>;
     fn read_entity_id(&mut self) -> anyhow::Result<EntityId>;
     fn read_direction(&mut self) -> anyhow::Result<Direction>;
 }
@@ -118,6 +129,18 @@ impl PacketReadExt for &[u8] {
         } else {
             Err(anyhow!("unexpected EOF"))
         }
+    }
+
+    fn read_utf16_pascal(&mut self) -> anyhow::Result<String> {
+        let len = self.read_u16::<Endian>()? as usize;
+        let bytes = &self[..len * 2];
+        let result = bytes.chunks_exact(2)
+            .map(|c| Endian::read_u16(c))
+            .to_utf16chars()
+            .map(|r| r.unwrap_or(Utf16Char::from('\u{fffd}')))
+            .collect();
+        *self = &self[len * 2..];
+        Ok(result)
     }
 
     fn read_entity_id(&mut self) -> anyhow::Result<EntityId> {

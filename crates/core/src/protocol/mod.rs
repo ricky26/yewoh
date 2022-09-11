@@ -3,6 +3,7 @@ use std::fmt;
 use std::fmt::Debug;
 use std::io::Write;
 use std::mem::{MaybeUninit, size_of, transmute};
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use byteorder::{ByteOrder, WriteBytesExt};
@@ -53,6 +54,8 @@ pub trait Packet where Self: Sized {
 
     fn decode(client_version: ClientVersion, from_client: bool, payload: &[u8]) -> anyhow::Result<Self>;
     fn encode(&self, client_version: ClientVersion, to_client: bool, writer: &mut impl Write) -> anyhow::Result<()>;
+
+    fn into_arc(self) -> Arc<AnyPacket> { Arc::from(AnyPacket::from(self)) }
 }
 
 #[derive(Clone)]
@@ -184,7 +187,10 @@ fn packet_registry() -> &'static PacketRegistry {
             PacketRegistration::for_type::<UpsertLocalPlayer>(),
             PacketRegistration::for_type::<UpsertEntityCharacter>(),
             PacketRegistration::for_type::<UpsertEntityEquipped>(),
+            PacketRegistration::for_type::<UpsertEntityContained>(),
             PacketRegistration::for_type::<UpsertContainerContents>(),
+            PacketRegistration::for_type::<EntityTooltipVersion>(),
+            PacketRegistration::for_type::<EntityTooltip>(),
             PacketRegistration::for_type::<UpsertEntityStats>(),
         ].into_iter() {
             max_size = registration.size.max(max_size);
