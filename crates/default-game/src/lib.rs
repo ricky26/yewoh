@@ -32,6 +32,8 @@ impl Plugin for DefaultGamePlugin {
             .add_system(handle_double_click)
             .add_system(handle_incoming_chat)
             .add_system(commands::test::echo)
+            .add_system(commands::test::frypan)
+            .add_system(commands::test::test_gump)
             .add_system_to_stage(CoreStage::Last, update_space);
     }
 
