@@ -14,6 +14,7 @@ use super::{ClientVersion, Endian, Packet};
 #[derive(Debug, Clone, Default)]
 pub struct Move {
     pub direction: Direction,
+    pub run: bool,
     pub sequence: u8,
     pub fast_walk: u32,
 }
@@ -24,15 +25,21 @@ impl Packet for Move {
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(7) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
-        let direction = Direction::from_repr(payload.read_u8()?)
+        let direction_and_run = payload.read_u8()?;
+        let run = (direction_and_run & 0x80) != 0;
+        let direction = Direction::from_repr(direction_and_run & 0x7f)
             .ok_or_else(|| anyhow!("Invalid direction"))?;
         let sequence = payload.read_u8()?;
         let fast_walk = payload.read_u32::<Endian>()?;
-        Ok(Move { direction, sequence, fast_walk })
+        Ok(Move { direction, run, sequence, fast_walk })
     }
 
     fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
-        writer.write_u8(self.direction as u8)?;
+        let mut direction_and_run = self.direction as u8;
+        if self.run {
+            direction_and_run |= 0x80;
+        }
+        writer.write_u8(direction_and_run)?;
         writer.write_u8(self.sequence)?;
         writer.write_u32::<Endian>(self.fast_walk)?;
         Ok(())

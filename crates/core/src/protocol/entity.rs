@@ -179,7 +179,7 @@ impl Packet for UpsertEntityWorld {
     fn packet_kind() -> u8 { 0xf3 }
 
     fn fixed_length(client_version: ClientVersion) -> Option<usize> {
-        Some(if client_version >= VERSION_HIGH_SEAS { 28 } else { 24 })
+        Some(if client_version >= VERSION_HIGH_SEAS { 26 } else { 24 })
     }
 
     fn decode(client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
