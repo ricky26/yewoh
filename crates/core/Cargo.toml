@@ -1,5 +1,9 @@
 [package]
 name = "yewoh"
+description = "A protocol library for Ultima Online"
+authors = ["Erica Sian Taylor"]
+repository = "https://github.com/ricky26/yewoh"
+license = "MIT"
 version = "0.1.0"
 edition = "2021"
 

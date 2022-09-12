@@ -1,6 +1,9 @@
 [package]
 name = "yewoh-default-server"
 description = "A Yewoh server implementation which tries to match the official UO behaviour."
+authors = ["Erica Sian Taylor"]
+repository = "https://github.com/ricky26/yewoh"
+license = "MIT"
 version = "0.1.0"
 edition = "2021"
 
