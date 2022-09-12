@@ -13,6 +13,7 @@ yewoh-server = { path = "../server" }
 tokio = { version = "1.21.0", default_features = false, features = ["fs", "net", "macros"] }
 anyhow = "1.0.64"
 log = "0.4.17"
+clap = "3.2.20"
 async-trait = "0.1.57"
 bevy_ecs = "0.8.1"
 bevy_app = "0.8.1"
@@ -21,4 +22,5 @@ serde = "1.0.144"
 serde_derive = "1.0.144"
 serde_yaml = "0.9.11"
 quadtree_rs = "0.1.2"
+shell-words = "1.1.0"
 chrono = "0.4.22"
