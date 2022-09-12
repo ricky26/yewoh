@@ -273,21 +273,3 @@ impl Blowfish {
         [r, l]
     }
 }
-
-/*
-cipher::impl_simple_block_encdec!(
-    <T: ByteOrder> Blowfish, U8, cipher, block,
-    encrypt: {
-        let mut b = [0u32; 2];
-        T::read_u32_into(block.get_in(), &mut b);
-        b = cipher.encrypt(b);
-        T::write_u32_into(&b, block.get_out());
-    }
-    decrypt: {
-        let mut b = [0u32; 2];
-        T::read_u32_into(block.get_in(), &mut b);
-        b = cipher.decrypt(b);
-        T::write_u32_into(&b, block.get_out());
-    }
-);
-*/
