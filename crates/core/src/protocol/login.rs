@@ -1,3 +1,4 @@
+use std::fmt::{Debug, Formatter};
 use std::io::Write;
 
 use anyhow::anyhow;
@@ -43,7 +44,7 @@ impl Packet for Seed {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AccountLogin {
     pub username: String,
     pub password: String,
@@ -57,6 +58,16 @@ impl Default for AccountLogin {
             password: Default::default(),
             next_login_key: 0xff,
         }
+    }
+}
+
+impl Debug for AccountLogin {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AccountLogin")
+            .field("username", &self.username)
+            .field("password", &"<redacted>")
+            .field("next_login_key", &self.next_login_key)
+            .finish()
     }
 }
 
@@ -197,11 +208,21 @@ impl Packet for SwitchServer {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct GameServerLogin {
     pub token: u32,
     pub username: String,
     pub password: String,
+}
+
+impl Debug for GameServerLogin {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GameServerLogin")
+            .field("token", &self.token)
+            .field("username", &self.username)
+            .field("password", &"<redacted>")
+            .finish()
+    }
 }
 
 impl Packet for GameServerLogin {
@@ -297,10 +318,19 @@ impl Packet for SupportedFeatures {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct CharacterFromList {
     pub name: String,
     pub password: String,
+}
+
+impl Debug for CharacterFromList {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CharacterFromList")
+            .field("name", &self.name)
+            .field("password", &"<redacted>")
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, Default)]
