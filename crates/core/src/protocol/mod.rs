@@ -6,7 +6,7 @@ use std::mem::{MaybeUninit, size_of, transmute};
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use byteorder::{ByteOrder, WriteBytesExt};
+use byteorder::ByteOrder;
 pub use byteorder::BigEndian as Endian;
 use once_cell::sync::OnceCell;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
@@ -25,10 +25,13 @@ pub use sound::*;
 pub use ui::*;
 
 use crate::protocol::compression::{HuffmanVecWriter};
+use crate::protocol::encryption::Encryption;
 
 mod format;
 
 pub mod compression;
+
+pub mod encryption;
 
 mod client_version;
 
@@ -306,12 +309,28 @@ pub struct Reader {
     reader: BufReader<OwnedReadHalf>,
     buffer: Vec<u8>,
     from_client: bool,
+    encryption: Option<Encryption>,
 }
 
 impl Reader {
+    pub fn set_encryption(&mut self, encryption: Option<Encryption>) {
+        self.encryption = encryption;
+    }
+
     pub async fn recv(&mut self, client_version: ClientVersion)
         -> anyhow::Result<AnyPacket> {
-        let packet_kind = self.reader.read_u8().await?;
+        let mut packet_kind = self.reader.read_u8().await?;
+
+        if let Some(encryption) = self.encryption.as_mut() {
+            let mut cell = [packet_kind];
+            if self.from_client {
+                encryption.crypt_client_to_server(&mut cell);
+            } else {
+                encryption.crypt_server_to_client(&mut cell);
+            }
+            packet_kind = cell[0];
+        }
+
         let registry = packet_registry();
         let registration = match registry.registrations[packet_kind as usize].as_ref() {
             Some(r) => r,
@@ -323,7 +342,18 @@ impl Reader {
         let length = if let Some(fixed_length) = (registration.fixed_length)(client_version) {
             fixed_length - 1
         } else {
-            self.reader.read_u16().await? as usize - 3
+            let mut bytes = [0u8; 2];
+            self.reader.read_exact(&mut bytes).await?;
+
+            if let Some(encryption) = self.encryption.as_mut() {
+                if self.from_client {
+                    encryption.crypt_client_to_server(&mut bytes);
+                } else {
+                    encryption.crypt_server_to_client(&mut bytes);
+                }
+            }
+
+            Endian::read_u16(&bytes) as usize - 3
         };
 
         log::debug!("Beginning {packet_kind:2x} length {length}");
@@ -331,9 +361,17 @@ impl Reader {
         self.buffer.resize(length, 0u8);
         self.reader.read_exact(&mut self.buffer[..]).await?;
 
-        let decoded = (registration.decode)(client_version, self.from_client, &self.buffer)?;
+        if let Some(encryption) = self.encryption.as_mut() {
+            if self.from_client {
+                encryption.crypt_client_to_server(&mut self.buffer);
+            } else {
+                encryption.crypt_server_to_client(&mut self.buffer);
+            }
+        }
+
+        let decoded = (registration.decode)(client_version, self.from_client, &self.buffer);
         self.buffer.clear();
-        Ok(decoded)
+        Ok(decoded?)
     }
 }
 
@@ -344,11 +382,16 @@ pub struct Writer {
     to_client: bool,
     compress: bool,
     compress_buffer: Vec<u8>,
+    encryption: Option<Encryption>,
 }
 
 impl Writer {
     pub fn enable_compression(&mut self) {
         self.compress = true;
+    }
+
+    pub fn set_encryption(&mut self, encryption: Option<Encryption>) {
+        self.encryption = encryption;
     }
 
     pub async fn send_legacy_seed(&mut self, seed: u32) -> anyhow::Result<()> {
@@ -364,91 +407,60 @@ impl Writer {
         Ok(())
     }
 
-    pub async fn send<T: Packet>(&mut self, client_version: ClientVersion, packet: &T)
-        -> anyhow::Result<()> {
+    async fn send_raw(&mut self) -> anyhow::Result<()> {
         self.has_sent = true;
 
-        match (T::fixed_length(client_version), self.compress) {
-            (Some(_), true) => {
-                let mut writer = HuffmanVecWriter::new(&mut self.buffer);
-                writer.write_u8(T::packet_kind())?;
-                packet.encode(client_version, self.to_client, &mut writer)?;
-                writer.finish();
-            }
-            (Some(length), false) => {
-                self.buffer.reserve(length);
-                self.buffer.push(T::packet_kind());
-                packet.encode(client_version, self.to_client, &mut self.buffer)?;
-                assert_eq!(length, self.buffer.len(), "Fixed length packet wrote wrong size");
-            }
-            (None, true) => {
-                self.compress_buffer.clear();
-                self.compress_buffer.reserve(4096);
-                self.compress_buffer.extend([T::packet_kind(), 0, 0]);
-                packet.encode(client_version, self.to_client, &mut self.compress_buffer)?;
-                let packet_len = self.compress_buffer.len() as u16;
-                Endian::write_u16(&mut self.compress_buffer[1..3], packet_len);
-                let mut writer = HuffmanVecWriter::new(&mut self.buffer);
-                writer.write(&self.compress_buffer)?;
-                writer.finish();
-                self.compress_buffer.clear();
-            }
-            (None, false) => {
-                self.buffer.extend([T::packet_kind(), 0, 0]);
-                packet.encode(client_version, self.to_client, &mut self.buffer)?;
-                let packet_len = self.buffer.len() as u16;
-                Endian::write_u16(&mut self.buffer[1..3], packet_len);
+        if self.compress {
+            std::mem::swap(&mut self.buffer, &mut self.compress_buffer);
+            let mut writer = HuffmanVecWriter::new(&mut self.buffer);
+            writer.write_all(&self.compress_buffer)?;
+            writer.finish();
+            self.compress_buffer.clear();
+        }
+
+        if let Some(encryption) = self.encryption.as_mut() {
+            if self.to_client {
+                encryption.crypt_server_to_client(&mut self.buffer);
             }
         }
 
-        self.writer.write_all(&mut self.buffer).await?;
+        let result = self.writer.write_all(&mut self.buffer).await;
         self.buffer.clear();
+        result?;
         self.writer.flush().await?;
         Ok(())
     }
 
-    pub async fn send_any(&mut self, client_version: ClientVersion, packet: &AnyPacket)
-        -> anyhow::Result<()> {
-        self.has_sent = true;
-
-        let kind = packet.packet_kind();
-        match (packet.fixed_length(client_version), self.compress) {
-            (Some(_), true) => {
-                let mut writer = HuffmanVecWriter::new(&mut self.buffer);
-                writer.write_u8(kind)?;
-                packet.encode(client_version, self.to_client, &mut writer)?;
-                writer.finish();
-            }
-            (Some(length), false) => {
-                self.buffer.reserve(length);
-                self.buffer.push(kind);
-                packet.encode(client_version, self.to_client, &mut self.buffer)?;
-                assert_eq!(length, self.buffer.len(), "Fixed length packet wrote wrong size");
-            }
-            (None, true) => {
-                self.compress_buffer.clear();
-                self.compress_buffer.reserve(4096);
-                self.compress_buffer.extend([kind, 0, 0]);
-                packet.encode(client_version, self.to_client, &mut self.compress_buffer)?;
-                let packet_len = self.compress_buffer.len() as u16;
-                Endian::write_u16(&mut self.compress_buffer[1..3], packet_len);
-                let mut writer = HuffmanVecWriter::new(&mut self.buffer);
-                writer.write(&self.compress_buffer)?;
-                writer.finish();
-                self.compress_buffer.clear();
-            }
-            (None, false) => {
-                self.buffer.extend([kind, 0, 0]);
-                packet.encode(client_version, self.to_client, &mut self.buffer)?;
-                let packet_len = self.buffer.len() as u16;
-                Endian::write_u16(&mut self.buffer[1..3], packet_len);
-            }
+    pub async fn send<T: Packet>(&mut self, client_version: ClientVersion, packet: &T) -> anyhow::Result<()> {
+        if let Some(length) = T::fixed_length(client_version) {
+            self.buffer.reserve(length);
+            self.buffer.push(T::packet_kind());
+            packet.encode(client_version, self.to_client, &mut self.buffer)?;
+            assert_eq!(length, self.buffer.len(), "Fixed length packet wrote wrong size");
+        } else {
+            self.buffer.extend([T::packet_kind(), 0, 0]);
+            packet.encode(client_version, self.to_client, &mut self.buffer)?;
+            let packet_len = self.buffer.len() as u16;
+            Endian::write_u16(&mut self.buffer[1..3], packet_len);
         }
 
-        self.writer.write_all(&mut self.buffer).await?;
-        self.buffer.clear();
-        self.writer.flush().await?;
-        Ok(())
+        self.send_raw().await
+    }
+
+    pub async fn send_any(&mut self, client_version: ClientVersion, packet: &AnyPacket) -> anyhow::Result<()> {
+        if let Some(length) = packet.fixed_length(client_version) {
+            self.buffer.reserve(length);
+            self.buffer.push(packet.packet_kind());
+            packet.encode(client_version, self.to_client, &mut self.buffer)?;
+            assert_eq!(length, self.buffer.len(), "Fixed length packet wrote wrong size");
+        } else {
+            self.buffer.extend([packet.packet_kind(), 0, 0]);
+            packet.encode(client_version, self.to_client, &mut self.buffer)?;
+            let packet_len = self.buffer.len() as u16;
+            Endian::write_u16(&mut self.buffer[1..3], packet_len);
+        }
+
+        self.send_raw().await
     }
 }
 
@@ -458,6 +470,7 @@ pub fn new_io(stream: TcpStream, is_server: bool) -> (Reader, Writer) {
         reader: BufReader::new(reader),
         buffer: Vec::with_capacity(4096),
         from_client: is_server,
+        encryption: None,
     }, Writer {
         writer: BufWriter::new(writer),
         buffer: Vec::with_capacity(4096),
@@ -465,5 +478,6 @@ pub fn new_io(stream: TcpStream, is_server: bool) -> (Reader, Writer) {
         to_client: is_server,
         compress: false,
         compress_buffer: Vec::new(),
+        encryption: None,
     })
 }

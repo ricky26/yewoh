@@ -16,4 +16,5 @@ strum_macros = "0.24.3"
 encode_unicode = "1.0.0"
 pretty-hex = "0.3.0"
 glam = "0.21.3"
+md5 = "0.7.0"
 

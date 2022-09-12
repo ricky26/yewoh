@@ -6,14 +6,11 @@ use log::{info, warn};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 
-use yewoh::protocol::{
-    AnyPacket, AsciiTextMessageRequest, ClientVersion, ClientVersionRequest, CreateCharacterClassic,
-    CreateCharacterEnhanced, DoubleClick, FeatureFlags, Move, SingleClick, SupportedFeatures,
-    UnicodeTextMessageRequest,
-};
+use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DoubleClick, FeatureFlags, GameServerLogin, Move, SingleClick, SupportedFeatures, UnicodeTextMessageRequest};
+use yewoh::protocol::encryption::Encryption;
 
 use crate::game_server::NewSessionAttempt;
-use crate::lobby::{NewSession, NewSessionRequest, SessionAllocator};
+use crate::lobby::{NewSessionRequest, SessionAllocator};
 use crate::world::events::{
     CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DoubleClickEvent, MoveEvent,
     ReceivedPacketEvent, SentPacketEvent, SingleClickEvent,
@@ -53,8 +50,13 @@ impl NetClient {
 pub struct NetInWorld;
 
 pub struct NetServer {
+    encrypted: bool,
+
     new_session_requests: mpsc::UnboundedReceiver<NewSessionRequest>,
     new_session_attempts: mpsc::UnboundedReceiver<NewSessionAttempt>,
+
+    login_attempts_tx: mpsc::UnboundedSender<(NewSessionAttempt, ClientVersion, GameServerLogin)>,
+    login_attempts_rx: mpsc::UnboundedReceiver<(NewSessionAttempt, ClientVersion, GameServerLogin)>,
 
     session_allocator: SessionAllocator,
 
@@ -67,20 +69,25 @@ pub struct NetServer {
 
 impl NetServer {
     pub fn new(
+        encrypted: bool,
         new_session_requests: mpsc::UnboundedReceiver<NewSessionRequest>,
         new_sessions: mpsc::UnboundedReceiver<NewSessionAttempt>,
     ) -> NetServer {
-        let (internal_tx, packet_rx) = mpsc::unbounded_channel();
-        let (internal_close_tx, internal_close_rx) = mpsc::unbounded_channel();
+        let (received_packets_tx, received_packets_rx) = mpsc::unbounded_channel();
+        let (closed_tx, closed_rx) = mpsc::unbounded_channel();
+        let (login_attempts_tx, login_attempts_rx) = mpsc::unbounded_channel();
 
         Self {
+            encrypted,
             new_session_requests,
             new_session_attempts: new_sessions,
             session_allocator: SessionAllocator::new(),
-            received_packets_rx: packet_rx,
-            received_packets_tx: internal_tx,
-            closed_tx: internal_close_tx,
-            closed_rx: internal_close_rx,
+            login_attempts_tx,
+            login_attempts_rx,
+            received_packets_rx,
+            received_packets_tx,
+            closed_tx,
+            closed_rx,
         }
     }
 }
@@ -98,7 +105,67 @@ pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<NetServer>,
     }
 
     while let Ok(session_attempt) = server.new_session_attempts.try_recv() {
-        let new_session = match server.session_allocator.start_session(session_attempt) {
+        let client_version = match server.session_allocator.client_version_for_token(session_attempt.token) {
+            Some(x) => x,
+            None => {
+                warn!("Session attempt for unknown token {}", session_attempt.token);
+                continue;
+            }
+        };
+
+        let NewSessionAttempt {
+            address,
+            mut reader,
+            mut writer,
+            token,
+        } = session_attempt;
+
+        if server.encrypted {
+            let encryption = Encryption::new(client_version, token, false);
+            reader.set_encryption(Some(encryption.clone()));
+            writer.set_encryption(Some(encryption));
+        }
+
+        let attempt_tx = server.login_attempts_tx.clone();
+        runtime.spawn(async move {
+            let packet = match reader.recv(ClientVersion::default()).await {
+                Ok(packet) => packet,
+                Err(err) => {
+                    warn!("From ({address}): whilst reading first packet: {err}");
+                    return;
+                }
+            };
+
+            let login = match packet.into_downcast::<GameServerLogin>().ok() {
+                Some(packet) => packet,
+                None => {
+                    warn!("From ({address}): expected login as first game server connection message");
+                    return;
+                }
+            };
+
+            if login.token != token {
+                warn!("From ({address}): expected initial token & login token to match");
+                return;
+            }
+
+            attempt_tx.send((NewSessionAttempt {
+                address,
+                reader,
+                writer,
+                token,
+            }, client_version, login)).ok();
+        });
+    }
+
+    while let Ok((session_attempt, client_version, login)) = server.login_attempts_rx.try_recv() {
+        let NewSessionAttempt {
+            address,
+            mut reader,
+            mut writer,
+            token,
+        } = session_attempt;
+        let new_session = match server.session_allocator.start_session(token, login) {
             Ok(x) => x,
             Err(err) => {
                 warn!("Failed to start session: {err}");
@@ -106,16 +173,8 @@ pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<NetServer>,
             }
         };
 
-        let NewSession {
-            address,
-            mut reader,
-            mut writer,
-            username,
-            client_version,
-            ..
-        } = new_session;
+        let username = new_session.username;
         let (tx, mut rx) = mpsc::unbounded_channel();
-
         info!("New game session from {} for {} (version {})", &address, &username, client_version);
 
         runtime.spawn(async move {

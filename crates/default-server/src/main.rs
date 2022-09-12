@@ -37,6 +37,10 @@ struct Args {
     #[clap(short, long, default_value = "Yewoh Server", env = "YEWOH_SERVER_NAME")]
     server_display_name: String,
 
+    /// Whether or not to enable packet encryption.
+    #[clap(short, long, default_value = "true", env = "YEWOH_ENCRYPTION")]
+    encryption: bool,
+
     /// The external address of this server to provide to clients.
     #[clap(short, long, default_value = "127.0.0.1", env = "YEWOH_ADVERTISE_ADDRESS")]
     advertise_address: String,
@@ -94,7 +98,7 @@ fn main() -> anyhow::Result<()> {
     let lobby_listener = lobby_listener?;
     let game_listener = game_listener?;
 
-    let lobby_handle = rt.spawn(listen_for_lobby(lobby_listener, move || lobby.clone()));
+    let lobby_handle = rt.spawn(listen_for_lobby(lobby_listener, args.encryption, move || lobby.clone()));
 
     let (new_session_tx, new_session_rx) = mpsc::unbounded_channel();
     let game_handle = rt.spawn(listen_for_game(game_listener, new_session_tx));
@@ -110,7 +114,7 @@ fn main() -> anyhow::Result<()> {
     app
         .add_plugin(ServerPlugin)
         .add_plugin(DefaultGamePlugin)
-        .insert_resource(NetServer::new(new_session_requests, new_session_rx))
+        .insert_resource(NetServer::new(args.encryption, new_session_requests, new_session_rx))
         .insert_resource(static_data.maps.map_infos())
         .insert_resource(static_data);
 

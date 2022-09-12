@@ -7,15 +7,13 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::spawn;
 use tokio::sync::mpsc;
 
-use yewoh::protocol::{ClientVersion, GameServerLogin, new_io, Reader, Writer};
+use yewoh::protocol::{new_io, Reader, Writer};
 
 pub struct NewSessionAttempt {
     pub address: SocketAddr,
     pub reader: Reader,
     pub writer: Writer,
     pub token: u32,
-    pub username: String,
-    pub password: String,
 }
 
 pub async fn serve_game(
@@ -25,7 +23,7 @@ pub async fn serve_game(
 ) -> anyhow::Result<()> {
     let token = stream.read_u32().await?;
 
-    let (mut reader, mut writer) = new_io(stream, true);
+    /*
     let login = reader.recv(ClientVersion::default()).await?
         .into_downcast::<GameServerLogin>()
         .ok()
@@ -33,17 +31,17 @@ pub async fn serve_game(
 
     if login.token != token {
         return Err(anyhow!("expected initial token & login token to match"));
-    }
+    }*/
 
+    let (reader, mut writer) = new_io(stream, true);
     writer.enable_compression();
+
     tx
         .send(NewSessionAttempt {
             address,
             reader,
             writer,
             token,
-            username: login.username,
-            password: login.password,
         })
         .map_err(|_| anyhow!("failed to start new session"))?;
 

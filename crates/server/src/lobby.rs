@@ -1,6 +1,5 @@
 use std::collections::{hash_map, HashMap};
 use std::net::Ipv4Addr;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 
@@ -11,11 +10,8 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::spawn;
 use tokio::sync::{mpsc, oneshot};
 
-use yewoh::protocol::{
-    new_io, AccountLogin, ClientVersion, GameServer, Reader, Seed, SelectGameServer, ServerList,
-    SwitchServer, Writer,
-};
-use crate::game_server::NewSessionAttempt;
+use yewoh::protocol::{AccountLogin, ClientVersion, GameServer, GameServerLogin, new_io, Seed, SelectGameServer, ServerList, SwitchServer};
+use yewoh::protocol::encryption::Encryption;
 
 #[async_trait]
 pub trait Lobby {
@@ -28,12 +24,17 @@ pub trait Lobby {
     ) -> anyhow::Result<SwitchServer>;
 }
 
-pub async fn serve_lobby(mut lobby: impl Lobby, stream: TcpStream) -> anyhow::Result<()> {
+pub async fn serve_lobby(mut lobby: impl Lobby, encrypted: bool, stream: TcpStream) -> anyhow::Result<()> {
     let (mut reader, mut writer) = new_io(stream, true);
     let seed = reader.recv(ClientVersion::default()).await?
         .into_downcast::<Seed>()
         .ok()
         .ok_or_else(|| anyhow!("expected seed as first packet"))?;
+
+    if encrypted {
+        let encryption = Encryption::new(seed.client_version, seed.seed, true);
+        reader.set_encryption(Some(encryption));
+    }
 
     let login = reader.recv(seed.client_version).await?
         .into_downcast::<AccountLogin>()
@@ -62,6 +63,7 @@ pub async fn serve_lobby(mut lobby: impl Lobby, stream: TcpStream) -> anyhow::Re
 
 pub async fn listen_for_lobby<L: Lobby + Send + 'static>(
     listener: TcpListener,
+    encrypted: bool,
     mut lobby_factory: impl FnMut() -> L,
 ) -> anyhow::Result<()> where <L as Lobby>::User: Send + Sync {
     loop {
@@ -69,7 +71,7 @@ pub async fn listen_for_lobby<L: Lobby + Send + 'static>(
         info!("New lobby connection from {address}");
         let lobby = lobby_factory();
         spawn(async move {
-            if let Err(err) = serve_lobby(lobby, stream).await {
+            if let Err(err) = serve_lobby(lobby, encrypted, stream).await {
                 warn!("error serving lobby: {:?}", err);
             }
             info!("Lobby connection disconnected {address}");
@@ -178,19 +180,12 @@ impl Lobby for LocalLobby {
 }
 
 pub struct NewSession {
-    pub address: SocketAddr,
-    pub reader: Reader,
-    pub writer: Writer,
     pub username: String,
-    pub password: String,
-    pub seed: u32,
-    pub client_version: ClientVersion,
 }
 
 #[derive(Debug)]
 struct PendingSession {
     pub username: String,
-    pub seed: u32,
     pub client_version: ClientVersion,
 }
 
@@ -211,7 +206,6 @@ impl SessionAllocator {
         let result = if matches!(entry, hash_map::Entry::Vacant(_)) {
             entry.or_insert(PendingSession {
                 username: session.username,
-                seed: session.seed,
                 client_version: session.client_version,
             });
             Ok(())
@@ -222,25 +216,23 @@ impl SessionAllocator {
         session.done.send(result).ok();
     }
 
-    pub fn start_session(&mut self, session: NewSessionAttempt) -> anyhow::Result<NewSession> {
-        let test_session = match self.pending_sessions.get(&session.token) {
+    pub fn client_version_for_token(&self, token: u32) -> Option<ClientVersion> {
+        self.pending_sessions.get(&token).map(|t| t.client_version)
+    }
+
+    pub fn start_session(&mut self, token: u32, login: GameServerLogin) -> anyhow::Result<NewSession> {
+        let test_session = match self.pending_sessions.get(&token) {
             Some(x) => x,
             None => return Err(anyhow!("no such session token")),
         };
 
-        if test_session.username != session.username {
+        if test_session.username != login.username {
             return Err(anyhow!("wrong user for session"));
         }
 
-        let request = self.pending_sessions.remove(&session.token).unwrap();
+        self.pending_sessions.remove(&token);
         Ok(NewSession {
-            address: session.address,
-            reader: session.reader,
-            writer: session.writer,
-            username: session.username,
-            password: session.password,
-            seed: request.seed,
-            client_version: request.client_version,
+            username: login.username,
         })
     }
 }
