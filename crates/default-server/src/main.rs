@@ -3,13 +3,11 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use actix_web::{HttpServer, web};
 use anyhow::anyhow;
 use bevy_app::App;
 use clap::Parser;
 use futures::future::join;
 use log::info;
-use memmap2::Mmap;
 use tokio::net::{lookup_host, TcpListener};
 use tokio::sync::mpsc;
 
@@ -17,7 +15,6 @@ use yewoh::assets::uop::UopBuffer;
 use yewoh_default_game::data::static_data;
 use yewoh_default_game::DefaultGamePlugin;
 use yewoh_server::game_server::listen_for_game;
-use yewoh_server::http::HttpApi;
 use yewoh_server::lobby::{listen_for_lobby, LocalLobby};
 use yewoh_server::world::net::NetServer;
 use yewoh_server::world::ServerPlugin;
@@ -103,12 +100,9 @@ fn main() -> anyhow::Result<()> {
     let (new_session_tx, new_session_rx) = mpsc::unbounded_channel();
     let game_handle = rt.spawn(listen_for_game(game_listener, new_session_tx));
 
-    let http_server_handle = rt.spawn(HttpServer::new(|| {
-        actix_web::App::new()
-            .service(web::scope("/api").service(HttpApi::new()))
-    })
-        .bind(&args.http_bind)?
-        .run());
+    let http_app = axum::Router::new();
+    let http_server_handle = rt.spawn(axum::Server::bind(&SocketAddr::from_str(&args.http_bind)?)
+        .serve(http_app.into_make_service()));
 
     let mut app = App::new();
     app
