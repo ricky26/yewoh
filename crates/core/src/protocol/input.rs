@@ -128,6 +128,7 @@ impl Packet for SingleClick {
 #[derive(Debug, Clone)]
 pub struct DoubleClick {
     pub target_id: EntityId,
+    pub paperdoll: bool,
 }
 
 impl Packet for DoubleClick {
@@ -135,12 +136,18 @@ impl Packet for DoubleClick {
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(5) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
-        let target_id = payload.read_entity_id()?;
-        Ok(Self { target_id })
+        let raw_target_id = payload.read_u32::<Endian>()?;
+        let target_id = EntityId::from_u32(raw_target_id & 0x7fffffff);
+        let paperdoll = (raw_target_id & 0x80000000) != 0;
+        Ok(Self { target_id, paperdoll })
     }
 
     fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
-        writer.write_entity_id(self.target_id)?;
+        let mut target_id = self.target_id.as_u32();
+        if self.paperdoll {
+            target_id |= 0x80000000;
+        }
+        writer.write_u32::<Endian>(target_id)?;
         Ok(())
     }
 }

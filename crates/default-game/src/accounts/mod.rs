@@ -177,7 +177,7 @@ pub fn handle_spawn_character(
             .insert(NetEntity { id: entity_allocator.allocate_item() })
             .insert(Flags::default())
             .insert(Graphic { id: 0xe75, hue: 0 })
-            .insert(Container { gump_id: 7, items: vec![child_entity] })
+            .insert(Container { gump_id: 0x3c, items: vec![child_entity] })
             .id();
         let top_entity = commands.spawn()
             .insert(NetEntity { id: entity_allocator.allocate_item() })
