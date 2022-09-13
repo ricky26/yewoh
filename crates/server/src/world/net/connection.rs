@@ -6,12 +6,12 @@ use log::{info, warn};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 
-use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DoubleClick, DropEntity, FeatureFlags, GameServerLogin, Move, PickUpEntity, SelectCharacter, SingleClick, SupportedFeatures, UnicodeTextMessageRequest};
+use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DoubleClick, DropEntity, EquipEntity, FeatureFlags, GameServerLogin, Move, PickUpEntity, SelectCharacter, SingleClick, SupportedFeatures, UnicodeTextMessageRequest};
 use yewoh::protocol::encryption::Encryption;
 
 use crate::game_server::NewSessionAttempt;
 use crate::lobby::{NewSessionRequest, SessionAllocator};
-use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DoubleClickEvent, DropEvent, MoveEvent, PickUpEvent, ReceivedPacketEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
+use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ReceivedPacketEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::net::entity::NetEntityLookup;
 
 pub enum WriterAction {
@@ -329,6 +329,7 @@ pub fn handle_input_packets(
     mut double_click_events: EventWriter<DoubleClickEvent>,
     mut pick_up_events: EventWriter<PickUpEvent>,
     mut drop_events: EventWriter<DropEvent>,
+    mut equip_events: EventWriter<EquipEvent>,
 ) {
     for ReceivedPacketEvent { client: connection, packet } in events.iter() {
         let connection = *connection;
@@ -360,6 +361,16 @@ pub fn handle_input_packets(
                     position: request.position,
                     grid_index: request.grid_index,
                     dropped_on: request.container_id.and_then(|id| lookup.net_to_ecs(id)),
+                });
+            }
+        } else if let Some(request) = packet.downcast::<EquipEntity>() {
+            if let Some((target, character)) = lookup.net_to_ecs(request.target_id)
+                .zip(lookup.net_to_ecs(request.character_id)) {
+                equip_events.send(EquipEvent {
+                    client: connection,
+                    target,
+                    character,
+                    slot: request.slot,
                 });
             }
         } else if let Some(request) = packet.downcast::<AsciiTextMessageRequest>() {

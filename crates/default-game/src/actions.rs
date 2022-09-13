@@ -2,7 +2,7 @@ use bevy_ecs::prelude::*;
 
 use yewoh::protocol::{MoveConfirm, MoveEntityReject, OpenContainer, OpenPaperDoll};
 use yewoh_server::world::entity::{Character, Container, EquippedBy, Graphic, MapPosition, Notorious, ParentContainer, Quantity};
-use yewoh_server::world::events::{DoubleClickEvent, DropEvent, MoveEvent, PickUpEvent};
+use yewoh_server::world::events::{DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent};
 use yewoh_server::world::net::{make_container_contents_packet, NetClient, NetEntity, NetOwned, PlayerState};
 
 #[derive(Debug, Clone, Component)]
@@ -199,6 +199,54 @@ pub fn handle_drop(
                 .remove::<Holder>()
                 .insert(MapPosition {
                     position: event.position,
+                    map_id: character_position.map_id,
+                    ..Default::default()
+                });
+        }
+
+        commands.entity(character)
+            .remove::<Held>();
+    }
+}
+
+pub fn handle_equip(
+    mut events: EventReader<EquipEvent>,
+    clients: Query<(&NetClient, &NetOwned)>,
+    characters: Query<(&MapPosition, &Held)>,
+    mut loadouts: Query<&mut Character>,
+    mut commands: Commands,
+) {
+    for event in events.iter() {
+        let (client, owner) = match clients.get(event.client) {
+            Ok(x) => x,
+            _ => continue,
+        };
+
+        let character = owner.primary_entity;
+        let (character_position, held) = match characters.get(character) {
+            Ok(x) => x,
+            _ => continue,
+        };
+
+        if held.held_entity != event.target {
+            client.send_packet(MoveEntityReject::BelongsToAnother.into());
+            continue;
+        }
+
+        let target = event.target;
+        if let Ok(mut target_character) = loadouts.get_mut(event.character) {
+            target_character.equipment.push(target);
+            commands.entity(target)
+                .remove::<Holder>()
+                .insert(EquippedBy {
+                    parent: event.character,
+                    slot: event.slot,
+                });
+        } else {
+            commands.entity(target)
+                .remove::<Holder>()
+                .insert(MapPosition {
+                    position: character_position.position,
                     map_id: character_position.map_id,
                     ..Default::default()
                 });

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use bevy_ecs::prelude::*;
 use glam::IVec3;
 
-use yewoh::protocol::{AnyPacket, CreateCharacter, Move, SelectCharacter, UnicodeTextMessageRequest};
+use yewoh::protocol::{AnyPacket, CreateCharacter, EquipmentSlot, Move, SelectCharacter, UnicodeTextMessageRequest};
 
 #[derive(Debug)]
 pub struct ReceivedPacketEvent {
@@ -65,6 +65,14 @@ pub struct DropEvent {
     pub position: IVec3,
     pub grid_index: u8,
     pub dropped_on: Option<Entity>,
+}
+
+#[derive(Debug, Clone)]
+pub struct EquipEvent {
+    pub client: Entity,
+    pub target: Entity,
+    pub character: Entity,
+    pub slot: EquipmentSlot,
 }
 
 #[derive(Debug, Clone)]

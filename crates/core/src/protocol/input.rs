@@ -6,7 +6,7 @@ use glam::IVec3;
 use strum_macros::FromRepr;
 
 use crate::{Direction, EntityId, Notoriety};
-use crate::protocol::{PacketReadExt, PacketWriteExt};
+use crate::protocol::{EquipmentSlot, PacketReadExt, PacketWriteExt};
 use crate::protocol::client_version::VERSION_GRID_INVENTORY;
 
 use super::{ClientVersion, Endian, Packet};
@@ -253,6 +253,34 @@ impl Packet for MoveEntityReject {
 
     fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u8(*self as u8)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct EquipEntity {
+    pub target_id: EntityId,
+    pub slot: EquipmentSlot,
+    pub character_id: EntityId,
+}
+
+impl Packet for EquipEntity {
+    fn packet_kind() -> u8 { 0x13 }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(10) }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let id = payload.read_entity_id()?;
+        let layer = EquipmentSlot::from_repr(payload.read_u8()?)
+            .ok_or_else(|| anyhow!("invalid equipment slot"))?;
+        let to = payload.read_entity_id()?;
+        Ok(Self { target_id: id, slot: layer, character_id: to })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_entity_id(self.target_id)?;
+        writer.write_u8(self.slot as u8)?;
+        writer.write_entity_id(self.character_id)?;
         Ok(())
     }
 }
