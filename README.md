@@ -18,7 +18,7 @@ my excuses.
 ## What works?
 At the moment, you can connect and walk around.
 - Login is currently a no-op
-- There is no persistence/ validation or game login
+- There is no persistence/ validation or game logic
 
 ## Starting the server
     cargo run --bin=yewoh-default-server --uo-data-path /path/to/UOClassic
