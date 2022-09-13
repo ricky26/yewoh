@@ -53,7 +53,7 @@ pub struct Multi {
     pub id: u16,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Component)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Component)]
 pub struct MapPosition {
     pub position: IVec3,
     pub map_id: u8,

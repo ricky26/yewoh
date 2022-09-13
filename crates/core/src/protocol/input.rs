@@ -233,6 +233,32 @@ impl Packet for DropEntity {
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, FromRepr)]
+pub enum MoveEntityReject {
+    CannotLift = 0,
+    OutOfRange = 1,
+    OutOfSight = 2,
+    BelongsToAnother = 3,
+    AlreadyHolding = 4,
+}
+
+impl Packet for MoveEntityReject {
+    fn packet_kind() -> u8 { 0x27 }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        Ok(MoveEntityReject::from_repr(payload.read_u8()?)
+            .ok_or_else(|| anyhow!("Invalid rejection reason"))?)
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_u8(*self as u8)?;
+        Ok(())
+    }
+}
+
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, FromRepr)]
 pub enum TargetType {
     Neutral = 0,
     Harmful = 1,

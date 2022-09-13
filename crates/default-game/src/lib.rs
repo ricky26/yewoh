@@ -2,7 +2,7 @@ use bevy_app::prelude::*;
 
 use crate::accounts::{handle_create_character, handle_list_characters, handle_list_characters_callback, handle_select_character, handle_spawn_character, PendingCharacterInfo, PendingCharacterLists};
 use crate::accounts::repository::MemoryAccountRepository;
-use crate::actions::{handle_double_click, handle_move};
+use crate::actions::{handle_double_click, handle_drop, handle_move, handle_pick_up};
 use crate::chat::handle_incoming_chat;
 use crate::commands::TextCommands;
 use crate::space::{Space, update_space};
@@ -37,6 +37,8 @@ impl Plugin for DefaultGamePlugin {
             .add_system(handle_spawn_character)
             .add_system(handle_move)
             .add_system(handle_double_click)
+            .add_system(handle_pick_up)
+            .add_system(handle_drop)
             .add_system(handle_incoming_chat)
             .add_system(commands::test::echo)
             .add_system(commands::test::frypan)

@@ -162,6 +162,7 @@ fn packet_registry() -> &'static PacketRegistry {
             PacketRegistration::for_type::<DoubleClick>(),
             PacketRegistration::for_type::<PickUpEntity>(),
             PacketRegistration::for_type::<DropEntity>(),
+            PacketRegistration::for_type::<MoveEntityReject>(),
             PacketRegistration::for_type::<PickTarget>(),
 
             // UI

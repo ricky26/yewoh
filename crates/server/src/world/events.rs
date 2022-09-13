@@ -1,5 +1,8 @@
 use std::sync::Arc;
+
 use bevy_ecs::prelude::*;
+use glam::IVec3;
+
 use yewoh::protocol::{AnyPacket, CreateCharacter, Move, SelectCharacter, UnicodeTextMessageRequest};
 
 #[derive(Debug)]
@@ -47,6 +50,21 @@ pub struct SingleClickEvent {
 pub struct DoubleClickEvent {
     pub client: Entity,
     pub target: Option<Entity>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PickUpEvent {
+    pub client: Entity,
+    pub target: Entity,
+}
+
+#[derive(Debug, Clone)]
+pub struct DropEvent {
+    pub client: Entity,
+    pub target: Entity,
+    pub position: IVec3,
+    pub grid_index: u8,
+    pub dropped_on: Option<Entity>,
 }
 
 #[derive(Debug, Clone)]
