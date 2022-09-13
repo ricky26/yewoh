@@ -22,17 +22,6 @@ pub async fn serve_game(
     tx: mpsc::UnboundedSender<NewSessionAttempt>,
 ) -> anyhow::Result<()> {
     let token = stream.read_u32().await?;
-
-    /*
-    let login = reader.recv(ClientVersion::default()).await?
-        .into_downcast::<GameServerLogin>()
-        .ok()
-        .ok_or_else(|| anyhow!("expected game server login as first packet"))?;
-
-    if login.token != token {
-        return Err(anyhow!("expected initial token & login token to match"));
-    }*/
-
     let (reader, mut writer) = new_io(stream, true);
     writer.enable_compression();
 
