@@ -171,6 +171,7 @@ pub fn handle_spawn_character(
             .insert(NetEntity { id: child_backpack_id })
             .insert(Flags { flags: EntityFlags::default() })
             .insert(Graphic { id: 0x9b2, hue: 120 })
+            .insert(Container { gump_id: 0x3c, items: vec![] })
             .id();
 
         let backpack_entity = commands.spawn()
