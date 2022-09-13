@@ -27,3 +27,4 @@ maps:
     name: Internal
     size: [16, 16]
     season: 1
+    no_assets: true

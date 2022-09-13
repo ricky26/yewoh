@@ -1,4 +1,3 @@
-use std::fs::File;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -11,7 +10,6 @@ use log::info;
 use tokio::net::{lookup_host, TcpListener};
 use tokio::sync::mpsc;
 
-use yewoh::assets::uop::UopBuffer;
 use yewoh_default_game::data::static_data;
 use yewoh_default_game::DefaultGamePlugin;
 use yewoh_server::game_server::listen_for_game;
@@ -67,12 +65,8 @@ fn main() -> anyhow::Result<()> {
         .init();
 
     let args = Args::parse();
-    let art_uop_path = args.uo_data_path.join("artLegacyMUL.uop");
-    let art_uop_file = File::open(art_uop_path)?;
-    let mmap = unsafe { Mmap::map(&art_uop_file)? };
-    let _uop = UopBuffer::try_from_backing(mmap)?;
 
-    let static_data = rt.block_on(static_data::load_from_directory(&args.data_path))?;
+    let static_data = rt.block_on(static_data::load_from_directory(&args.data_path, &args.uo_data_path))?;
 
     let external_ip = rt.block_on(lookup_host(format!("{}:0", &args.advertise_address)))?
         .filter_map(|entry| match entry {

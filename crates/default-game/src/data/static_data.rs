@@ -11,10 +11,10 @@ pub struct StaticData {
     pub skills: Skills,
 }
 
-pub async fn load_from_directory(path: &Path) -> anyhow::Result<StaticData> {
-    let cities = serde_yaml::from_slice(&fs::read(path.join("cities.yaml")).await?)?;
-    let maps = serde_yaml::from_slice(&fs::read(path.join("maps.yaml")).await?)?;
-    let skills = serde_yaml::from_slice(&fs::read(path.join("skills.yaml")).await?)?;
+pub async fn load_from_directory(data_path: &Path, uo_data_path: &Path) -> anyhow::Result<StaticData> {
+    let cities = serde_yaml::from_slice(&fs::read(data_path.join("cities.yaml")).await?)?;
+    let maps = Maps::load(&data_path.join("maps.yaml"), uo_data_path).await?;
+    let skills = serde_yaml::from_slice(&fs::read(data_path.join("skills.yaml")).await?)?;
     Ok(StaticData {
         cities,
         maps,

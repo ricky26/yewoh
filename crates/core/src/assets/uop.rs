@@ -1,79 +1,88 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::io::Read;
+use std::num::Wrapping;
 use std::ops::Deref;
 
 use anyhow::anyhow;
-use byteorder::{LittleEndian as Endian, ReadBytesExt};
+use byteorder::{LittleEndian as Endian, ByteOrder, ReadBytesExt};
 use flate2::read::ZlibDecoder;
 
 const FILE_MAGIC: &[u8] = b"MYP\0";
 
+fn partial_read_u32(s: &[u8]) -> Wrapping<u32> {
+    let l = s.len();
+    let mut v = 0;
+
+    if l > 0 {
+        v |= s[0] as u32;
+    }
+
+    if l > 1 {
+        v |= (s[1] as u32) << 8;
+    }
+
+    if l > 2 {
+        v |= (s[2] as u32) << 16;
+    }
+
+    if l > 3 {
+        v |= (s[3] as u32) << 24;
+    }
+
+    Wrapping(v)
+}
+
 pub fn hash(mut src: &[u8]) -> u64 {
-    let mut eax = 0u32;
-    let mut ebx = src.len() as u32 + 0xdeadbeefu32;
-    let mut edi = ebx;
-    let mut esi = ebx;
+    let mut a = Wrapping((src.len() as u32).wrapping_add(0xdeadbeef));
+    let mut b = a;
+    let mut c = a;
 
-    fn get(src: &[u8], offset: usize) -> u32 { src[offset] as u32 }
+    while src.len() > 12 {
+        a += Wrapping(Endian::read_u32(src));
+        b += Wrapping(Endian::read_u32(&src[4..]));
+        c += Wrapping(Endian::read_u32(&src[8..]));
 
-    while src.len() >= 12 {
-        edi = ((get(src, 7) << 24) | (get(src, 6) << 16) | (get(src, 5) << 8) | get(src, 4)) + edi;
-        esi = ((get(src, 11) << 24) | (get(src, 10) << 16) | (get(src, 9) << 8) | get(src, 8)) + esi;
-        let mut edx = ((get(src, 3) << 24) | (get(src, 2) << 16) | (get(src, 1) << 8) | get(src, 0)) - esi;
-        edx = (edx + ebx) ^ (esi >> 28) ^ (esi << 4);
-        esi += edi;
-        edi = (edi - edx) ^ (edx >> 26) ^ (edx << 6);
-        edx += esi;
-        esi = (esi - edi) ^ (edi >> 24) ^ (edi << 8);
-        edi += edx;
-        ebx = (edx - esi) ^ (esi >> 16) ^ (esi << 16);
-        esi += edi;
-        edi = (edi - ebx) ^ (ebx >> 13) ^ (ebx << 19);
-        ebx += esi;
-        esi = (esi - edi) ^ (edi >> 28) ^ (edi << 4);
-        edi += ebx;
+        a = (a - c) ^ ((c << 4) | (c >> 28));
+        c += b;
+        b = (b - a) ^ ((a << 6) | (a >> 26));
+        a += c;
+        c = (c - b) ^ ((b << 8) | (b >> 24));
+        b += a;
+        a = (a - c) ^ ((c << 16) | (c >> 16));
+        c += b;
+        b = (b - a) ^ ((a << 19) | (a >> 13));
+        a += c;
+        c = (c - b) ^ ((b << 4) | (b >> 28));
+        b += a;
+
         src = &src[12..];
     }
 
-    for i in (1..(src.len())).rev() {
-        match i {
-            11 => esi += get(src, 10) << 16,
-            10 => esi += get(src, 9) << 8,
-            9 => esi += get(src, 8),
-            8 => edi += get(src, 7) << 24,
-            7 => edi += get(src, 6) << 16,
-            6 => edi += get(src, 5) << 8,
-            5 => edi += get(src, 4),
-            4 => ebx += get(src, 3) << 24,
-            3 => ebx += get(src, 2) << 16,
-            2 => ebx += get(src, 1) << 8,
-            1 => {
-                ebx += get(src, 0);
-                esi = (esi ^ edi) - ((edi >> 18) ^ (edi << 14));
-                let ecx = (esi ^ ebx) - ((esi >> 21) ^ (esi << 11));
-                edi = (edi ^ ecx) - ((ecx >> 7) ^ (ecx << 25));
-                esi = (esi ^ edi) - ((edi >> 16) ^ (edi << 16));
-                let edx = (esi ^ ecx) - ((esi >> 28) ^ (esi << 4));
-                edi = (edi ^ edx) - ((edx >> 18) ^ (edx << 14));
-                eax = (esi ^ edi) - ((edi >> 8) ^ (edi << 24));
-                esi = edi;
-            }
-            _ => unreachable!(),
-        }
+    if src.len() > 0 {
+        a += partial_read_u32(src);
+        b += partial_read_u32(&src[4..]);
+        c += partial_read_u32(&src[8..]);
+
+        c = (c ^ b) - ((b << 14) | (b >> 18));
+        a = (a ^ c) - ((c << 11) | (c >> 21));
+        b = (b ^ a) - ((a << 25) | (a >> 7));
+        c = (c ^ b) - ((b << 16) | (b >> 16));
+        a = (a ^ c) - ((c << 4) | (c >> 28));
+        b = (b ^ a) - ((a << 14) | (a >> 18));
+        c = (c ^ b) - ((b << 24) | (b >> 8));
     }
 
-    ((esi as u64) << 32) | (eax as u64)
+    ((b.0 as u64) << 32) | (c.0 as u64)
 }
 
 #[derive(Debug, Clone)]
-struct Entry {
+struct EntryInfo {
     offset: usize,
     header_length: usize,
     compressed_length: usize,
     decompressed_length: usize,
     is_compressed: bool,
-    crc: u32,
 }
 
 pub struct UopBuffer<T> {
@@ -82,24 +91,33 @@ pub struct UopBuffer<T> {
     format_timestamp: u32,
     block_size: u32,
     count: u32,
-    entries: HashMap<u64, Entry>,
+    entries: HashMap<u64, EntryInfo>,
 }
 
 impl<T: Deref<Target=[u8]>> UopBuffer<T> {
     pub fn as_bytes(&self) -> &[u8] { self.backing.deref() }
 
-    pub fn get(&self, key: &str) -> Option<EntryStream> {
+    pub fn iter_hashes(&self) -> impl Iterator<Item = u64> + '_ { self.entries.keys().copied() }
+
+    pub fn get(&self, key: &str) -> Option<Entry> {
         self.get_by_hash(hash(key.as_bytes()))
     }
 
-    pub fn get_by_hash(&self, key_hash: u64) -> Option<EntryStream> {
+    pub fn get_by_hash(&self, key_hash: u64) -> Option<Entry> {
         self.entries.get(&key_hash)
             .map(|v| {
-                let bytes = &self.backing[v.offset..(v.offset + v.compressed_length)];
-                if v.is_compressed {
+                let (header, rest) = &self.backing[v.offset..].split_at(v.header_length);
+                let bytes = &rest[..v.compressed_length];
+
+                let stream = if v.is_compressed {
                     EntryStream::Zlib(ZlibDecoder::new(bytes))
                 } else {
                     EntryStream::Uncompressed(bytes)
+                };
+                Entry {
+                    info: v.clone(),
+                    header,
+                    stream,
                 }
             })
     }
@@ -132,15 +150,14 @@ impl<T: Deref<Target=[u8]>> UopBuffer<T> {
                 let compressed_length = read.read_u32::<Endian>()? as usize;
                 let decompressed_length = read.read_u32::<Endian>()? as usize;
                 let key_hash = read.read_u64::<Endian>()?;
-                let value_crc = read.read_u32::<Endian>()?;
+                let _value_crc = read.read_u32::<Endian>()?;
                 let is_compressed = read.read_u16::<Endian>()?;
-                entries.insert(key_hash, Entry {
+                entries.insert(key_hash, EntryInfo {
                     offset,
                     header_length,
                     compressed_length,
                     decompressed_length,
                     is_compressed: is_compressed == 1,
-                    crc: value_crc,
                 });
             }
         }
@@ -182,14 +199,25 @@ impl<T: fmt::Debug> fmt::Debug for UopBuffer<T> {
     }
 }
 
-pub enum EntryStream<'a> {
+enum EntryStream<'a> {
     Uncompressed(&'a [u8]),
     Zlib(ZlibDecoder<&'a [u8]>),
 }
 
-impl<'a> Read for EntryStream<'a> {
+pub struct Entry<'a> {
+    info: EntryInfo,
+    header: &'a [u8],
+    stream: EntryStream<'a>,
+}
+
+impl<'a> Entry<'a> {
+    pub fn header(&self) -> &[u8] { self.header }
+    pub fn len(&self) -> usize { self.info.decompressed_length }
+}
+
+impl<'a> Read for Entry<'a> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        match self {
+        match &mut self.stream {
             EntryStream::Uncompressed(s) => s.read(buf),
             EntryStream::Zlib(s) => s.read(buf),
         }
