@@ -162,8 +162,8 @@ pub fn handle_spawn_character(
         };
 
         let bottom_graphic = match info.is_female {
-            true => 449,
-            false => 431
+            true => 0x1516,
+            false => 0x1539,
         };
 
         let child_backpack_id = entity_allocator.allocate_item();
@@ -175,25 +175,31 @@ pub fn handle_spawn_character(
 
         let backpack_entity = commands.spawn()
             .insert(NetEntity { id: entity_allocator.allocate_item() })
-            .insert(Flags { flags: EntityFlags::default() })
-            .insert(Graphic { id: 0x9b2, hue: 120 })
+            .insert(Flags::default())
+            .insert(Graphic { id: 0xe75, hue: 0 })
             .insert(Container { gump_id: 7, items: vec![child_entity] })
             .id();
         let top_entity = commands.spawn()
             .insert(NetEntity { id: entity_allocator.allocate_item() })
             .insert(Flags::default())
-            .insert(Graphic { id: 449, hue: info.shirt_hue })
+            .insert(Graphic { id: 0x1517, hue: info.shirt_hue })
             .id();
         let bottom_entity = commands.spawn()
             .insert(NetEntity { id: entity_allocator.allocate_item() })
             .insert(Flags::default())
             .insert(Graphic { id: bottom_graphic, hue: info.pants_hue })
             .id();
+        let shoes_entity = commands.spawn()
+            .insert(NetEntity { id: entity_allocator.allocate_item() })
+            .insert(Flags::default())
+            .insert(Graphic { id: 0x170f, hue: 0 })
+            .id();
 
         let mut equipment = vec![
             (EquipmentSlot::Backpack, backpack_entity),
             (EquipmentSlot::Top, top_entity),
             (EquipmentSlot::Bottom, bottom_entity),
+            (EquipmentSlot::Shoes, shoes_entity),
         ];
 
         if info.hair != 0 {
