@@ -1,6 +1,7 @@
 pub use connection::{
     NetServer,
     NetClient,
+    User,
     broadcast,
     accept_new_clients,
     handle_input_packets,

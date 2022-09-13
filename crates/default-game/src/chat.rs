@@ -1,6 +1,7 @@
 use bevy_ecs::prelude::*;
 
 use yewoh::protocol::{MessageKind, Packet, UnicodeTextMessage};
+use yewoh_server::world::entity::Stats;
 use yewoh_server::world::events::ChatRequestEvent;
 use yewoh_server::world::net::{broadcast, NetClient, NetEntity, NetOwned};
 
@@ -10,7 +11,7 @@ pub fn handle_incoming_chat(
     mut events: EventReader<ChatRequestEvent>,
     mut command_executor: TextCommandExecutor,
     clients: Query<(&NetClient, &NetOwned)>,
-    character_query: Query<&NetEntity>,
+    character_query: Query<(&NetEntity, &Stats)>,
 ) {
     for ChatRequestEvent { client, request } in events.iter() {
         if command_executor.try_split_exec(*client, &request.text) {
@@ -22,7 +23,7 @@ pub fn handle_incoming_chat(
             _ => continue,
         };
 
-        let net = match character_query.get(owned.primary_entity) {
+        let (net, stats) = match character_query.get(owned.primary_entity) {
             Ok(x) => x,
             _ => continue,
         };
@@ -32,7 +33,7 @@ pub fn handle_incoming_chat(
             kind: MessageKind::Regular,
             language: "ENG".to_string(),
             text: request.text.clone(),
-            name: "User".to_string(),
+            name: stats.name.to_string(),
             hue: 1234,
             font: 1,
             graphic_id: 0

@@ -6,15 +6,12 @@ use log::{info, warn};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 
-use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DoubleClick, FeatureFlags, GameServerLogin, Move, SingleClick, SupportedFeatures, UnicodeTextMessageRequest};
+use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DoubleClick, FeatureFlags, GameServerLogin, Move, SelectCharacter, SingleClick, SupportedFeatures, UnicodeTextMessageRequest};
 use yewoh::protocol::encryption::Encryption;
 
 use crate::game_server::NewSessionAttempt;
 use crate::lobby::{NewSessionRequest, SessionAllocator};
-use crate::world::events::{
-    CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DoubleClickEvent, MoveEvent,
-    ReceivedPacketEvent, SentPacketEvent, SingleClickEvent,
-};
+use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DoubleClickEvent, MoveEvent, ReceivedPacketEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::net::entity::NetEntityLookup;
 
 pub enum WriterAction {
@@ -27,6 +24,11 @@ pub struct NetClient {
     address: SocketAddr,
     client_version: ClientVersion,
     tx: mpsc::UnboundedSender<WriterAction>,
+}
+
+#[derive(Debug, Clone, Component)]
+pub struct User {
+    pub username: String,
 }
 
 impl NetClient {
@@ -197,6 +199,7 @@ pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<NetServer>,
         let client = NetClient { address, client_version, tx };
         let entity = commands.spawn()
             .insert(client.clone())
+            .insert(User { username })
             .id();
 
         let internal_tx = server.received_packets_tx.clone();
@@ -262,6 +265,7 @@ pub fn handle_login_packets(
     mut events: EventReader<ReceivedPacketEvent>,
     mut character_list_events: EventWriter<CharacterListEvent>,
     mut character_creation_events: EventWriter<CreateCharacterEvent>,
+    mut select_character_events: EventWriter<SelectCharacterEvent>,
     mut commands: Commands,
 ) {
     for ReceivedPacketEvent { client: connection, packet } in events.iter() {
@@ -306,6 +310,11 @@ pub fn handle_login_packets(
             character_creation_events.send(CreateCharacterEvent {
                 client: connection,
                 request: create_character.0.clone(),
+            });
+        } else if let Some(select_character) = packet.downcast::<SelectCharacter>() {
+            select_character_events.send(SelectCharacterEvent {
+                client: connection,
+                request: select_character.clone(),
             });
         }
     }

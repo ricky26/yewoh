@@ -1,6 +1,7 @@
 use bevy_app::prelude::*;
 
-use crate::accounts::{handle_create_character, handle_list_characters};
+use crate::accounts::{handle_create_character, handle_list_characters, handle_list_characters_callback, handle_select_character, handle_spawn_character, PendingCharacterInfo, PendingCharacterLists};
+use crate::accounts::repository::MemoryAccountRepository;
 use crate::actions::{handle_double_click, handle_move};
 use crate::chat::handle_incoming_chat;
 use crate::commands::TextCommands;
@@ -25,9 +26,15 @@ impl Plugin for DefaultGamePlugin {
     fn build(&self, app: &mut App) {
         app
             .init_resource::<Space>()
+            .init_resource::<MemoryAccountRepository>()
+            .init_resource::<PendingCharacterLists>()
+            .init_resource::<PendingCharacterInfo>()
             .insert_resource(TextCommands::new('['))
-            .add_system(handle_list_characters)
-            .add_system(handle_create_character)
+            .add_system(handle_list_characters::<MemoryAccountRepository>)
+            .add_system(handle_list_characters_callback)
+            .add_system(handle_create_character::<MemoryAccountRepository>)
+            .add_system(handle_select_character::<MemoryAccountRepository>)
+            .add_system(handle_spawn_character)
             .add_system(handle_move)
             .add_system(handle_double_click)
             .add_system(handle_incoming_chat)

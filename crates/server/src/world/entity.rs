@@ -6,12 +6,12 @@ use glam::{IVec2, IVec3};
 use yewoh::{Direction, EntityId, Notoriety};
 use yewoh::protocol::{EntityFlags, EquipmentSlot, UpsertEntityStats};
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Component)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Component)]
 pub struct Flags {
     pub flags: EntityFlags,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Component)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Component)]
 pub struct Notorious(pub Notoriety);
 
 impl Deref for Notorious {

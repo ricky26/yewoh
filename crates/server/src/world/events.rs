@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use bevy_ecs::prelude::*;
-use yewoh::protocol::{AnyPacket, CreateCharacter, Move, UnicodeTextMessageRequest};
+use yewoh::protocol::{AnyPacket, CreateCharacter, Move, SelectCharacter, UnicodeTextMessageRequest};
 
 #[derive(Debug)]
 pub struct ReceivedPacketEvent {
@@ -23,6 +23,12 @@ pub struct CharacterListEvent {
 pub struct CreateCharacterEvent {
     pub client: Entity,
     pub request: CreateCharacter,
+}
+
+#[derive(Debug, Clone)]
+pub struct SelectCharacterEvent {
+    pub client: Entity,
+    pub request: SelectCharacter,
 }
 
 #[derive(Debug, Clone)]
