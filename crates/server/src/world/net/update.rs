@@ -47,7 +47,7 @@ pub fn update_players(
     mut commands: Commands,
 ) {
     for (entity, net, owner, flags, character, position) in added.iter() {
-        let client = match clients.get(owner.client) {
+        let client = match clients.get(owner.client_entity) {
             Ok(x) => x,
             _ => continue,
         };
@@ -62,7 +62,7 @@ pub fn update_players(
     }
 
     for (mut state, net, owner, flags, character, position) in updated.iter_mut() {
-        let client = match clients.get(owner.client) {
+        let client = match clients.get(owner.client_entity) {
             Ok(x) => x,
             _ => continue,
         };

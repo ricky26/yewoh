@@ -1,11 +1,11 @@
 use bevy_ecs::prelude::*;
 
-use yewoh::protocol::{ContextMenuEntry, MoveConfirm, MoveEntityReject, OpenContainer, OpenPaperDoll};
+use yewoh::protocol::{CharacterProfile, ContextMenuEntry, MoveConfirm, MoveEntityReject, OpenContainer, OpenPaperDoll, ProfileResponse};
 use yewoh_server::world::entity::{Character, Container, EquippedBy, Graphic, MapPosition, Notorious, ParentContainer, Quantity};
-use yewoh_server::world::events::{ContextMenuEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, SingleClickEvent};
+use yewoh_server::world::events::{ContextMenuEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, SingleClickEvent};
 use yewoh_server::world::input::ContextMenuRequest;
 use yewoh_server::world::map::Chunk;
-use yewoh_server::world::net::{make_container_contents_packet, NetClient, NetEntity, NetOwned, PlayerState};
+use yewoh_server::world::net::{make_container_contents_packet, NetClient, NetEntity, NetEntityLookup, NetOwned, PlayerState};
 use yewoh_server::world::spatial::EntitySurfaces;
 
 #[derive(Debug, Clone, Component)]
@@ -25,7 +25,7 @@ pub fn handle_move(
     connection_query: Query<(&NetClient, &NetOwned)>,
     mut character_query: Query<(&mut MapPosition, &mut PlayerState, &Notorious)>,
 ) {
-    for MoveEvent { client: connection, request } in events.iter() {
+    for MoveEvent { client_entity: connection, request } in events.iter() {
         let connection = *connection;
         let (client, owned) = match connection_query.get(connection) {
             Ok(x) => x,
@@ -79,7 +79,7 @@ pub fn handle_single_click(
     mut click_events: EventReader<SingleClickEvent>,
     mut commands: Commands,
 ) {
-    for SingleClickEvent { client, target } in click_events.iter() {
+    for SingleClickEvent { client_entity: client, target } in click_events.iter() {
         let client_entity = *client;
         let target = match target {
             Some(x) => *x,
@@ -88,7 +88,7 @@ pub fn handle_single_click(
 
         commands.spawn()
             .insert(ContextMenuRequest {
-                connection: client_entity,
+                client_entity: client_entity,
                 target,
                 entries: Vec::new(),
             });
@@ -101,7 +101,7 @@ pub fn handle_double_click(
     target_query: Query<(&NetEntity, Option<&Character>, Option<&Container>)>,
     content_query: Query<(&NetEntity, &ParentContainer, &Graphic, Option<&Quantity>)>,
 ) {
-    for DoubleClickEvent { client, target } in events.iter() {
+    for DoubleClickEvent { client_entity: client, target } in events.iter() {
         let client = match clients.get(*client) {
             Ok(x) => x,
             _ => continue,
@@ -144,7 +144,7 @@ pub fn handle_pick_up(
     mut commands: Commands,
 ) {
     for event in events.iter() {
-        let (client, owner) = match clients.get(event.client) {
+        let (client, owner) = match clients.get(event.client_entity) {
             Ok(x) => x,
             _ => continue,
         };
@@ -203,7 +203,7 @@ pub fn handle_drop(
     mut commands: Commands,
 ) {
     for event in events.iter() {
-        let (client, owner) = match clients.get(event.client) {
+        let (client, owner) = match clients.get(event.client_entity) {
             Ok(x) => x,
             _ => continue,
         };
@@ -263,7 +263,7 @@ pub fn handle_equip(
     mut commands: Commands,
 ) {
     for event in events.iter() {
-        let (client, owner) = match clients.get(event.client) {
+        let (client, owner) = match clients.get(event.client_entity) {
             Ok(x) => x,
             _ => continue,
         };
@@ -304,11 +304,10 @@ pub fn handle_equip(
 }
 
 pub fn handle_context_menu(
-    mut context_requests: Query<(Entity, &mut ContextMenuRequest)>,
+    mut context_requests: Query<&mut ContextMenuRequest>,
     mut context_events: EventReader<ContextMenuEvent>,
-    mut commands: Commands,
 ) {
-    for (entity, mut request) in context_requests.iter_mut() {
+    for mut request in context_requests.iter_mut() {
         request.entries.push(ContextMenuEntry {
             id: 0,
             text_id: 3000489,
@@ -319,5 +318,31 @@ pub fn handle_context_menu(
 
     for ContextMenuEvent { target, .. } in context_events.iter() {
         log::info!("Context on {:?}", target);
+    }
+}
+
+pub fn handle_profile_requests(
+    lookup: Res<NetEntityLookup>,
+    clients: Query<&NetClient>,
+    mut requests: EventReader<ProfileEvent>,
+) {
+    for request in requests.iter() {
+        let client_entity = request.client_entity;
+        let client = match clients.get(client_entity) {
+            Ok(x) => x,
+            _ => continue,
+        };
+
+        let target_id = match lookup.ecs_to_net(request.target) {
+            Some(x) => x,
+            _ => continue,
+        };
+
+        client.send_packet(CharacterProfile::Response(ProfileResponse {
+            target_id,
+            title: "Supreme Commander".to_string(),
+            static_profile: "Static Profile".to_string(),
+            profile: "Bio".to_string()
+        }).into());
     }
 }

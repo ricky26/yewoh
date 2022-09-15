@@ -46,14 +46,14 @@ pub fn handle_list_characters<T: AccountRepository>(
     mut events: EventReader<CharacterListEvent>,
 ) {
     for event in events.iter() {
-        let user = match users.get(event.client) {
+        let user = match users.get(event.client_entity) {
             Ok(x) => x,
             _ => continue,
         };
 
         let username = user.username.clone();
         let tx = pending.tx.clone();
-        let entity = event.client;
+        let entity = event.client_entity;
         let repository = account_repository.clone();
         runtime.spawn(async move {
             tx.send((entity, repository.list_characters(&username).await)).ok();
@@ -110,7 +110,7 @@ pub fn handle_create_character<T: AccountRepository>(
     pending: Res<PendingCharacterInfo>,
     mut events: EventReader<CreateCharacterEvent>,
 ) {
-    for CreateCharacterEvent { client: client_entity, request} in events.iter() {
+    for CreateCharacterEvent { client_entity, request} in events.iter() {
         let client_entity = *client_entity;
         let user = match users.get(client_entity) {
             Ok(x) => x,
@@ -134,7 +134,7 @@ pub fn handle_select_character<T: AccountRepository>(
     pending: Res<PendingCharacterInfo>,
     mut events: EventReader<SelectCharacterEvent>,
 ) {
-    for SelectCharacterEvent { client: client_entity, request } in events.iter() {
+    for SelectCharacterEvent { client_entity, request } in events.iter() {
         let client_entity = *client_entity;
         let user = match users.get(client_entity) {
             Ok(x) => x,
@@ -277,7 +277,7 @@ pub fn handle_spawn_character(
                 .insert(EquippedBy { parent: primary_entity, slot });
         }
 
-        out_events.send(NewPrimaryEntityEvent { client: client_entity, primary_entity: Some(primary_entity) });
+        out_events.send(NewPrimaryEntityEvent { client_entity: client_entity, primary_entity: Some(primary_entity) });
         client.send_packet(UnicodeTextMessage {
             text: "Avast me hearties".to_string(),
             hue: 120,

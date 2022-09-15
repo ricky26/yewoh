@@ -7,60 +7,60 @@ use yewoh::protocol::{AnyPacket, CreateCharacter, EquipmentSlot, Move, SelectCha
 
 #[derive(Debug)]
 pub struct ReceivedPacketEvent {
-    pub client: Entity,
+    pub client_entity: Entity,
     pub packet: AnyPacket,
 }
 
 #[derive(Debug)]
 pub struct SentPacketEvent {
-    pub client: Option<Entity>,
+    pub client_entity: Option<Entity>,
     pub packet: Arc<AnyPacket>,
 }
 
 #[derive(Debug, Clone)]
 pub struct CharacterListEvent {
-    pub client: Entity,
+    pub client_entity: Entity,
 }
 
 #[derive(Debug, Clone)]
 pub struct CreateCharacterEvent {
-    pub client: Entity,
+    pub client_entity: Entity,
     pub request: CreateCharacter,
 }
 
 #[derive(Debug, Clone)]
 pub struct SelectCharacterEvent {
-    pub client: Entity,
+    pub client_entity: Entity,
     pub request: SelectCharacter,
 }
 
 #[derive(Debug, Clone)]
 pub struct MoveEvent {
-    pub client: Entity,
+    pub client_entity: Entity,
     pub request: Move,
 }
 
 #[derive(Debug, Clone)]
 pub struct SingleClickEvent {
-    pub client: Entity,
+    pub client_entity: Entity,
     pub target: Option<Entity>,
 }
 
 #[derive(Debug, Clone)]
 pub struct DoubleClickEvent {
-    pub client: Entity,
+    pub client_entity: Entity,
     pub target: Option<Entity>,
 }
 
 #[derive(Debug, Clone)]
 pub struct PickUpEvent {
-    pub client: Entity,
+    pub client_entity: Entity,
     pub target: Entity,
 }
 
 #[derive(Debug, Clone)]
 pub struct DropEvent {
-    pub client: Entity,
+    pub client_entity: Entity,
     pub target: Entity,
     pub position: IVec3,
     pub grid_index: u8,
@@ -69,7 +69,7 @@ pub struct DropEvent {
 
 #[derive(Debug, Clone)]
 pub struct EquipEvent {
-    pub client: Entity,
+    pub client_entity: Entity,
     pub target: Entity,
     pub character: Entity,
     pub slot: EquipmentSlot,
@@ -77,19 +77,26 @@ pub struct EquipEvent {
 
 #[derive(Debug, Clone)]
 pub struct NewPrimaryEntityEvent {
-    pub client: Entity,
+    pub client_entity: Entity,
     pub primary_entity: Option<Entity>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ChatRequestEvent {
-    pub client: Entity,
+    pub client_entity: Entity,
     pub request: UnicodeTextMessageRequest,
 }
 
 #[derive(Debug, Clone)]
 pub struct ContextMenuEvent {
-    pub client: Entity,
+    pub client_entity: Entity,
     pub target: Entity,
     pub option: u16,
+}
+
+#[derive(Debug, Clone)]
+pub struct ProfileEvent {
+    pub client_entity: Entity,
+    pub target: Entity,
+    pub new_profile: Option<String>,
 }

@@ -6,13 +6,13 @@ use log::{info, warn};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 
-use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DoubleClick, DropEntity, EntityTooltip, EquipEntity, FeatureFlags, GameServerLogin, Move, PickUpEntity, SelectCharacter, SingleClick, SupportedFeatures, UnicodeTextMessageRequest};
+use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, CharacterProfile, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DoubleClick, DropEntity, EntityTooltip, EquipEntity, FeatureFlags, GameServerLogin, Move, PickUpEntity, SelectCharacter, SingleClick, SupportedFeatures, UnicodeTextMessageRequest};
 use yewoh::protocol::encryption::Encryption;
 
 use crate::game_server::NewSessionAttempt;
 use crate::lobby::{NewSessionRequest, SessionAllocator};
 use crate::world::entity::Tooltip;
-use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ReceivedPacketEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
+use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::input::Targeting;
 use crate::world::net::entity::NetEntityLookup;
 
@@ -247,10 +247,10 @@ pub fn handle_new_packets(
     mut read_events: EventWriter<ReceivedPacketEvent>,
 ) {
     while let Ok((connection, packet)) = server.received_packets_rx.try_recv() {
-        read_events.send(ReceivedPacketEvent { client: connection, packet });
+        read_events.send(ReceivedPacketEvent { client_entity: connection, packet });
     }
 
-    for SentPacketEvent { client: connection, packet } in write_events.iter() {
+    for SentPacketEvent { client_entity: connection, packet } in write_events.iter() {
         match connection {
             Some(entity) => {
                 if let Ok(client) = clients.get(*entity) {
@@ -271,7 +271,7 @@ pub fn handle_login_packets(
     mut select_character_events: EventWriter<SelectCharacterEvent>,
     mut commands: Commands,
 ) {
-    for ReceivedPacketEvent { client: connection, packet } in events.iter() {
+    for ReceivedPacketEvent { client_entity: connection, packet } in events.iter() {
         let connection = *connection;
         let client = match clients.get(connection) {
             Ok(x) => x,
@@ -301,22 +301,22 @@ pub fn handle_login_packets(
                         | FeatureFlags::EJ,
                 }.into());
                 character_list_events.send(CharacterListEvent {
-                    client: connection,
+                    client_entity: connection,
                 });
             }
         } else if let Some(create_character) = packet.downcast::<CreateCharacterClassic>() {
             character_creation_events.send(CreateCharacterEvent {
-                client: connection,
+                client_entity: connection,
                 request: create_character.0.clone(),
             });
         } else if let Some(create_character) = packet.downcast::<CreateCharacterEnhanced>() {
             character_creation_events.send(CreateCharacterEvent {
-                client: connection,
+                client_entity: connection,
                 request: create_character.0.clone(),
             });
         } else if let Some(select_character) = packet.downcast::<SelectCharacter>() {
             select_character_events.send(SelectCharacterEvent {
-                client: connection,
+                client_entity: connection,
                 request: select_character.clone(),
             });
         }
@@ -333,34 +333,35 @@ pub fn handle_input_packets(
     mut pick_up_events: EventWriter<PickUpEvent>,
     mut drop_events: EventWriter<DropEvent>,
     mut equip_events: EventWriter<EquipEvent>,
+    mut profile_events: EventWriter<ProfileEvent>,
 ) {
-    for ReceivedPacketEvent { client: connection, packet } in events.iter() {
+    for ReceivedPacketEvent { client_entity: connection, packet } in events.iter() {
         let connection = *connection;
 
         if let Some(request) = packet.downcast::<Move>().cloned() {
-            move_events.send(MoveEvent { client: connection, request });
+            move_events.send(MoveEvent { client_entity: connection, request });
         } else if let Some(request) = packet.downcast::<SingleClick>() {
             single_click_events.send(SingleClickEvent {
-                client: connection,
+                client_entity: connection,
                 target: lookup.net_to_ecs(request.target_id),
             });
         } else if let Some(request) = packet.downcast::<DoubleClick>() {
             double_click_events.send(DoubleClickEvent {
-                client: connection,
+                client_entity: connection,
                 target: lookup.net_to_ecs(request.target_id),
             });
         } else if let Some(request) = packet.downcast::<PickUpEntity>() {
             if let Some(target) = lookup.net_to_ecs(request.target_id) {
                 pick_up_events.send(PickUpEvent {
-                    client: connection,
+                    client_entity: connection,
                     target,
                 });
             }
         } else if let Some(request) = packet.downcast::<DropEntity>() {
             if let Some(target) = lookup.net_to_ecs(request.target_id) {
                 drop_events.send(DropEvent {
-                    client: connection,
-                    target,
+                    client_entity: connection,
+                    target: target,
                     position: request.position,
                     grid_index: request.grid_index,
                     dropped_on: request.container_id.and_then(|id| lookup.net_to_ecs(id)),
@@ -370,7 +371,7 @@ pub fn handle_input_packets(
             if let Some((target, character)) = lookup.net_to_ecs(request.target_id)
                 .zip(lookup.net_to_ecs(request.character_id)) {
                 equip_events.send(EquipEvent {
-                    client: connection,
+                    client_entity: connection,
                     target,
                     character,
                     slot: request.slot,
@@ -378,7 +379,7 @@ pub fn handle_input_packets(
             }
         } else if let Some(request) = packet.downcast::<AsciiTextMessageRequest>() {
             chat_events.send(ChatRequestEvent {
-                client: connection,
+                client_entity: connection,
                 request: UnicodeTextMessageRequest {
                     kind: request.kind,
                     hue: request.hue,
@@ -388,7 +389,20 @@ pub fn handle_input_packets(
                 },
             });
         } else if let Some(request) = packet.downcast::<UnicodeTextMessageRequest>().cloned() {
-            chat_events.send(ChatRequestEvent { client: connection, request });
+            chat_events.send(ChatRequestEvent { client_entity: connection, request });
+        } else if let Some(request) = packet.downcast::<CharacterProfile>().cloned() {
+            match request {
+                CharacterProfile::Request(request) => {
+                    if let Some(target) = lookup.net_to_ecs(request.target_id) {
+                        profile_events.send(ProfileEvent {
+                            client_entity: connection,
+                            target,
+                            new_profile: request.new_profile.clone(),
+                        });
+                    }
+                }
+                _ => unreachable!(),
+            }
         }
     }
 }
@@ -399,7 +413,7 @@ pub fn send_tooltips(
     tooltips: Query<&Tooltip>,
     mut events: EventReader<ReceivedPacketEvent>,
 ) {
-    for ReceivedPacketEvent { client: connection, packet } in events.iter() {
+    for ReceivedPacketEvent { client_entity: connection, packet } in events.iter() {
         let connection = *connection;
         let client = match clients.get(connection) {
             Ok(x) => x,

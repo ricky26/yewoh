@@ -10,7 +10,7 @@ use crate::world::net::{NetClient, NetEntityLookup};
 
 #[derive(Debug, Clone, Component)]
 pub struct WorldTargetRequest {
-    pub connection: Entity,
+    pub client_entity: Entity,
     pub target_type: TargetType,
 }
 
@@ -21,7 +21,7 @@ pub struct WorldTargetResponse {
 
 #[derive(Debug, Clone, Component)]
 pub struct EntityTargetRequest {
-    pub connection: Entity,
+    pub client_entity: Entity,
     pub target_type: TargetType,
 }
 
@@ -43,7 +43,7 @@ pub struct Targeting {
 
 #[derive(Debug, Clone, Component)]
 pub struct ContextMenuRequest {
-    pub connection: Entity,
+    pub client_entity: Entity,
     pub target: Entity,
     pub entries: Vec<ContextMenuEntry>,
 }
@@ -68,14 +68,14 @@ pub fn update_targets(
     mut events: EventReader<ReceivedPacketEvent>,
     mut commands: Commands,
 ) {
-    for ReceivedPacketEvent { client: connection, packet } in events.iter() {
-        let connection = *connection;
+    for ReceivedPacketEvent { client_entity, packet } in events.iter() {
+        let client_entity = *client_entity;
         let request = match packet.downcast::<PickTarget>() {
             Some(x) => x,
             None => continue,
         };
 
-        let (client, mut targeting) = match clients.get_mut(connection) {
+        let (client, mut targeting) = match clients.get_mut(client_entity) {
             Ok(x) => x,
             _ => continue,
         };
@@ -101,12 +101,12 @@ pub fn update_targets(
     }
 
     let new_targets = new_entity_targets.iter()
-        .map(|(entity, request)| (entity, request.connection, false, request.target_type))
+        .map(|(entity, request)| (entity, request.client_entity, false, request.target_type))
         .chain(
             new_world_targets.iter()
-                .map(|(entity, request)| (entity, request.connection, true, request.target_type)));
-    for (entity, connection, target_ground, target_type) in new_targets {
-        let (client, mut targeting) = match clients.get_mut(connection) {
+                .map(|(entity, request)| (entity, request.client_entity, true, request.target_type)));
+    for (entity, client_entity, target_ground, target_type) in new_targets {
+        let (client, mut targeting) = match clients.get_mut(client_entity) {
             Ok(x) => x,
             _ => {
                 commands.entity(entity)
@@ -139,13 +139,13 @@ pub fn update_targets(
     }
 
     for entity in removed_world_targets.iter().chain(removed_entity_targets.iter()) {
-        let connection = match all_targets.get(entity) {
-            Ok((_, Some(r), _)) => r.connection,
-            Ok((_, _, Some(r))) => r.connection,
+        let client_entity = match all_targets.get(entity) {
+            Ok((_, Some(r), _)) => r.client_entity,
+            Ok((_, _, Some(r))) => r.client_entity,
             _ => continue,
         };
 
-        let (client, mut targeting) = match clients.get_mut(connection) {
+        let (client, mut targeting) = match clients.get_mut(client_entity) {
             Ok(x) => x,
             _ => continue,
         };
@@ -172,8 +172,8 @@ pub fn handle_context_menu_packets(
     mut invoked_events: EventWriter<ContextMenuEvent>,
     mut commands: Commands,
 ) {
-    for ReceivedPacketEvent { client, packet } in events.iter() {
-        let connection = *client;
+    for ReceivedPacketEvent { client_entity: client, packet } in events.iter() {
+        let client_entity = *client;
         let packet = match packet.downcast::<ExtendedCommand>() {
             Some(x) => x,
             _ => continue,
@@ -188,7 +188,7 @@ pub fn handle_context_menu_packets(
 
                 commands.spawn()
                     .insert(ContextMenuRequest {
-                        connection,
+                        client_entity,
                         target,
                         entries: vec![],
                     });
@@ -200,7 +200,7 @@ pub fn handle_context_menu_packets(
                 };
 
                 invoked_events.send(ContextMenuEvent {
-                    client: connection,
+                    client_entity,
                     target,
                     option: response.id,
                 });
@@ -219,7 +219,7 @@ pub fn send_context_menu(
     for (entity, request) in requests.iter() {
         commands.entity(entity).despawn();
 
-        let client = match clients.get(request.connection) {
+        let client = match clients.get(request.client_entity) {
             Ok(x) => x,
             _ => continue,
         };

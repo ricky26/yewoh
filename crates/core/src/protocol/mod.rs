@@ -23,6 +23,7 @@ pub use entity::*;
 pub use chat::*;
 pub use sound::*;
 pub use ui::*;
+pub use character::*;
 
 use crate::protocol::compression::{HuffmanVecWriter};
 use crate::protocol::encryption::Encryption;
@@ -50,6 +51,8 @@ mod ui;
 mod sound;
 
 mod chat;
+
+mod character;
 
 pub trait Packet where Self: Sized {
     fn packet_kind() -> u8;
@@ -201,6 +204,9 @@ fn packet_registry() -> &'static PacketRegistry {
             PacketRegistration::for_type::<EntityTooltipVersion>(),
             PacketRegistration::for_type::<EntityTooltip>(),
             PacketRegistration::for_type::<UpsertEntityStats>(),
+
+            // Character
+            PacketRegistration::for_type::<CharacterProfile>(),
         ].into_iter() {
             max_size = registration.size.max(max_size);
             let index = registration.packet_kind as usize;

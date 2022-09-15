@@ -17,7 +17,7 @@ pub struct NetOwned {
 
 #[derive(Debug, Clone, Copy, Component)]
 pub struct NetOwner {
-    pub client: Entity,
+    pub client_entity: Entity,
 }
 
 #[derive(Debug, Clone, Copy, Component)]
@@ -46,7 +46,7 @@ pub fn start_synchronizing(
     mut commands: Commands,
 ) {
     for event in events.iter() {
-        let entity = event.client;
+        let entity = event.client_entity;
         let (client, owned) = match clients.get(entity) {
             Ok(x) => x,
             _ => continue,
@@ -69,7 +69,7 @@ pub fn start_synchronizing(
             }
         };
 
-        commands.entity(primary_entity).insert(NetOwner { client: entity });
+        commands.entity(primary_entity).insert(NetOwner { client_entity: entity });
         commands.entity(entity)
             .insert(NetOwned { primary_entity })
             .remove::<NetSynchronized>()

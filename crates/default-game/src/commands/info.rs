@@ -32,7 +32,7 @@ pub fn info(
     for (from, _) in exec.iter() {
         commands.spawn()
             .insert(EntityTargetRequest {
-                connection: from,
+                client_entity: from,
                 target_type: TargetType::Neutral,
             })
             .insert(ShowInfoCommand);
@@ -41,7 +41,7 @@ pub fn info(
     for (entity, request, response) in completed.iter() {
         commands.entity(entity).despawn();
 
-        let client = match clients.get(request.connection) {
+        let client = match clients.get(request.client_entity) {
             Ok(x) => x,
             _ => continue,
         };

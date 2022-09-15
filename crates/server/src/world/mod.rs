@@ -2,7 +2,7 @@ use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
 use tokio::runtime::Handle;
 
-use crate::world::events::{CharacterListEvent, ChatRequestEvent, ContextMenuEvent, CreateCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, NewPrimaryEntityEvent, PickUpEvent, ReceivedPacketEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
+use crate::world::events::{CharacterListEvent, ChatRequestEvent, ContextMenuEvent, CreateCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, NewPrimaryEntityEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::input::{handle_context_menu_packets, send_context_menu, update_targets};
 use crate::world::net::{accept_new_clients, finish_synchronizing, handle_input_packets, handle_login_packets, handle_new_packets, MapInfos, NetEntityAllocator, NetEntityLookup, send_remove_entity, send_tooltips, send_updated_stats, start_synchronizing, sync_entities, update_characters, update_entity_lookup, update_equipped_items, update_items_in_containers, update_items_in_world, update_players, update_tooltips};
 use crate::world::spatial::{EntitySurfaces, update_entity_surfaces};
@@ -47,6 +47,7 @@ impl Plugin for ServerPlugin {
             .add_event::<DropEvent>()
             .add_event::<EquipEvent>()
             .add_event::<ContextMenuEvent>()
+            .add_event::<ProfileEvent>()
             .add_event::<NewPrimaryEntityEvent>()
             .add_event::<ChatRequestEvent>()
             .add_system_to_stage(CoreStage::First, accept_new_clients)
