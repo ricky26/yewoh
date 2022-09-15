@@ -144,6 +144,66 @@ impl Packet for UnicodeTextMessage {
 }
 
 #[derive(Debug, Clone, Default)]
+pub struct LocalisedTextMessage {
+    pub entity_id: Option<EntityId>,
+    pub graphic_id: u16,
+    pub kind: MessageKind,
+    pub hue: u16,
+    pub font: u16,
+    pub name: String,
+    pub text_id: u32,
+    pub params: String,
+}
+
+impl Packet for LocalisedTextMessage {
+    fn packet_kind() -> u8 { 0xc1 }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let raw_entity_id = payload.read_u32::<Endian>()?;
+        let entity_id = if raw_entity_id != !0 {
+            Some(EntityId::from_u32(raw_entity_id))
+        } else {
+            None
+        };
+        let graphic_id = payload.read_u16::<Endian>()?;
+        let kind = MessageKind::from_repr(payload.read_u8()?)
+            .ok_or_else(|| anyhow!("invalid message kind"))?;
+        let hue = payload.read_u16::<Endian>()?;
+        let font = payload.read_u16::<Endian>()?;
+        let text_id = payload.read_u32::<Endian>()?;
+        let name = payload.read_str_block(30)?;
+        let params = payload.read_utf16le_nul()?;
+        Ok(Self {
+            entity_id,
+            graphic_id,
+            kind,
+            name,
+            hue,
+            font,
+            text_id,
+            params
+        })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        if let Some(entity_id) = self.entity_id {
+            writer.write_entity_id(entity_id)?;
+        } else {
+            writer.write_u32::<Endian>(!0)?;
+        }
+        writer.write_u16::<Endian>(self.graphic_id)?;
+        writer.write_u8(self.kind as u8)?;
+        writer.write_u16::<Endian>(self.hue)?;
+        writer.write_u16::<Endian>(self.font)?;
+        writer.write_u32::<Endian>(self.text_id)?;
+        writer.write_str_block(&self.name, 30)?;
+        writer.write_utf16le_nul(&self.params)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct AsciiTextMessageRequest {
     pub kind: MessageKind,
     pub hue: u16,

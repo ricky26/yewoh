@@ -181,6 +181,7 @@ fn packet_registry() -> &'static PacketRegistry {
             // Chat
             PacketRegistration::for_type::<AsciiTextMessage>(),
             PacketRegistration::for_type::<UnicodeTextMessage>(),
+            PacketRegistration::for_type::<LocalisedTextMessage>(),
             PacketRegistration::for_type::<AsciiTextMessageRequest>(),
             PacketRegistration::for_type::<UnicodeTextMessageRequest>(),
 
