@@ -1,7 +1,7 @@
 use bevy_ecs::prelude::*;
 use bevy_reflect::prelude::*;
 
-use yewoh::protocol::{Attack, CharacterProfile, ContextMenuEntry, DamageDealt, EntityFlags, MoveConfirm, MoveEntityReject, OpenContainer, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, WarMode};
+use yewoh::protocol::{Swing, CharacterProfile, ContextMenuEntry, DamageDealt, EntityFlags, MoveConfirm, MoveEntityReject, OpenContainer, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, WarMode, CharacterAnimation};
 use yewoh_server::world::entity::{Character, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer, Quantity};
 use yewoh_server::world::events::{ContextMenuEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SingleClickEvent};
 use yewoh_server::world::input::ContextMenuRequest;
@@ -336,9 +336,25 @@ pub fn handle_context_menu(
             _ => continue,
         };
 
-        client.send_packet(Attack {
+        client.send_packet(Swing {
             attacker_id: net.id,
             target_id,
+        }.into());
+        client.send_packet(CharacterAnimation {
+            target_id: net.id,
+            animation_id: 9,
+            frame_count: 7,
+            repeat_count: 1,
+            reverse: false,
+            speed: 0,
+        }.into());
+        client.send_packet(CharacterAnimation {
+            target_id,
+            animation_id: 7,
+            frame_count: 5,
+            repeat_count: 1,
+            reverse: false,
+            speed: 0,
         }.into());
         client.send_packet(DamageDealt {
             target_id,

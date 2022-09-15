@@ -942,3 +942,26 @@ impl Packet for UpsertEntityStats {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct DamageDealt {
+    pub target_id: EntityId,
+    pub damage: u16,
+}
+
+impl Packet for DamageDealt {
+    fn packet_kind() -> u8 { 0x0b }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(7) }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let target_id = payload.read_entity_id()?;
+        let damage = payload.read_u16::<Endian>()?;
+        Ok(Self { target_id, damage})
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_entity_id(self.target_id)?;
+        writer.write_u16::<Endian>(self.damage)?;
+        Ok(())
+    }
+}

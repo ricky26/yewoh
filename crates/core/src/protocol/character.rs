@@ -260,12 +260,12 @@ impl Packet for SetCombatant {
 }
 
 #[derive(Debug, Clone)]
-pub struct Attack {
+pub struct Swing {
     pub attacker_id: EntityId,
     pub target_id: EntityId,
 }
 
-impl Packet for Attack {
+impl Packet for Swing {
     fn packet_kind() -> u8 { 0x2f }
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(10) }
@@ -286,25 +286,51 @@ impl Packet for Attack {
 }
 
 #[derive(Debug, Clone)]
-pub struct DamageDealt {
+pub struct CharacterAnimation {
     pub target_id: EntityId,
-    pub damage: u16,
+    pub animation_id: u16,
+    pub frame_count: u16,
+    pub repeat_count: u16,
+    pub reverse: bool,
+    pub speed: u8,
 }
 
-impl Packet for DamageDealt {
-    fn packet_kind() -> u8 { 0x0b }
+impl Packet for CharacterAnimation {
+    fn packet_kind() -> u8 { 0x6e }
 
-    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(7) }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(14) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let target_id = payload.read_entity_id()?;
-        let damage = payload.read_u16::<Endian>()?;
-        Ok(Self { target_id, damage})
+        let animation_id = payload.read_u16::<Endian>()?;
+        let frame_count = payload.read_u16::<Endian>()?;
+        let repeat_count = payload.read_u16::<Endian>()?;
+        let reverse = payload.read_u8()? != 0;
+        let repeat_count = if payload.read_u8()? != 0 {
+            repeat_count
+        } else {
+            1
+        };
+        let speed = payload.read_u8()?;
+
+        Ok(Self {
+            target_id,
+            animation_id,
+            frame_count,
+            repeat_count,
+            reverse,
+            speed
+        })
     }
 
     fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.target_id)?;
-        writer.write_u16::<Endian>(self.damage)?;
+        writer.write_u16::<Endian>(self.animation_id)?;
+        writer.write_u16::<Endian>(self.frame_count)?;
+        writer.write_u16::<Endian>(self.repeat_count)?;
+        writer.write_u8(if self.reverse { 1 } else { 0 })?;
+        writer.write_u8(if self.repeat_count != 1 { 1 } else { 0 })?;
+        writer.write_u8(self.speed)?;
         Ok(())
     }
 }
