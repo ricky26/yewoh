@@ -10,3 +10,5 @@ pub use registration::{
 mod registration;
 
 pub mod test;
+
+pub mod info;

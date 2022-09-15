@@ -37,6 +37,7 @@ impl Plugin for DefaultGamePlugin {
             .add_system(handle_drop)
             .add_system(handle_equip)
             .add_system(handle_incoming_chat)
+            .add_system(commands::info::info)
             .add_system(commands::test::echo)
             .add_system(commands::test::frypan)
             .add_system(commands::test::test_gump);
