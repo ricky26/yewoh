@@ -412,16 +412,6 @@ pub fn update_characters(
     }
 }
 
-pub fn update_containers(
-    clients: Query<&NetClient>,
-    container_query: Query<(&NetEntity, &Container), Changed<Container>>,
-    content_query: Query<(&NetEntity, &ParentContainer, &Graphic, Option<&Quantity>)>,
-) {
-    for (net, container) in container_query.iter() {
-        broadcast(clients.iter(), make_container_contents_packet(net.id, container, &content_query).into_arc());
-    }
-}
-
 pub fn make_container_contents_packet(
     id: EntityId, container: &Container,
     content_query: &Query<(&NetEntity, &ParentContainer, &Graphic, Option<&Quantity>)>,

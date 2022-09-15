@@ -286,15 +286,16 @@ impl Packet for EquipEntity {
 }
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, FromRepr)]
+#[derive(Debug, Clone, Copy, Default, FromRepr)]
 pub enum TargetType {
+    #[default]
     Neutral = 0,
     Harmful = 1,
     Helpful = 2,
     Cancel = 3,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PickTarget {
     pub target_ground: bool,
     pub target_type: TargetType,
@@ -314,7 +315,12 @@ impl Packet for PickTarget {
         let id = payload.read_u32::<Endian>()?;
         let target_type = TargetType::from_repr(payload.read_u8()?)
             .ok_or_else(|| anyhow!("invalid target type"))?;
-        let target_id = Some(payload.read_entity_id()?);
+        let raw_target_id = payload.read_u32::<Endian>()?;
+        let target_id = if raw_target_id != 0 {
+            Some(EntityId::from_u32(raw_target_id))
+        } else {
+            None
+        };
         let x = payload.read_u16::<Endian>()? as i32;
         let y = payload.read_u16::<Endian>()? as i32;
         let z = payload.read_u16::<Endian>()? as i32;

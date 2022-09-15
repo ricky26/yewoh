@@ -12,6 +12,7 @@ use yewoh::protocol::encryption::Encryption;
 use crate::game_server::NewSessionAttempt;
 use crate::lobby::{NewSessionRequest, SessionAllocator};
 use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ReceivedPacketEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
+use crate::world::input::Targeting;
 use crate::world::net::entity::NetEntityLookup;
 
 pub enum WriterAction {
@@ -200,6 +201,7 @@ pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<NetServer>,
         let entity = commands.spawn()
             .insert(client.clone())
             .insert(User { username })
+            .insert(Targeting::default())
             .id();
 
         let internal_tx = server.received_packets_tx.clone();

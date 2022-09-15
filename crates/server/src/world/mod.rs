@@ -2,8 +2,9 @@ use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
 use tokio::runtime::Handle;
 
-use crate::world::net::{NetEntityAllocator, NetEntityLookup, MapInfos, accept_new_clients, start_synchronizing, handle_input_packets, handle_login_packets, handle_new_packets, send_remove_entity, update_containers, send_updated_stats, update_entity_lookup, update_items_in_containers, update_items_in_world, update_equipped_items, update_characters, update_players, finish_synchronizing, sync_entities};
+use crate::world::net::{NetEntityAllocator, NetEntityLookup, MapInfos, accept_new_clients, start_synchronizing, handle_input_packets, handle_login_packets, handle_new_packets, send_remove_entity, send_updated_stats, update_entity_lookup, update_items_in_containers, update_items_in_world, update_equipped_items, update_characters, update_players, finish_synchronizing, sync_entities};
 use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, NewPrimaryEntityEvent, PickUpEvent, ReceivedPacketEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
+use crate::world::input::update_targets;
 use crate::world::spatial::{EntitySurfaces, update_entity_surfaces};
 use crate::world::time::{limit_tick_rate, TickRate};
 
@@ -18,6 +19,8 @@ pub mod events;
 pub mod spatial;
 
 pub mod map;
+
+pub mod input;
 
 #[derive(Default)]
 pub struct ServerPlugin;
@@ -51,7 +54,6 @@ impl Plugin for ServerPlugin {
             .add_system_to_stage(CoreStage::First, update_items_in_containers.before(handle_new_packets))
             .add_system_to_stage(CoreStage::First, update_equipped_items.before(handle_new_packets))
             .add_system_to_stage(CoreStage::First, update_characters.before(handle_new_packets))
-            .add_system_to_stage(CoreStage::First, update_containers.before(handle_new_packets))
             .add_system_to_stage(CoreStage::First, handle_new_packets.after(accept_new_clients))
             .add_system_to_stage(CoreStage::PreUpdate, start_synchronizing)
             .add_system_to_stage(CoreStage::PreUpdate, handle_login_packets)
@@ -59,6 +61,7 @@ impl Plugin for ServerPlugin {
             .add_system_to_stage(CoreStage::Update, sync_entities)
             .add_system_to_stage(CoreStage::PostUpdate, finish_synchronizing)
             .add_system_to_stage(CoreStage::Last, send_remove_entity.before(update_entity_lookup))
+            .add_system_to_stage(CoreStage::Last, update_targets)
             .add_system_to_stage(CoreStage::Last, update_entity_lookup)
             .add_system_to_stage(CoreStage::Last, update_entity_surfaces)
             .add_system_to_stage(CoreStage::Last, limit_tick_rate);

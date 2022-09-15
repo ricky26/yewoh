@@ -30,7 +30,6 @@ pub use update::{
     CharacterState,
     send_remove_entity,
     make_container_contents_packet,
-    update_containers,
     send_updated_stats,
     update_items_in_world,
     update_equipped_items,
