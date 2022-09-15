@@ -1,8 +1,9 @@
 use bevy_ecs::prelude::*;
 
-use yewoh::protocol::{MoveConfirm, MoveEntityReject, OpenContainer, OpenPaperDoll};
+use yewoh::protocol::{ContextMenuEntry, MoveConfirm, MoveEntityReject, OpenContainer, OpenPaperDoll};
 use yewoh_server::world::entity::{Character, Container, EquippedBy, Graphic, MapPosition, Notorious, ParentContainer, Quantity};
-use yewoh_server::world::events::{DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent};
+use yewoh_server::world::events::{ContextMenuEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, SingleClickEvent};
+use yewoh_server::world::input::ContextMenuRequest;
 use yewoh_server::world::map::Chunk;
 use yewoh_server::world::net::{make_container_contents_packet, NetClient, NetEntity, NetOwned, PlayerState};
 use yewoh_server::world::spatial::EntitySurfaces;
@@ -71,6 +72,26 @@ pub fn handle_move(
             sequence: request.sequence,
             notoriety,
         }.into());
+    }
+}
+
+pub fn handle_single_click(
+    mut click_events: EventReader<SingleClickEvent>,
+    mut commands: Commands,
+) {
+    for SingleClickEvent { client, target } in click_events.iter() {
+        let client_entity = *client;
+        let target = match target {
+            Some(x) => *x,
+            None => continue,
+        };
+
+        commands.spawn()
+            .insert(ContextMenuRequest {
+                connection: client_entity,
+                target,
+                entries: Vec::new(),
+            });
     }
 }
 
@@ -279,5 +300,24 @@ pub fn handle_equip(
 
         commands.entity(character)
             .remove::<Held>();
+    }
+}
+
+pub fn handle_context_menu(
+    mut context_requests: Query<(Entity, &mut ContextMenuRequest)>,
+    mut context_events: EventReader<ContextMenuEvent>,
+    mut commands: Commands,
+) {
+    for (entity, mut request) in context_requests.iter_mut() {
+        request.entries.push(ContextMenuEntry {
+            id: 0,
+            text_id: 3000489,
+            hue: None,
+            flags: Default::default()
+        });
+    }
+
+    for ContextMenuEvent { target, .. } in context_events.iter() {
+        log::info!("Context on {:?}", target);
     }
 }

@@ -414,9 +414,10 @@ pub fn send_tooltips(
         match request {
             EntityTooltip::Request(ids) => {
                 for id in ids.iter().copied() {
-                    if let Some(tooltip) = lookup.net_to_ecs(id).and_then(|e| tooltips.get(e).ok()) {
-                        client.send_packet(EntityTooltip::Response { id, entries: tooltip.entries.clone() }.into());
-                    }
+                    let entries = lookup.net_to_ecs(id)
+                        .and_then(|e| tooltips.get(e).ok())
+                        .map_or(Vec::new(), |t| t.entries.clone());
+                    client.send_packet(EntityTooltip::Response { id, entries }.into());
                 }
             }
             _ => {}

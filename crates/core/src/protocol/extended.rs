@@ -1,8 +1,10 @@
 use std::io::Write;
 
 use anyhow::anyhow;
+use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 
+use crate::EntityId;
 use crate::protocol::{ClientFlags, PacketReadExt, PacketWriteExt};
 
 use super::{ClientVersion, Endian, Packet};
@@ -13,6 +15,36 @@ pub struct ScreenSize {
     pub height: u32,
 }
 
+bitflags! {
+    #[derive(Default)]
+    pub struct ContextMenuFlags : u16 {
+        const DISABLED = 0x01;
+        const ARROW = 0x02;
+        const HIGHLIGHTED = 0x04;
+        const HUE = 0x20;
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ContextMenuEntry {
+    pub id: u16,
+    pub text_id: u32,
+    pub hue: Option<u16>,
+    pub flags: ContextMenuFlags,
+}
+
+#[derive(Debug, Clone)]
+pub struct ContextMenu {
+    pub target_id: EntityId,
+    pub entries: Vec<ContextMenuEntry>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ContextMenuResponse {
+    pub target_id: EntityId,
+    pub id: u16,
+}
+
 #[derive(Debug, Clone)]
 pub enum ExtendedCommand {
     Unknown,
@@ -21,6 +53,10 @@ pub enum ExtendedCommand {
     Language(String),
     CloseStatusGump(u32),
     ClientType(ClientFlags),
+    ContextMenuRequest(EntityId),
+    ContextMenu(ContextMenu),
+    ContextMenuEnhanced(ContextMenu),
+    ContextMenuResponse(ContextMenuResponse),
 }
 
 impl ExtendedCommand {
@@ -29,6 +65,11 @@ impl ExtendedCommand {
     const LANGUAGE: u16 = 0xb;
     const CLOSE_STATUS_GUMP: u16 = 0xc;
     const CLIENT_TYPE: u16 = 0xf;
+    const CONTEXT_MENU_REQUEST: u16 = 0x13;
+    const CONTEXT_MENU: u16 = 0x14;
+    const CONTEXT_MENU_RESPONSE: u16 = 0x15;
+
+    const CLASSIC_CONTEXT_MIN_TEXT_ID: u32 = 3000000;
 
     pub fn kind(&self) -> u16 {
         match self {
@@ -38,6 +79,10 @@ impl ExtendedCommand {
             ExtendedCommand::Language(_) => Self::LANGUAGE,
             ExtendedCommand::CloseStatusGump(_) => Self::CLOSE_STATUS_GUMP,
             ExtendedCommand::ClientType(_) => Self::CLIENT_TYPE,
+            ExtendedCommand::ContextMenuRequest(_) => Self::CONTEXT_MENU_REQUEST,
+            ExtendedCommand::ContextMenu(_) => Self::CONTEXT_MENU,
+            ExtendedCommand::ContextMenuEnhanced(_) => Self::CONTEXT_MENU,
+            ExtendedCommand::ContextMenuResponse(_) => Self::CONTEXT_MENU_RESPONSE,
         }
     }
 }
@@ -59,10 +104,52 @@ impl Packet for ExtendedCommand {
                 Ok(ExtendedCommand::CloseStatusGump(payload.read_u32::<Endian>()?)),
             Self::CLIENT_TYPE => Ok(ExtendedCommand::ClientType(
                 ClientFlags::from_bits_truncate(payload.read_u32::<Endian>()?))),
+            Self::CONTEXT_MENU_REQUEST => Ok(ExtendedCommand::ContextMenuRequest(payload.read_entity_id()?)),
+            Self::CONTEXT_MENU => {
+                let subcommand = payload.read_u16::<Endian>()?;
+                let target_id = payload.read_entity_id()?;
+                let count = payload.read_u8()? as usize;
+                let mut entries = Vec::with_capacity(count);
+
+                match subcommand {
+                    1 => {
+                        for _ in 0..count {
+                            let id = payload.read_u16::<Endian>()?;
+                            let text_id = payload.read_u16::<Endian>()? as u32
+                                + Self::CLASSIC_CONTEXT_MIN_TEXT_ID;
+                            let flags = ContextMenuFlags::from_bits_truncate(payload.read_u16::<Endian>()?);
+                            let hue = if flags.contains(ContextMenuFlags::HUE) {
+                                Some(payload.read_u16::<Endian>()?)
+                            } else {
+                                None
+                            };
+                            entries.push(ContextMenuEntry { id, text_id, flags, hue });
+                        }
+
+                        Ok(ExtendedCommand::ContextMenu(ContextMenu { target_id, entries }))
+                    }
+                    2 => {
+                        for _ in 0..count {
+                            let text_id = payload.read_u32::<Endian>()?;
+                            let id = payload.read_u16::<Endian>()?;
+                            let flags = ContextMenuFlags::from_bits_truncate(payload.read_u16::<Endian>()?);
+                            entries.push(ContextMenuEntry { id, text_id, flags, hue: None });
+                        }
+
+                        Ok(ExtendedCommand::ContextMenuEnhanced(ContextMenu { target_id, entries }))
+                    }
+                    _ => Ok(ExtendedCommand::Unknown),
+                }
+            }
+            Self::CONTEXT_MENU_RESPONSE => {
+                let target_id = payload.read_entity_id()?;
+                let id = payload.read_u16::<Endian>()?;
+                Ok(ExtendedCommand::ContextMenuResponse(ContextMenuResponse { id, target_id }))
+            }
             _ => {
                 log::warn!("Unknown extended packet {kind}");
                 Ok(ExtendedCommand::Unknown)
-            },
+            }
         }
     }
 
@@ -82,6 +169,48 @@ impl Packet for ExtendedCommand {
                 writer.write_u32::<Endian>(*id)?,
             ExtendedCommand::ClientType(client_type) =>
                 writer.write_u32::<Endian>(client_type.bits())?,
+            ExtendedCommand::ContextMenuRequest(target_id) =>
+                writer.write_entity_id(*target_id)?,
+            ExtendedCommand::ContextMenu(menu) => {
+                writer.write_u16::<Endian>(1)?;
+                writer.write_entity_id(menu.target_id)?;
+                writer.write_u8(menu.entries.len() as u8)?;
+
+                for entry in menu.entries.iter() {
+                    if entry.text_id < Self::CLASSIC_CONTEXT_MIN_TEXT_ID {
+                        return Err(anyhow!("Class context menu must only contain text IDs > {}",
+                            Self::CLASSIC_CONTEXT_MIN_TEXT_ID));
+                    }
+
+                    let mut flags = entry.flags & !ContextMenuFlags::HUE;
+                    if entry.hue.is_some() {
+                        flags |= ContextMenuFlags::HUE;
+                    }
+
+                    writer.write_u16::<Endian>(entry.id)?;
+                    writer.write_u16::<Endian>((entry.text_id - Self::CLASSIC_CONTEXT_MIN_TEXT_ID) as u16)?;
+                    writer.write_u16::<Endian>(entry.flags.bits())?;
+
+                    if let Some(hue) = entry.hue {
+                        writer.write_u16::<Endian>(hue)?;
+                    }
+                }
+            }
+            ExtendedCommand::ContextMenuEnhanced(menu) => {
+                writer.write_u16::<Endian>(2)?;
+                writer.write_entity_id(menu.target_id)?;
+                writer.write_u8(menu.entries.len() as u8)?;
+
+                for entry in menu.entries.iter() {
+                    writer.write_u32::<Endian>(entry.text_id)?;
+                    writer.write_u16::<Endian>(entry.id)?;
+                    writer.write_u16::<Endian>(entry.flags.bits())?;
+                }
+            }
+            ExtendedCommand::ContextMenuResponse(response) => {
+                writer.write_entity_id(response.target_id)?;
+                writer.write_u16::<Endian>(response.id)?;
+            }
         }
         Ok(())
     }

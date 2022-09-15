@@ -1,9 +1,11 @@
 use std::collections::VecDeque;
+
 use bevy_ecs::prelude::*;
 use glam::IVec3;
-use yewoh::protocol::{PickTarget, TargetType};
-use crate::world::events::ReceivedPacketEvent;
 
+use yewoh::protocol::{ContextMenu, ContextMenuEntry, ExtendedCommand, PickTarget, TargetType};
+
+use crate::world::events::{ContextMenuEvent, ReceivedPacketEvent};
 use crate::world::net::{NetClient, NetEntityLookup};
 
 #[derive(Debug, Clone, Component)]
@@ -37,6 +39,13 @@ struct InFlightTargetRequest {
 #[derive(Debug, Clone, Default, Component)]
 pub struct Targeting {
     pending: VecDeque<InFlightTargetRequest>,
+}
+
+#[derive(Debug, Clone, Component)]
+pub struct ContextMenuRequest {
+    pub connection: Entity,
+    pub target: Entity,
+    pub entries: Vec<ContextMenuEntry>,
 }
 
 pub fn update_targets(
@@ -154,5 +163,75 @@ pub fn update_targets(
         } else {
             targeting.pending.remove(position);
         }
+    }
+}
+
+pub fn handle_context_menu_packets(
+    lookup: Res<NetEntityLookup>,
+    mut events: EventReader<ReceivedPacketEvent>,
+    mut invoked_events: EventWriter<ContextMenuEvent>,
+    mut commands: Commands,
+) {
+    for ReceivedPacketEvent { client, packet } in events.iter() {
+        let connection = *client;
+        let packet = match packet.downcast::<ExtendedCommand>() {
+            Some(x) => x,
+            _ => continue,
+        };
+
+        match packet {
+            ExtendedCommand::ContextMenuRequest(target_id) => {
+                let target = match lookup.net_to_ecs(*target_id) {
+                    Some(x) => x,
+                    _ => continue,
+                };
+
+                commands.spawn()
+                    .insert(ContextMenuRequest {
+                        connection,
+                        target,
+                        entries: vec![],
+                    });
+            }
+            ExtendedCommand::ContextMenuResponse(response) => {
+                let target = match lookup.net_to_ecs(response.target_id) {
+                    Some(x) => x,
+                    _ => continue,
+                };
+
+                invoked_events.send(ContextMenuEvent {
+                    client: connection,
+                    target,
+                    option: response.id,
+                });
+            }
+            _ => {},
+        }
+    }
+}
+
+pub fn send_context_menu(
+    lookup: Res<NetEntityLookup>,
+    clients: Query<&NetClient>,
+    requests: Query<(Entity, &ContextMenuRequest)>,
+    mut commands: Commands,
+) {
+    for (entity, request) in requests.iter() {
+        commands.entity(entity).despawn();
+
+        let client = match clients.get(request.connection) {
+            Ok(x) => x,
+            _ => continue,
+        };
+
+        let target_id = match lookup.ecs_to_net(request.target) {
+            Some(x) => x,
+            _ => continue,
+        };
+
+        client.send_packet(ExtendedCommand::ContextMenuEnhanced(ContextMenu {
+            target_id,
+            entries: request.entries.clone(),
+        }).into());
     }
 }

@@ -86,3 +86,10 @@ pub struct ChatRequestEvent {
     pub client: Entity,
     pub request: UnicodeTextMessageRequest,
 }
+
+#[derive(Debug, Clone)]
+pub struct ContextMenuEvent {
+    pub client: Entity,
+    pub target: Entity,
+    pub option: u16,
+}
