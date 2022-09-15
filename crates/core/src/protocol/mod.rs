@@ -152,6 +152,7 @@ fn packet_registry() -> &'static PacketRegistry {
             PacketRegistration::for_type::<Ping>(),
             PacketRegistration::for_type::<Logout>(),
             PacketRegistration::for_type::<WarMode>(),
+            PacketRegistration::for_type::<RequestHelp>(),
 
             // Extended
             PacketRegistration::for_type::<ExtendedCommand>(),

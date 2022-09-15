@@ -910,3 +910,21 @@ impl Packet for WarMode {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone, Default)]
+pub struct RequestHelp;
+
+impl Packet for RequestHelp {
+    fn packet_kind() -> u8 { 0x9b }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(258) }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        Ok(Self)
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_zeros(257)?;
+        Ok(())
+    }
+}
