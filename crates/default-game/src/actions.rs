@@ -1,8 +1,8 @@
 use bevy_ecs::prelude::*;
 
-use yewoh::protocol::{CharacterProfile, ContextMenuEntry, MoveConfirm, MoveEntityReject, OpenContainer, OpenPaperDoll, ProfileResponse};
+use yewoh::protocol::{CharacterProfile, ContextMenuEntry, MoveConfirm, MoveEntityReject, OpenContainer, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind};
 use yewoh_server::world::entity::{Character, Container, EquippedBy, Graphic, MapPosition, Notorious, ParentContainer, Quantity};
-use yewoh_server::world::events::{ContextMenuEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, SingleClickEvent};
+use yewoh_server::world::events::{ContextMenuEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, RequestSkillsEvent, SingleClickEvent};
 use yewoh_server::world::input::ContextMenuRequest;
 use yewoh_server::world::map::Chunk;
 use yewoh_server::world::net::{make_container_contents_packet, NetClient, NetEntity, NetEntityLookup, NetOwned, PlayerState};
@@ -88,7 +88,7 @@ pub fn handle_single_click(
 
         commands.spawn()
             .insert(ContextMenuRequest {
-                client_entity: client_entity,
+                client_entity,
                 target,
                 entries: Vec::new(),
             });
@@ -343,6 +343,32 @@ pub fn handle_profile_requests(
             title: "Supreme Commander".to_string(),
             static_profile: "Static Profile".to_string(),
             profile: "Bio".to_string()
+        }).into());
+    }
+}
+
+pub fn handle_skills_requests(
+    clients: Query<&NetClient>,
+    mut requests: EventReader<RequestSkillsEvent>,
+) {
+    for request in requests.iter() {
+        let client_entity = request.client_entity;
+        let client = match clients.get(client_entity) {
+            Ok(x) => x,
+            _ => continue,
+        };
+
+        client.send_packet(Skills::Response(SkillsResponse {
+            kind: SkillsResponseKind::FullWithCaps,
+            skills: vec![
+                SkillEntry {
+                    id: 1,
+                    value: 724,
+                    raw_value: 701,
+                    lock: SkillLock::Up,
+                    cap: 1200,
+                }
+            ]
         }).into());
     }
 }

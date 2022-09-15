@@ -16,9 +16,16 @@ use super::{ClientVersion, Endian, Packet, PacketReadExt};
 pub const REQUEST_MOBILE_STATUS: u8 = 4;
 pub const REQUEST_MOBILE_SKILLS: u8 = 4;
 
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, FromRepr)]
+pub enum EntityRequestKind {
+    Status = 4,
+    Skills = 5,
+}
+
 #[derive(Debug, Clone)]
 pub struct EntityRequest {
-    pub kind: u8,
+    pub kind: EntityRequestKind,
     pub target: EntityId,
 }
 
@@ -29,14 +36,15 @@ impl Packet for EntityRequest {
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         payload.skip(4)?;
-        let kind = payload.read_u8()?;
+        let kind = EntityRequestKind::from_repr(payload.read_u8()?)
+            .ok_or_else(|| anyhow!("invalid entity request kind"))?;
         let target = payload.read_entity_id()?;
         Ok(EntityRequest { kind, target })
     }
 
     fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u32::<Endian>(0xedededed)?;
-        writer.write_u8(self.kind)?;
+        writer.write_u8(self.kind as u8)?;
         writer.write_entity_id(self.target)?;
         Ok(())
     }

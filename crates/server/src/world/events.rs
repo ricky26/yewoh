@@ -100,3 +100,9 @@ pub struct ProfileEvent {
     pub target: Entity,
     pub new_profile: Option<String>,
 }
+
+#[derive(Debug, Clone)]
+pub struct RequestSkillsEvent {
+    pub client_entity: Entity,
+    pub target: Entity,
+}

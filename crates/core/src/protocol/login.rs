@@ -919,7 +919,7 @@ impl Packet for RequestHelp {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(258) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _from_client: bool, _payload: &[u8]) -> anyhow::Result<Self> {
         Ok(Self)
     }
 

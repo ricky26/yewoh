@@ -6,13 +6,13 @@ use log::{info, warn};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 
-use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, CharacterProfile, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DoubleClick, DropEntity, EntityTooltip, EquipEntity, FeatureFlags, GameServerLogin, Move, PickUpEntity, SelectCharacter, SingleClick, SupportedFeatures, UnicodeTextMessageRequest};
+use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, CharacterProfile, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DoubleClick, DropEntity, EntityRequest, EntityRequestKind, EntityTooltip, EquipEntity, FeatureFlags, GameServerLogin, Move, PickUpEntity, SelectCharacter, SingleClick, SupportedFeatures, UnicodeTextMessageRequest};
 use yewoh::protocol::encryption::Encryption;
 
 use crate::game_server::NewSessionAttempt;
 use crate::lobby::{NewSessionRequest, SessionAllocator};
 use crate::world::entity::Tooltip;
-use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
+use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::input::Targeting;
 use crate::world::net::entity::NetEntityLookup;
 
@@ -334,33 +334,34 @@ pub fn handle_input_packets(
     mut drop_events: EventWriter<DropEvent>,
     mut equip_events: EventWriter<EquipEvent>,
     mut profile_events: EventWriter<ProfileEvent>,
+    mut skills_events: EventWriter<RequestSkillsEvent>,
 ) {
     for ReceivedPacketEvent { client_entity: connection, packet } in events.iter() {
-        let connection = *connection;
+        let client_entity = *connection;
 
         if let Some(request) = packet.downcast::<Move>().cloned() {
-            move_events.send(MoveEvent { client_entity: connection, request });
+            move_events.send(MoveEvent { client_entity, request });
         } else if let Some(request) = packet.downcast::<SingleClick>() {
             single_click_events.send(SingleClickEvent {
-                client_entity: connection,
+                client_entity,
                 target: lookup.net_to_ecs(request.target_id),
             });
         } else if let Some(request) = packet.downcast::<DoubleClick>() {
             double_click_events.send(DoubleClickEvent {
-                client_entity: connection,
+                client_entity,
                 target: lookup.net_to_ecs(request.target_id),
             });
         } else if let Some(request) = packet.downcast::<PickUpEntity>() {
             if let Some(target) = lookup.net_to_ecs(request.target_id) {
                 pick_up_events.send(PickUpEvent {
-                    client_entity: connection,
+                    client_entity,
                     target,
                 });
             }
         } else if let Some(request) = packet.downcast::<DropEntity>() {
             if let Some(target) = lookup.net_to_ecs(request.target_id) {
                 drop_events.send(DropEvent {
-                    client_entity: connection,
+                    client_entity,
                     target: target,
                     position: request.position,
                     grid_index: request.grid_index,
@@ -371,7 +372,7 @@ pub fn handle_input_packets(
             if let Some((target, character)) = lookup.net_to_ecs(request.target_id)
                 .zip(lookup.net_to_ecs(request.character_id)) {
                 equip_events.send(EquipEvent {
-                    client_entity: connection,
+                    client_entity,
                     target,
                     character,
                     slot: request.slot,
@@ -379,7 +380,7 @@ pub fn handle_input_packets(
             }
         } else if let Some(request) = packet.downcast::<AsciiTextMessageRequest>() {
             chat_events.send(ChatRequestEvent {
-                client_entity: connection,
+                client_entity,
                 request: UnicodeTextMessageRequest {
                     kind: request.kind,
                     hue: request.hue,
@@ -389,19 +390,29 @@ pub fn handle_input_packets(
                 },
             });
         } else if let Some(request) = packet.downcast::<UnicodeTextMessageRequest>().cloned() {
-            chat_events.send(ChatRequestEvent { client_entity: connection, request });
+            chat_events.send(ChatRequestEvent { client_entity, request });
         } else if let Some(request) = packet.downcast::<CharacterProfile>().cloned() {
             match request {
                 CharacterProfile::Request(request) => {
                     if let Some(target) = lookup.net_to_ecs(request.target_id) {
                         profile_events.send(ProfileEvent {
-                            client_entity: connection,
+                            client_entity,
                             target,
                             new_profile: request.new_profile.clone(),
                         });
                     }
                 }
                 _ => unreachable!(),
+            }
+        } else if let Some(request) = packet.downcast::<EntityRequest>().cloned() {
+            let target = match lookup.net_to_ecs(request.target) {
+                Some(x) => x,
+                _ => continue,
+            };
+
+            match request.kind {
+                EntityRequestKind::Skills => skills_events.send(RequestSkillsEvent { client_entity, target }),
+                _ => {}
             }
         }
     }
