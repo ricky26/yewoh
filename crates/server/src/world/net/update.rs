@@ -2,11 +2,12 @@ use bevy_ecs::prelude::*;
 use glam::IVec2;
 
 use yewoh::{EntityId, EntityKind, Notoriety};
-use yewoh::protocol::{CharacterEquipment, DeleteEntity, EntityFlags, EquipmentSlot, Packet, UpsertContainerContents, UpsertEntityCharacter, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityWorld, UpsertLocalPlayer};
+use yewoh::protocol::{CharacterEquipment, DeleteEntity, EntityFlags, EntityTooltipVersion, EquipmentSlot, Packet, UpsertContainerContents, UpsertEntityCharacter, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityWorld, UpsertLocalPlayer};
 
-use crate::world::entity::{Character, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer, Quantity, Stats};
+use crate::world::entity::{Character, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer, Quantity, Stats, Tooltip};
 use crate::world::net::{broadcast, NetClient, NetEntity, NetEntityLookup, NetOwner};
 use crate::world::net::owner::NetSynchronizing;
+use crate::world::time::Tick;
 
 #[derive(Debug, Clone, Eq, PartialEq, Component)]
 pub struct PlayerState {
@@ -467,11 +468,13 @@ pub fn send_updated_stats(
 }
 
 pub fn sync_entities(
+    tick: Res<Tick>,
     clients: Query<&NetClient, With<NetSynchronizing>>,
     characters: Query<(&NetEntity, &CharacterState)>,
     world_items: Query<(&NetEntity, &WorldItemState)>,
     contained_items: Query<(&NetEntity, &ContainedItemState)>,
     equipped_items: Query<(&NetEntity, &EquippedItemState)>,
+    tooltips: Query<&NetEntity, With<Tooltip>>,
     all_equipment_query: Query<(&NetEntity, &Graphic, &EquippedBy)>,
 ) {
     for (net, state) in characters.iter() {
@@ -488,5 +491,26 @@ pub fn sync_entities(
 
     for (net, state) in contained_items.iter() {
         broadcast(clients.iter(), state.to_update(net.id).into_arc());
+    }
+
+    for net in tooltips.iter() {
+        broadcast(clients.iter(), EntityTooltipVersion {
+            id: net.id,
+            revision: tick.tick,
+        }.into_arc());
+    }
+}
+
+pub fn update_tooltips(
+    tick: Res<Tick>,
+    clients: Query<&NetClient>,
+    tooltips: Query<&NetEntity, Changed<Tooltip>>,
+) {
+    let tick = tick.tick;
+    for net in tooltips.iter() {
+        broadcast(clients.iter(), EntityTooltipVersion {
+            id: net.id,
+            revision: tick,
+        }.into_arc());
     }
 }

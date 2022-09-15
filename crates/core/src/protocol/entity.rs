@@ -511,14 +511,20 @@ impl Packet for EntityTooltipVersion {
 }
 
 #[derive(Debug, Clone)]
+pub struct EntityTooltipLine {
+    pub text_id: u32,
+    pub params: String,
+}
+
+#[derive(Debug, Clone)]
 pub enum EntityTooltip {
     Request(Vec<EntityId>),
-    Response { id: EntityId, entries: Vec<(u32, String)> },
+    Response { id: EntityId, entries: Vec<EntityTooltipLine> },
 }
 
 impl Packet for EntityTooltip {
     fn packet_kind() -> u8 { 0xd6 }
-    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(15) }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
     fn decode(_client_version: ClientVersion, from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         if from_client {
@@ -540,8 +546,8 @@ impl Packet for EntityTooltip {
                     break
                 }
 
-                let params = payload.read_utf16_pascal()?;
-                entries.push((text_id, params));
+                let params = payload.read_utf16le_pascal()?;
+                entries.push(EntityTooltipLine { text_id, params });
             }
 
             Ok(Self::Response { id, entries })
@@ -569,10 +575,9 @@ impl Packet for EntityTooltip {
                 writer.write_u16::<Endian>(0)?;
                 writer.write_entity_id(*id)?;
 
-                for (loc_id, params) in entries.iter() {
-                    writer.write_u32::<Endian>(*loc_id)?;
-                    writer.write_utf16_pascal(params)?;
-
+                for line in entries.iter() {
+                    writer.write_u32::<Endian>(line.text_id)?;
+                    writer.write_utf16le_pascal(&line.params)?;
                 }
 
                 writer.write_u32::<Endian>(0)?;

@@ -7,6 +7,7 @@ pub use connection::{
     handle_input_packets,
     handle_login_packets,
     handle_new_packets,
+    send_tooltips,
 };
 pub use owner::{
     NetOwner,
@@ -36,6 +37,7 @@ pub use update::{
     update_items_in_containers,
     update_characters,
     update_players,
+    update_tooltips,
     sync_entities,
 };
 

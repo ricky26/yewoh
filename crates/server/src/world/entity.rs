@@ -4,7 +4,7 @@ use bevy_ecs::prelude::*;
 use glam::{IVec2, IVec3};
 
 use yewoh::{Direction, EntityId, Notoriety};
-use yewoh::protocol::{EntityFlags, EquipmentSlot, UpsertEntityStats};
+use yewoh::protocol::{EntityFlags, EntityTooltipLine, EquipmentSlot, UpsertEntityStats};
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Component)]
 pub struct Flags {
@@ -184,4 +184,9 @@ impl Stats {
             max_mana_bonus: self.max_mana_bonus,
         }
     }
+}
+
+#[derive(Debug, Clone, Default, Component)]
+pub struct Tooltip {
+    pub entries: Vec<EntityTooltipLine>,
 }

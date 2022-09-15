@@ -344,11 +344,19 @@ pub struct StartingCity {
 }
 
 bitflags! {
+    #[derive(Default)]
     pub struct CharacterListFlags : u32 {
+        const ALLOW_OVERWRITE_CONFIG = 0x2;
         const SINGLE_CHARACTER_SLOT = 0x4;
+        const CONTEXT_MENU = 0x8;
         const SLOT_LIMIT = 0x10;
+        const PALADIN_NECROMANCER_TOOLTIPS = 0x20;
         const SIXTH_CHARACTER_SLOT = 0x40;
+        const SAMURAI_NINJA = 0x80;
+        const ELVES = 0x100;
         const SEVENTH_CHARACTER_SLOT = 0x1000;
+        const NEW_MOVEMENT_SYSTEM = 0x4000;
+        const ALLOW_FELUCCA = 0x8000;
     }
 }
 
@@ -356,6 +364,7 @@ bitflags! {
 pub struct CharacterList {
     pub characters: Vec<Option<CharacterFromList>>,
     pub cities: Vec<StartingCity>,
+    pub flags: CharacterListFlags,
 }
 
 impl CharacterList {
@@ -417,9 +426,15 @@ impl Packet for CharacterList {
             });
         }
 
+        let flags = CharacterListFlags::from_bits_truncate(payload.read_u32::<Endian>()?);
+        if new_character_list {
+            payload.skip(2)?;
+        }
+
         Ok(CharacterList {
             characters,
             cities,
+            flags,
         })
     }
 
@@ -453,22 +468,7 @@ impl Packet for CharacterList {
             }
         }
 
-        let mut flags = CharacterListFlags::empty();
-
-        if self.characters.len() > 6 {
-            flags |= CharacterListFlags::SEVENTH_CHARACTER_SLOT;
-        }
-
-        if self.characters.len() > 5 {
-            flags |= CharacterListFlags::SIXTH_CHARACTER_SLOT;
-        }
-
-        if self.characters.len() == 1 {
-            flags |= CharacterListFlags::SLOT_LIMIT
-                | CharacterListFlags::SINGLE_CHARACTER_SLOT;
-        }
-
-        writer.write_u32::<Endian>(flags.bits())?;
+        writer.write_u32::<Endian>(self.flags.bits())?;
         if new_character_list {
             writer.write_u16::<Endian>(0xffff)?;
         }

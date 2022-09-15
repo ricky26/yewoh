@@ -2,6 +2,11 @@ use std::time::{Duration, Instant};
 
 use bevy_ecs::prelude::*;
 
+#[derive(Debug, Clone, Default)]
+pub struct Tick {
+    pub tick: u32,
+}
+
 #[derive(Debug, Clone)]
 pub struct TickRate {
     tick_rate: f32,
@@ -38,7 +43,7 @@ impl Default for TickRate {
     }
 }
 
-pub fn limit_tick_rate(mut tick_rate: ResMut<TickRate>) {
+pub fn limit_tick_rate(mut tick_rate: ResMut<TickRate>, mut tick: ResMut<Tick>) {
     let now = Instant::now();
 
     if now < tick_rate.deadline {
@@ -48,4 +53,5 @@ pub fn limit_tick_rate(mut tick_rate: ResMut<TickRate>) {
 
     let new_deadline = tick_rate.deadline + tick_rate.interval;
     tick_rate.deadline = new_deadline;
+    tick.tick = tick.tick.wrapping_add(1);
 }

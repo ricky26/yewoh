@@ -6,11 +6,12 @@ use log::{info, warn};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 
-use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DoubleClick, DropEntity, EquipEntity, FeatureFlags, GameServerLogin, Move, PickUpEntity, SelectCharacter, SingleClick, SupportedFeatures, UnicodeTextMessageRequest};
+use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DoubleClick, DropEntity, EntityTooltip, EquipEntity, FeatureFlags, GameServerLogin, Move, PickUpEntity, SelectCharacter, SingleClick, SupportedFeatures, UnicodeTextMessageRequest};
 use yewoh::protocol::encryption::Encryption;
 
 use crate::game_server::NewSessionAttempt;
 use crate::lobby::{NewSessionRequest, SessionAllocator};
+use crate::world::entity::Tooltip;
 use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ReceivedPacketEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::input::Targeting;
 use crate::world::net::entity::NetEntityLookup;
@@ -388,6 +389,37 @@ pub fn handle_input_packets(
             });
         } else if let Some(request) = packet.downcast::<UnicodeTextMessageRequest>().cloned() {
             chat_events.send(ChatRequestEvent { client: connection, request });
+        }
+    }
+}
+
+pub fn send_tooltips(
+    lookup: Res<NetEntityLookup>,
+    clients: Query<&NetClient>,
+    tooltips: Query<&Tooltip>,
+    mut events: EventReader<ReceivedPacketEvent>,
+) {
+    for ReceivedPacketEvent { client: connection, packet } in events.iter() {
+        let connection = *connection;
+        let client = match clients.get(connection) {
+            Ok(x) => x,
+            _ => continue,
+        };
+
+        let request = match packet.downcast::<EntityTooltip>() {
+            Some(x) => x,
+            _ => continue,
+        };
+
+        match request {
+            EntityTooltip::Request(ids) => {
+                for id in ids.iter().copied() {
+                    if let Some(tooltip) = lookup.net_to_ecs(id).and_then(|e| tooltips.get(e).ok()) {
+                        client.send_packet(EntityTooltip::Response { id, entries: tooltip.entries.clone() }.into());
+                    }
+                }
+            }
+            _ => {}
         }
     }
 }

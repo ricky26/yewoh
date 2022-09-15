@@ -65,7 +65,7 @@ impl AccountRepository for MemoryAccountRepository {
 
         Ok(CharacterList {
             characters,
-            cities: Vec::new(),
+            ..Default::default()
         })
     }
 

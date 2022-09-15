@@ -4,8 +4,8 @@ use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 
 use yewoh::{Direction, Notoriety};
-use yewoh::protocol::{CharacterList, EntityFlags, EquipmentSlot, UnicodeTextMessage};
-use yewoh_server::world::entity::{Character, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer};
+use yewoh::protocol::{CharacterList, CharacterListFlags, EntityFlags, EntityTooltipLine, EquipmentSlot, UnicodeTextMessage};
+use yewoh_server::world::entity::{Character, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer, Tooltip};
 use yewoh_server::world::events::{CharacterListEvent, CreateCharacterEvent, NewPrimaryEntityEvent, SelectCharacterEvent};
 use yewoh_server::world::net::{NetClient, NetEntity, NetEntityAllocator, User};
 
@@ -75,6 +75,27 @@ pub fn handle_list_characters_callback(
         match result {
             Ok(mut characters) => {
                 characters.cities = static_data.cities.to_starting_cities();
+                characters.flags |= CharacterListFlags::ALLOW_OVERWRITE_CONFIG
+                    | CharacterListFlags::CONTEXT_MENU
+                    | CharacterListFlags::PALADIN_NECROMANCER_TOOLTIPS
+                    | CharacterListFlags::SAMURAI_NINJA
+                    | CharacterListFlags::ELVES
+                    | CharacterListFlags::NEW_MOVEMENT_SYSTEM
+                    | CharacterListFlags::ALLOW_FELUCCA;
+
+                if characters.characters.len() > 6 {
+                    characters.flags |= CharacterListFlags::SEVENTH_CHARACTER_SLOT;
+                }
+
+                if characters.characters.len() > 5 {
+                    characters.flags |= CharacterListFlags::SIXTH_CHARACTER_SLOT;
+                }
+
+                if characters.characters.len() == 1 {
+                    characters.flags |= CharacterListFlags::SLOT_LIMIT
+                        | CharacterListFlags::SINGLE_CHARACTER_SLOT;
+                }
+
                 client.send_packet(characters.into());
             }
             Err(err) => log::warn!("Failed to list characters: {err}"),
@@ -172,6 +193,11 @@ pub fn handle_spawn_character(
             .insert(Flags { flags: EntityFlags::default() })
             .insert(Graphic { id: 0x9b2, hue: 120 })
             .insert(Container { gump_id: 0x3c, items: vec![] })
+            .insert(Tooltip {
+                entries: vec![
+                  EntityTooltipLine { text_id: 1042971, params: "Hello, world!".into() },
+                ],
+            })
             .id();
 
         let backpack_entity = commands.spawn()
