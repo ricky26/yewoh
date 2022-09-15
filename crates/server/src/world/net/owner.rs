@@ -30,6 +30,7 @@ pub struct NetSynchronized;
 pub struct MapInfo {
     pub size: UVec2,
     pub season: u8,
+    pub is_virtual: bool,
 }
 
 #[derive(Debug, Clone, Default)]

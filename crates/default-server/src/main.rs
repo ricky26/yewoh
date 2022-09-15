@@ -4,6 +4,7 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 use bevy_app::App;
+use bevy_ecs::prelude::*;
 use clap::Parser;
 use futures::future::join;
 use log::info;
@@ -14,6 +15,7 @@ use yewoh_default_game::data::static_data;
 use yewoh_default_game::DefaultGamePlugin;
 use yewoh_server::game_server::listen_for_game;
 use yewoh_server::lobby::{listen_for_lobby, LocalLobby};
+use yewoh_server::world::map::{Chunk, create_map_entities, create_statics, Static};
 use yewoh_server::world::net::NetServer;
 use yewoh_server::world::ServerPlugin;
 
@@ -66,7 +68,8 @@ fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
 
-    let static_data = rt.block_on(static_data::load_from_directory(&args.data_path, &args.uo_data_path))?;
+    let static_data = rt.block_on(static_data::load_from_directory(&args.data_path))?;
+    let map_infos = static_data.maps.map_infos();
 
     let external_ip = rt.block_on(lookup_host(format!("{}:0", &args.advertise_address)))?
         .filter_map(|entry| match entry {
@@ -103,8 +106,18 @@ fn main() -> anyhow::Result<()> {
         .add_plugin(ServerPlugin)
         .add_plugin(DefaultGamePlugin)
         .insert_resource(NetServer::new(args.encryption, new_session_requests, new_session_rx))
-        .insert_resource(static_data.maps.map_infos())
+        .insert_resource(map_infos.clone())
         .insert_resource(static_data);
+
+    info!("Loading map data...");
+    rt.block_on(create_map_entities(&mut app.world, &map_infos, &args.uo_data_path))?;
+    info!("Loading statics...");
+    rt.block_on(create_statics(&mut app.world, &map_infos, &args.uo_data_path))?;
+
+    let mut query = app.world.query_filtered::<(), With<Chunk>>();
+    info!("Spawned {} map chunks", query.iter(&app.world).count());
+    let mut query = app.world.query_filtered::<(), With<Static>>();
+    info!("Spawned {} statics", query.iter(&app.world).count());
 
     info!("Listening for http connections on {}", &args.http_bind);
     info!("Listening for lobby connections on {}", &args.lobby_bind);

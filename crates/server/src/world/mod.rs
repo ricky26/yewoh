@@ -4,6 +4,7 @@ use tokio::runtime::Handle;
 
 use crate::world::net::{NetEntityAllocator, NetEntityLookup, MapInfos, accept_new_clients, start_synchronizing, handle_input_packets, handle_login_packets, handle_new_packets, send_remove_entity, update_containers, send_updated_stats, update_entity_lookup, update_items_in_containers, update_items_in_world, update_equipped_items, update_characters, update_players, finish_synchronizing, sync_entities};
 use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, NewPrimaryEntityEvent, PickUpEvent, ReceivedPacketEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
+use crate::world::spatial::{EntitySurfaces, update_entity_surfaces};
 use crate::world::time::{limit_tick_rate, TickRate};
 
 pub mod time;
@@ -13,6 +14,10 @@ pub mod net;
 pub mod entity;
 
 pub mod events;
+
+pub mod spatial;
+
+pub mod map;
 
 #[derive(Default)]
 pub struct ServerPlugin;
@@ -24,6 +29,7 @@ impl Plugin for ServerPlugin {
             .init_resource::<MapInfos>()
             .init_resource::<NetEntityAllocator>()
             .init_resource::<NetEntityLookup>()
+            .init_resource::<EntitySurfaces>()
             .insert_resource(Handle::current())
             .add_event::<ReceivedPacketEvent>()
             .add_event::<SentPacketEvent>()
@@ -54,6 +60,7 @@ impl Plugin for ServerPlugin {
             .add_system_to_stage(CoreStage::PostUpdate, finish_synchronizing)
             .add_system_to_stage(CoreStage::Last, send_remove_entity.before(update_entity_lookup))
             .add_system_to_stage(CoreStage::Last, update_entity_lookup)
+            .add_system_to_stage(CoreStage::Last, update_entity_surfaces)
             .add_system_to_stage(CoreStage::Last, limit_tick_rate);
     }
 
