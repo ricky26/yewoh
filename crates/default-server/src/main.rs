@@ -7,7 +7,6 @@ use bevy_app::App;
 use bevy_ecs::prelude::*;
 use clap::Parser;
 use futures::future::join;
-use glam::IVec3;
 use log::info;
 use tokio::net::{lookup_host, TcpListener};
 use tokio::sync::mpsc;
@@ -20,7 +19,6 @@ use yewoh_server::lobby::{listen_for_lobby, LocalLobby};
 use yewoh_server::world::map::{Chunk, create_map_entities, create_statics, Static};
 use yewoh_server::world::net::NetServer;
 use yewoh_server::world::ServerPlugin;
-use yewoh_server::world::spatial::EntitySurfaces;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
