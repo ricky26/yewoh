@@ -51,6 +51,7 @@ impl<T: Write> PacketWriteExt for T {
         for c in src.encode_utf16() {
             self.write_u16::<Endian>(c)?;
         }
+        self.write_u16::<Endian>(0)?;
         Ok(())
     }
 

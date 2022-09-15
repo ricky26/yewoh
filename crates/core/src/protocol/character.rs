@@ -18,8 +18,8 @@ pub struct ProfileRequest {
 #[derive(Debug, Clone)]
 pub struct ProfileResponse {
     pub target_id: EntityId,
-    pub title: String,
-    pub static_profile: String,
+    pub header: String,
+    pub footer: String,
     pub profile: String,
 }
 
@@ -40,7 +40,7 @@ impl Packet for CharacterProfile {
                 let target_id = payload.read_entity_id()?;
                 let new_profile = if is_edit {
                     payload.skip(2)?;
-                    Some(payload.read_utf16_nul()?)
+                    Some(payload.read_utf16_pascal()?)
                 } else {
                     None
                 };
@@ -57,8 +57,8 @@ impl Packet for CharacterProfile {
                 let profile = payload.read_utf16_nul()?;
                 Ok(CharacterProfile::Response(ProfileResponse {
                     target_id,
-                    title,
-                    static_profile,
+                    header: title,
+                    footer: static_profile,
                     profile,
                 }))
             }
@@ -72,13 +72,14 @@ impl Packet for CharacterProfile {
                 writer.write_entity_id(request.target_id)?;
 
                 if let Some(new_profile) = request.new_profile.as_ref() {
-                    writer.write_str_nul(&new_profile)?;
+                    writer.write_u16::<Endian>(1)?;
+                    writer.write_utf16_pascal(&new_profile)?;
                 }
             }
             CharacterProfile::Response(response) => {
                 writer.write_entity_id(response.target_id)?;
-                writer.write_str_nul(&response.title)?;
-                writer.write_utf16_nul(&response.static_profile)?;
+                writer.write_str_nul(&response.header)?;
+                writer.write_utf16_nul(&response.footer)?;
                 writer.write_utf16_nul(&response.profile)?;
             }
         }

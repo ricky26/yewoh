@@ -382,8 +382,8 @@ pub fn handle_profile_requests(
 
         client.send_packet(CharacterProfile::Response(ProfileResponse {
             target_id,
-            title: "Supreme Commander".to_string(),
-            static_profile: "Static Profile".to_string(),
+            header: "Supreme Commander".to_string(),
+            footer: "Static Profile".to_string(),
             profile: "Bio".to_string()
         }).into());
     }
