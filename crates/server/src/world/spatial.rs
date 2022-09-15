@@ -2,12 +2,13 @@ use std::collections::HashMap;
 use std::ops::Sub;
 
 use bevy_ecs::prelude::*;
-use glam::{IVec3, Vec3};
+use glam::{IVec2, IVec3, Vec3};
 use rstar::{AABB, Point, PointDistance, RTree, RTreeObject};
 use rstar::primitives::Rectangle;
+use yewoh::assets::map::CHUNK_SIZE;
 
 use crate::world::entity::MapPosition;
-use crate::world::map::Chunk;
+use crate::world::map::{Chunk, Surface};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SpatialPoint(pub Vec3);
@@ -77,6 +78,20 @@ impl PointDistance for Entry {
     }
 }
 
+struct MaybeIter<T>(Option<T>);
+
+impl<T: Iterator> Iterator for MaybeIter<T> {
+    type Item = T::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(ref mut iter) = &mut self.0 {
+            iter.next()
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct SpatialEntityTree {
     trees: HashMap<u8, RTree<Entry>>,
@@ -126,22 +141,20 @@ impl SpatialEntityTree {
     }
 
     pub fn iter_at_point(&self, map: u8, position: IVec3) -> impl Iterator<Item=(Entity, IVec3, IVec3)> + '_ {
-        struct Impl<T>(Option<T>);
-
-        impl<T: Iterator> Iterator for Impl<T> {
-            type Item = T::Item;
-
-            fn next(&mut self) -> Option<Self::Item> {
-                if let Some(ref mut iter) = &mut self.0 {
-                    iter.next()
-                } else {
-                    None
-                }
-            }
-        }
-
-        Impl(if let Some(tree) = self.trees.get(&map) {
+        MaybeIter(if let Some(tree) = self.trees.get(&map) {
             Some(tree.locate_all_at_point(&SpatialPoint(position.as_vec3()))
+                .map(|e| (e.entity, e.aabb.lower().0.as_ivec3(), e.aabb.upper().0.as_ivec3())))
+        } else {
+            None
+        })
+    }
+
+    pub fn iter_at_column(&self, map: u8, position: IVec2) -> impl Iterator<Item=(Entity, IVec3, IVec3)> + '_ {
+        let min = SpatialPoint(position.extend(-1000).as_vec3());
+        let max = SpatialPoint(position.extend(1000).as_vec3());
+        let aabb = AABB::from_corners(min, max);
+        MaybeIter(if let Some(tree) = self.trees.get(&map) {
+            Some(tree.locate_in_envelope_intersecting(&aabb)
                 .map(|e| (e.entity, e.aabb.lower().0.as_ivec3(), e.aabb.upper().0.as_ivec3())))
         } else {
             None
@@ -156,21 +169,27 @@ pub struct EntitySurfaces {
 
 pub fn update_entity_surfaces(
     mut storage: ResMut<EntitySurfaces>,
-    surfaces: Query<(Entity, &MapPosition, Option<&Chunk>), Or<(Changed<MapPosition>, Changed<Chunk>)>>,
-    removed: RemovedComponents<MapPosition>,
+    chunks: Query<(Entity, &MapPosition), (With<Chunk>, Or<(Changed<MapPosition>, Changed<Chunk>)>)>,
+    surfaces: Query<(Entity, &MapPosition, &Surface), Or<(Changed<MapPosition>, Changed<Surface>)>>,
+    removed_chunks: RemovedComponents<Chunk>,
+    removed_surfaces: RemovedComponents<Surface>,
 ) {
-    for (entity, position, chunk) in surfaces.iter() {
-        if let Some(chunk) = chunk {
-            let height = chunk.map_chunk.heights.iter().copied().max().unwrap_or(0);
-            let min = position.position;
-            let max = min + IVec3::new(15, 15, height as i32);
-            storage.tree.insert_aabb(entity, position.map_id, min, max);
-        } else {
-            storage.tree.insert_point(entity, position.map_id, position.position);
-        }
+    for (entity, position) in chunks.iter() {
+        let min = position.position - IVec3::new(0, 0, 1000);
+        let max = position.position + IVec3::new(CHUNK_SIZE as i32 - 1, CHUNK_SIZE as i32 - 1, 1000);
+        storage.tree.insert_aabb(entity, position.map_id, min, max);
     }
 
-    for entity in removed.iter() {
+    for (entity, position, surface) in surfaces.iter() {
+        storage.tree.insert_point(entity, position.map_id,
+            position.position + IVec3::new(0, 0, surface.offset as i32));
+    }
+
+    for entity in removed_chunks.iter() {
+        storage.tree.remove(entity);
+    }
+
+    for entity in removed_surfaces.iter() {
         storage.tree.remove(entity);
     }
 }

@@ -3,7 +3,9 @@ use bevy_ecs::prelude::*;
 use yewoh::protocol::{MoveConfirm, MoveEntityReject, OpenContainer, OpenPaperDoll};
 use yewoh_server::world::entity::{Character, Container, EquippedBy, Graphic, MapPosition, Notorious, ParentContainer, Quantity};
 use yewoh_server::world::events::{DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent};
+use yewoh_server::world::map::Chunk;
 use yewoh_server::world::net::{make_container_contents_packet, NetClient, NetEntity, NetOwned, PlayerState};
+use yewoh_server::world::spatial::EntitySurfaces;
 
 #[derive(Debug, Clone, Component)]
 pub struct Held {
@@ -17,6 +19,8 @@ pub struct Holder {
 
 pub fn handle_move(
     mut events: EventReader<MoveEvent>,
+    surfaces: Res<EntitySurfaces>,
+    map_chunks: Query<&Chunk>,
     connection_query: Query<(&NetClient, &NetOwned)>,
     mut character_query: Query<(&mut MapPosition, &mut PlayerState, &Notorious)>,
 ) {
@@ -36,7 +40,28 @@ pub fn handle_move(
         if map_position.direction != request.direction {
             map_position.direction = request.direction;
         } else {
-            map_position.position += request.direction.as_vec2().extend(0);
+            // Step forward and up 10 units, then drop the character down onto their destination.
+            let mut test_position = map_position.position + request.direction.as_vec2().extend(10);
+            let mut new_z = 0;
+
+            for (entity, min, _) in surfaces.tree.iter_at_column(map_position.map_id, test_position.truncate()) {
+                if let Ok(chunk) = map_chunks.get(entity) {
+                    let chunk_pos = test_position - min;
+                    let (_, z) = chunk.map_chunk.get(chunk_pos.x as usize, chunk_pos.y as usize);
+                    let z = z as i32;
+                    if z <= test_position.z {
+                        new_z = new_z.max(z);
+                    }
+                } else {
+                    let z = min.z;
+                    if z <= test_position.z {
+                        new_z = new_z.max(z);
+                    }
+                }
+            }
+
+            test_position.z = new_z;
+            map_position.position = test_position;
         }
 
         state.position = *map_position;

@@ -1,5 +1,5 @@
 use std::future::Future;
-use std::io::{ErrorKind, Read};
+use std::io::Read;
 use std::path::Path;
 
 use byteorder::{LittleEndian as Endian, ReadBytesExt};
@@ -7,29 +7,32 @@ use glam::IVec3;
 
 use crate::assets::mul::MulReader;
 
+pub const CHUNK_SIZE: usize = 8;
+pub const CHUNK_AREA: usize = CHUNK_SIZE * CHUNK_SIZE;
+
 #[derive(Debug, Clone)]
 pub struct MapChunk {
-    pub tile_ids: [u16; 64],
-    pub heights: [u8; 64],
+    pub tile_ids: [u16; CHUNK_AREA],
+    pub heights: [i8; CHUNK_AREA],
 }
 
 impl Default for MapChunk {
     fn default() -> Self {
         MapChunk {
-            tile_ids: [0; 64],
-            heights: [0; 64],
+            tile_ids: [0; CHUNK_AREA],
+            heights: [0; CHUNK_AREA],
         }
     }
 }
 
 impl MapChunk {
-    pub fn get(&self, x: usize, y: usize) -> (u16, u8) {
-        let index = x + 16 * y;
+    pub fn get(&self, x: usize, y: usize) -> (u16, i8) {
+        let index = x + CHUNK_SIZE * y;
         (self.tile_ids[index], self.heights[index])
     }
 }
 
-pub async fn load_map<C: FnMut(usize, MapChunk) -> F, F: Future<Output=anyhow::Result<()>>>(
+pub async fn load_map<C: FnMut(usize, usize, MapChunk) -> F, F: Future<Output=anyhow::Result<()>>>(
     data_path: &Path,
     index: usize,
     width: usize,
@@ -37,29 +40,22 @@ pub async fn load_map<C: FnMut(usize, MapChunk) -> F, F: Future<Output=anyhow::R
     mut callback: C,
 ) -> anyhow::Result<()> {
     let mut reader = MulReader::open(data_path, &format!("map{}", index)).await?;
-    let height_blocks = height / 16;
 
-    loop {
-        let block_index = match reader.read_u32::<Endian>() {
-            Ok(x) => x as usize,
-            Err(err) if err.kind() == ErrorKind::UnexpectedEof => break,
-            Err(err) => return Err(err.into()),
-        };
+    let width_blocks = (width + CHUNK_SIZE - 1) / CHUNK_SIZE;
+    let height_blocks = (height + CHUNK_SIZE - 1) / CHUNK_SIZE;
 
-        let block_x = (block_index / height_blocks) * 16;
-        let block_y = (block_index % height_blocks) * 16;
+    for x in 0..width_blocks {
+        for y in 0..height_blocks {
+            reader.read_u32::<Endian>()?;
 
-        if block_x >= width || block_y >= height {
-            continue;
+            let mut chunk = MapChunk::default();
+            for tile_index in 0..CHUNK_AREA {
+                chunk.tile_ids[tile_index] = reader.read_u16::<Endian>()?;
+                chunk.heights[tile_index] = reader.read_i8()?;
+            }
+
+            (callback)(x, y, chunk).await?;
         }
-
-        let mut chunk = MapChunk::default();
-        for tile_index in 0..64 {
-            chunk.tile_ids[tile_index] = reader.read_u16::<Endian>()?;
-            chunk.heights[tile_index] = reader.read_u8()?;
-        }
-
-        (callback)(block_index, chunk).await?;
     }
 
     Ok(())
@@ -87,8 +83,8 @@ pub async fn load_statics<C: FnMut(Static) -> F, F: Future<Output=anyhow::Result
         data
     };
 
-    let width_blocks = (width + 15) / 16;
-    let height_blocks = (height + 15) / 16;
+    let width_blocks = (width + CHUNK_SIZE - 1) / CHUNK_SIZE;
+    let height_blocks = (height + CHUNK_SIZE - 1) / CHUNK_SIZE;
 
     for block_x in 0..width_blocks {
         for block_y in 0..height_blocks {
@@ -99,8 +95,8 @@ pub async fn load_statics<C: FnMut(Static) -> F, F: Future<Output=anyhow::Result
                 continue;
             }
 
-            let x_base = (block_x * 16) as i32;
-            let y_base = (block_y * 16) as i32;
+            let x_base = (block_x * CHUNK_SIZE) as i32;
+            let y_base = (block_y * CHUNK_SIZE) as i32;
 
             let start = offset as usize;
             let end = start + (length as usize);
