@@ -2,6 +2,7 @@ use std::path::Path;
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::CommandQueue;
+use bevy_reflect::prelude::*;
 use futures::future::{self, TryFutureExt};
 use glam::IVec3;
 use tokio::spawn;
@@ -19,10 +20,10 @@ pub struct Chunk {
     pub map_chunk: MapChunk,
 }
 
-#[derive(Debug, Clone, Default, Component)]
+#[derive(Debug, Clone, Default, Component, Reflect)]
 pub struct Static;
 
-#[derive(Debug, Clone, Default, Component)]
+#[derive(Debug, Clone, Default, Component, Reflect)]
 pub struct Surface {
     pub offset: u8,
 }

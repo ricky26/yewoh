@@ -207,3 +207,104 @@ impl Packet for Skills {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct AttackRequest {
+    pub target_id: EntityId,
+}
+
+impl Packet for AttackRequest {
+    fn packet_kind() -> u8 { 0x5 }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(5) }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        Ok(Self { target_id: payload.read_entity_id()? })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_entity_id(self.target_id)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SetCombatant {
+    pub target_id: Option<EntityId>,
+}
+
+impl Packet for SetCombatant {
+    fn packet_kind() -> u8 { 0xaa }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(5) }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let raw_target_id = payload.read_u32::<Endian>()?;
+        let target_id = if raw_target_id != 0 {
+            Some(EntityId::from_u32(raw_target_id))
+        } else {
+            None
+        };
+
+        Ok(Self { target_id })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        if let Some(id) = self.target_id {
+            writer.write_entity_id(id)?;
+        } else {
+            writer.write_u32::<Endian>(0)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Attack {
+    pub attacker_id: EntityId,
+    pub target_id: EntityId,
+}
+
+impl Packet for Attack {
+    fn packet_kind() -> u8 { 0x2f }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(10) }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        payload.read_u8()?;
+        let attacker_id = payload.read_entity_id()?;
+        let target_id = payload.read_entity_id()?;
+        Ok(Self { attacker_id, target_id })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_u8(0)?;
+        writer.write_entity_id(self.attacker_id)?;
+        writer.write_entity_id(self.target_id)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DamageDealt {
+    pub target_id: EntityId,
+    pub damage: u16,
+}
+
+impl Packet for DamageDealt {
+    fn packet_kind() -> u8 { 0x0b }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(7) }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let target_id = payload.read_entity_id()?;
+        let damage = payload.read_u16::<Endian>()?;
+        Ok(Self { target_id, damage})
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_entity_id(self.target_id)?;
+        writer.write_u16::<Endian>(self.damage)?;
+        Ok(())
+    }
+}

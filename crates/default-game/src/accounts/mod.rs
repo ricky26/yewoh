@@ -200,6 +200,17 @@ pub fn handle_spawn_character(
             })
             .id();
 
+        let knife_entity = commands.spawn()
+            .insert(NetEntity { id: entity_allocator.allocate_item() })
+            .insert(Flags { flags: EntityFlags::default() })
+            .insert(Graphic { id: 0xec3, hue: 16 })
+            .insert(Tooltip {
+                entries: vec![
+                    EntityTooltipLine { text_id: 1042971, params: "Stabby stabby".into() },
+                ],
+            })
+            .id();
+
         let backpack_entity = commands.spawn()
             .insert(NetEntity { id: entity_allocator.allocate_item() })
             .insert(Flags::default())
@@ -227,6 +238,7 @@ pub fn handle_spawn_character(
             (EquipmentSlot::Top, top_entity),
             (EquipmentSlot::Bottom, bottom_entity),
             (EquipmentSlot::Shoes, shoes_entity),
+            (EquipmentSlot::MainHand, knife_entity),
         ];
 
         if info.hair != 0 {

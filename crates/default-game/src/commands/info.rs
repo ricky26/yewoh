@@ -1,6 +1,7 @@
 use bevy_ecs::archetype::Archetypes;
 use bevy_ecs::component::Components;
 use bevy_ecs::prelude::*;
+use bevy_reflect::prelude::*;
 use clap::Parser;
 
 use yewoh::protocol::{MessageKind, TargetType, UnicodeTextMessage};
@@ -18,7 +19,7 @@ impl TextCommand for Info {
     }
 }
 
-#[derive(Debug, Clone, Copy, Component)]
+#[derive(Debug, Clone, Copy, Component, Reflect)]
 pub struct ShowInfoCommand;
 
 pub fn info(

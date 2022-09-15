@@ -1,19 +1,20 @@
 use bevy_ecs::prelude::*;
+use bevy_reflect::prelude::*;
 
-use yewoh::protocol::{CharacterProfile, ContextMenuEntry, MoveConfirm, MoveEntityReject, OpenContainer, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind};
-use yewoh_server::world::entity::{Character, Container, EquippedBy, Graphic, MapPosition, Notorious, ParentContainer, Quantity};
-use yewoh_server::world::events::{ContextMenuEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, RequestSkillsEvent, SingleClickEvent};
+use yewoh::protocol::{Attack, CharacterProfile, ContextMenuEntry, DamageDealt, EntityFlags, MoveConfirm, MoveEntityReject, OpenContainer, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, WarMode};
+use yewoh_server::world::entity::{Character, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer, Quantity};
+use yewoh_server::world::events::{ContextMenuEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SingleClickEvent};
 use yewoh_server::world::input::ContextMenuRequest;
 use yewoh_server::world::map::Chunk;
 use yewoh_server::world::net::{make_container_contents_packet, NetClient, NetEntity, NetEntityLookup, NetOwned, PlayerState};
 use yewoh_server::world::spatial::EntitySurfaces;
 
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, Component, Reflect)]
 pub struct Held {
     pub held_entity: Entity,
 }
 
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, Component, Reflect)]
 pub struct Holder {
     pub held_by: Entity,
 }
@@ -304,6 +305,9 @@ pub fn handle_equip(
 }
 
 pub fn handle_context_menu(
+    lookup: Res<NetEntityLookup>,
+    clients: Query<(&NetClient, &NetOwned)>,
+    characters: Query<&NetEntity>,
     mut context_requests: Query<&mut ContextMenuRequest>,
     mut context_events: EventReader<ContextMenuEvent>,
 ) {
@@ -316,8 +320,30 @@ pub fn handle_context_menu(
         });
     }
 
-    for ContextMenuEvent { target, .. } in context_events.iter() {
-        log::info!("Context on {:?}", target);
+    for ContextMenuEvent { client_entity, target, .. } in context_events.iter() {
+        let (client, owned) = match clients.get(*client_entity) {
+            Ok(x) => x,
+            _ => continue,
+        };
+
+        let net = match characters.get(owned.primary_entity) {
+            Ok(x) => x,
+            _ => continue,
+        };
+
+        let target_id = match lookup.ecs_to_net(*target) {
+            Some(x) => x,
+            _ => continue,
+        };
+
+        client.send_packet(Attack {
+            attacker_id: net.id,
+            target_id,
+        }.into());
+        client.send_packet(DamageDealt {
+            target_id,
+            damage: 1337,
+        }.into());
     }
 }
 
@@ -370,5 +396,36 @@ pub fn handle_skills_requests(
                 }
             ]
         }).into());
+    }
+}
+
+pub fn handle_war_mode(
+    clients: Query<(&NetClient, &NetOwned)>,
+    mut characters: Query<&mut Flags>,
+    mut new_packets: EventReader<ReceivedPacketEvent>,
+) {
+    for ReceivedPacketEvent { client_entity, packet } in new_packets.iter() {
+        let packet = match packet.downcast::<WarMode>() {
+            Some(x) => x,
+            _ => continue,
+        };
+
+        let (client, owned) = match clients.get(*client_entity) {
+            Ok(x) => x,
+            _ => continue,
+        };
+
+        let mut flags = match characters.get_mut(owned.primary_entity) {
+            Ok(x) => x,
+            _ => continue,
+        };
+
+        if packet.war {
+            flags.flags |= EntityFlags::WAR_MODE;
+        } else {
+            flags.flags &= !EntityFlags::WAR_MODE;
+        }
+
+        client.send_packet(packet.clone().into());
     }
 }

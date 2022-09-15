@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use bevy_ecs::prelude::*;
+use bevy_reflect::prelude::*;
 use glam::UVec2;
 
 use yewoh::protocol::{BeginEnterWorld, ChangeSeason, EndEnterWorld, ExtendedCommand, SetTime};
@@ -10,20 +11,20 @@ use crate::world::events::NewPrimaryEntityEvent;
 use crate::world::net::connection::NetClient;
 use crate::world::net::entity::NetEntity;
 
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, Component, Reflect)]
 pub struct NetOwned {
     pub primary_entity: Entity,
 }
 
-#[derive(Debug, Clone, Copy, Component)]
+#[derive(Debug, Clone, Copy, Component, Reflect)]
 pub struct NetOwner {
     pub client_entity: Entity,
 }
 
-#[derive(Debug, Clone, Copy, Component)]
+#[derive(Debug, Clone, Copy, Component, Reflect)]
 pub struct NetSynchronizing;
 
-#[derive(Debug, Clone, Copy, Component)]
+#[derive(Debug, Clone, Copy, Component, Reflect)]
 pub struct NetSynchronized;
 
 #[derive(Debug, Clone)]

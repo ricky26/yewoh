@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use bevy_ecs::prelude::*;
+use bevy_reflect::prelude::*;
 use log::{info, warn};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
@@ -28,7 +29,7 @@ pub struct NetClient {
     tx: mpsc::UnboundedSender<WriterAction>,
 }
 
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, Component, Reflect)]
 pub struct User {
     pub username: String,
 }
@@ -50,7 +51,7 @@ impl NetClient {
     }
 }
 
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, Component, Reflect)]
 pub struct NetInWorld;
 
 pub struct NetServer {

@@ -1,6 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
 use bevy_ecs::prelude::*;
+use bevy_reflect::prelude::*;
 use glam::{IVec2, IVec3};
 
 use yewoh::{Direction, EntityId, Notoriety};
@@ -24,7 +25,7 @@ impl DerefMut for Notorious {
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Component)]
+#[derive(Debug, Clone, Eq, PartialEq, Component, Reflect)]
 pub struct Character {
     pub body_type: u16,
     pub hue: u16,
@@ -37,18 +38,18 @@ pub struct EquippedBy {
     pub slot: EquipmentSlot,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Component)]
+#[derive(Debug, Clone, Eq, PartialEq, Component, Reflect)]
 pub struct Quantity {
     pub quantity: u16,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Component)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Component, Reflect)]
 pub struct Graphic {
     pub id: u16,
     pub hue: u16,
 }
 
-#[derive(Debug, Clone, Copy, Component)]
+#[derive(Debug, Clone, Copy, Component, Reflect)]
 pub struct Multi {
     pub id: u16,
 }
@@ -60,20 +61,20 @@ pub struct MapPosition {
     pub direction: Direction,
 }
 
-#[derive(Debug, Clone, Default, Component)]
+#[derive(Debug, Clone, Default, Component, Reflect)]
 pub struct Container {
     pub gump_id: u16,
     pub items: Vec<Entity>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Component)]
+#[derive(Debug, Clone, Eq, PartialEq, Component, Reflect)]
 pub struct ParentContainer {
     pub parent: Entity,
     pub position: IVec2,
     pub grid_index: u8,
 }
 
-#[derive(Debug, Clone, Default, Component)]
+#[derive(Debug, Clone, Default, Component, Reflect)]
 pub struct Stats {
     pub name: String,
     pub race_and_gender: u8,

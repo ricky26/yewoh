@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 
 use bevy_ecs::prelude::*;
+use bevy_reflect::prelude::*;
 use glam::IVec3;
 
 use yewoh::protocol::{ContextMenu, ContextMenuEntry, ExtendedCommand, PickTarget, TargetType};
@@ -14,7 +15,7 @@ pub struct WorldTargetRequest {
     pub target_type: TargetType,
 }
 
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, Component, Reflect)]
 pub struct WorldTargetResponse {
     pub position: Option<IVec3>,
 }
@@ -25,7 +26,7 @@ pub struct EntityTargetRequest {
     pub target_type: TargetType,
 }
 
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, Component, Reflect)]
 pub struct EntityTargetResponse {
     pub target: Option<Entity>,
 }

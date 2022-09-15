@@ -209,6 +209,10 @@ fn packet_registry() -> &'static PacketRegistry {
             // Character
             PacketRegistration::for_type::<CharacterProfile>(),
             PacketRegistration::for_type::<Skills>(),
+            PacketRegistration::for_type::<AttackRequest>(),
+            PacketRegistration::for_type::<SetCombatant>(),
+            PacketRegistration::for_type::<Attack>(),
+            PacketRegistration::for_type::<DamageDealt>(),
         ].into_iter() {
             max_size = registration.size.max(max_size);
             let index = registration.packet_kind as usize;
