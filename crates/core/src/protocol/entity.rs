@@ -993,3 +993,27 @@ impl Packet for RequestName {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct RenameEntity {
+    pub target_id: EntityId,
+    pub name: String,
+}
+
+impl Packet for RenameEntity {
+    fn packet_kind() -> u8 { 0x75 }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(35) }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let target_id = payload.read_entity_id()?;
+        let name = payload.read_str_block(30)?;
+        Ok(Self { target_id, name })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_entity_id(self.target_id)?;
+        writer.write_str_block(&self.name, 30)?;
+        Ok(())
+    }
+}
