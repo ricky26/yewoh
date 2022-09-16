@@ -206,6 +206,7 @@ fn packet_registry() -> &'static PacketRegistry {
             PacketRegistration::for_type::<EntityTooltipVersion>(),
             PacketRegistration::for_type::<EntityTooltip>(),
             PacketRegistration::for_type::<UpsertEntityStats>(),
+            PacketRegistration::for_type::<RequestName>(),
 
             // Character
             PacketRegistration::for_type::<CharacterProfile>(),

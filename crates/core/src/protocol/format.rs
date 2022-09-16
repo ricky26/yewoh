@@ -16,6 +16,7 @@ pub trait PacketWriteExt {
     fn write_str_nul(&mut self, src: &str) -> anyhow::Result<()>;
     fn write_utf16_nul(&mut self, src: &str) -> anyhow::Result<()>;
     fn write_utf16_pascal(&mut self, src: &str) -> anyhow::Result<()>;
+    fn write_utf16le_nul(&mut self, src: &str) -> anyhow::Result<()>;
     fn write_utf16le_pascal(&mut self, src: &str) -> anyhow::Result<()>;
     fn write_entity_id(&mut self, src: EntityId) -> anyhow::Result<()>;
     fn write_direction(&mut self, src: Direction) -> anyhow::Result<()>;
@@ -64,6 +65,14 @@ impl<T: Write> PacketWriteExt for T {
         Ok(())
     }
 
+    fn write_utf16le_nul(&mut self, src: &str) -> anyhow::Result<()> {
+        for c in src.encode_utf16() {
+            self.write_u16::<Endian>(c)?;
+        }
+        self.write_u16::<Endian>(0)?;
+        Ok(())
+    }
+
     fn write_utf16le_pascal(&mut self, src: &str) -> anyhow::Result<()> {
         let len = src.encode_utf16().count();
         self.write_u16::<LE>(len as u16)?;
@@ -88,6 +97,7 @@ pub trait PacketReadExt {
     fn read_str_nul(&mut self) -> anyhow::Result<String>;
     fn read_utf16_nul(&mut self) -> anyhow::Result<String>;
     fn read_utf16_pascal(&mut self) -> anyhow::Result<String>;
+    fn read_utf16le_nul(&mut self) -> anyhow::Result<String>;
     fn read_utf16le_pascal(&mut self) -> anyhow::Result<String>;
     fn read_entity_id(&mut self) -> anyhow::Result<EntityId>;
     fn read_direction(&mut self) -> anyhow::Result<Direction>;
@@ -149,6 +159,21 @@ impl PacketReadExt for &[u8] {
         let result = utf16_slice_to_string(bytes);
         *self = &self[len * 2..];
         Ok(result)
+    }
+
+    fn read_utf16le_nul(&mut self) -> anyhow::Result<String> {
+        if let Some(idx) = self.windows(2).position(|window| window == [0, 0]) {
+            let result = self[..idx]
+                .chunks_exact(2)
+                .map(|c| LE::read_u16(c))
+                .to_utf16chars()
+                .map(|r| r.unwrap_or(Utf16Char::from('\u{fffd}')))
+                .collect();
+            *self = &self[idx + 2..];
+            Ok(result)
+        } else {
+            Err(anyhow!("unexpected EOF"))
+        }
     }
 
     fn read_utf16le_pascal(&mut self) -> anyhow::Result<String> {

@@ -551,7 +551,7 @@ impl Packet for EntityTooltip {
             loop {
                 let text_id = payload.read_u32::<Endian>()?;
                 if text_id == 0 {
-                    break
+                    break;
                 }
 
                 let params = payload.read_utf16le_pascal()?;
@@ -637,7 +637,7 @@ impl Packet for UpsertEntityContained {
             position: IVec2::new(x, y),
             grid_index,
             parent_id: container_id,
-            hue
+            hue,
         })
     }
 
@@ -956,12 +956,40 @@ impl Packet for DamageDealt {
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let target_id = payload.read_entity_id()?;
         let damage = payload.read_u16::<Endian>()?;
-        Ok(Self { target_id, damage})
+        Ok(Self { target_id, damage })
     }
 
     fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.target_id)?;
         writer.write_u16::<Endian>(self.damage)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RequestName {
+    pub target_id: EntityId,
+    pub name: String,
+}
+
+impl Packet for RequestName {
+    fn packet_kind() -> u8 { 0x98 }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let target_id = payload.read_entity_id()?;
+        let name = if !payload.is_empty() {
+            payload.read_str_nul()?
+        } else {
+            String::new()
+        };
+        Ok(Self { target_id, name })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_entity_id(self.target_id)?;
+        writer.write_str_nul(&self.name)?;
         Ok(())
     }
 }
