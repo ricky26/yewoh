@@ -474,6 +474,7 @@ pub fn sync_entities(
     world_items: Query<(&NetEntity, &WorldItemState)>,
     contained_items: Query<(&NetEntity, &ContainedItemState)>,
     equipped_items: Query<(&NetEntity, &EquippedItemState)>,
+    stats: Query<(&NetEntity, &Stats)>,
     tooltips: Query<&NetEntity, With<Tooltip>>,
     all_equipment_query: Query<(&NetEntity, &Graphic, &EquippedBy)>,
 ) {
@@ -491,6 +492,10 @@ pub fn sync_entities(
 
     for (net, state) in contained_items.iter() {
         broadcast(clients.iter(), state.to_update(net.id).into_arc());
+    }
+
+    for (net, stats) in stats.iter() {
+        broadcast(clients.iter(), stats.upsert(net.id, true).into_arc());
     }
 
     for net in tooltips.iter() {
