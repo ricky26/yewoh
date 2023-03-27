@@ -12,3 +12,5 @@ mod registration;
 pub mod test;
 
 pub mod info;
+
+pub mod go;

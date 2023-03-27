@@ -1,13 +1,33 @@
+use std::sync::Arc;
+
 use bevy_ecs::prelude::*;
 use glam::IVec2;
 
 use yewoh::{EntityId, EntityKind, Notoriety};
-use yewoh::protocol::{CharacterEquipment, DeleteEntity, EntityFlags, EntityTooltipVersion, EquipmentSlot, Packet, UpsertContainerContents, UpsertEntityCharacter, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityWorld, UpsertLocalPlayer};
+use yewoh::protocol::{AnyPacket, CharacterEquipment, DeleteEntity, EntityFlags, EntityTooltipVersion, EquipmentSlot, Packet, UpsertContainerContents, UpsertEntityCharacter, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityWorld, UpsertLocalPlayer};
 
 use crate::world::entity::{Character, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer, Quantity, Stats, Tooltip};
-use crate::world::net::{broadcast, NetClient, NetEntity, NetEntityLookup, NetOwner};
+use crate::world::net::{CanSee, HasSeen, NetClient, NetEntity, NetEntityLookup, NetOwner, NetSynchronized};
 use crate::world::net::owner::NetSynchronizing;
 use crate::world::time::Tick;
+
+fn send_update<'a>(
+    mut clients: impl Iterator<Item=(&'a NetClient, &'a CanSee, Mut<'a, HasSeen>)>,
+    entity: Entity,
+    update_packet_factory: impl FnOnce() -> Arc<AnyPacket>,
+) {
+    let mut update_packet_factory = Some(update_packet_factory);
+    let mut update_packet = None;
+
+    for (client, can_see, mut has_seen) in &mut clients {
+        let can_see = can_see.entities.contains(&entity);
+        if can_see {
+            has_seen.entities.insert(entity);
+            let packet = update_packet.get_or_insert_with(update_packet_factory.take().unwrap()).clone();
+            client.send_packet_arc(packet);
+        }
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Component)]
 pub struct PlayerState {
@@ -108,13 +128,13 @@ impl WorldItemState {
 }
 
 pub fn update_items_in_world(
-    clients: Query<&NetClient>,
+    mut clients: Query<(&NetClient, &CanSee, &mut HasSeen), With<NetSynchronized>>,
     new_items: Query<
         (Entity, &NetEntity, &Flags, &Graphic, &MapPosition, Option<&Quantity>),
         Without<WorldItemState>,
     >,
     mut updated_items: Query<
-        (&mut WorldItemState, &NetEntity, &Flags, &Graphic, &MapPosition, Option<&Quantity>),
+        (Entity, &mut WorldItemState, &NetEntity, &Flags, &Graphic, &MapPosition, Option<&Quantity>),
         Or<(Changed<Graphic>, Changed<MapPosition>, Changed<Quantity>)>,
     >,
     removed_items: Query<
@@ -133,11 +153,14 @@ pub fn update_items_in_world(
             quantity,
             flags: flags.flags,
         };
-        broadcast(clients.iter(), state.to_update(net.id).into_arc());
+        send_update(
+            clients.iter_mut(),
+            entity,
+            || state.to_update(net.id).into_arc());
         commands.entity(entity).insert(state);
     }
 
-    for (mut state, net, flags, graphic, position, quantity) in updated_items.iter_mut() {
+    for (entity, mut state, net, flags, graphic, position, quantity) in updated_items.iter_mut() {
         let graphic = *graphic;
         let position = *position;
         let quantity = quantity.map_or(1, |q| q.quantity);
@@ -151,7 +174,10 @@ pub fn update_items_in_world(
             continue;
         }
         *state = new_state;
-        broadcast(clients.iter(), state.to_update(net.id).into_arc());
+        send_update(
+            clients.iter_mut(),
+            entity,
+            || state.to_update(net.id).into_arc());
     }
 
     for entity in removed_items.iter() {
@@ -184,14 +210,14 @@ impl ContainedItemState {
 }
 
 pub fn update_items_in_containers(
-    clients: Query<&NetClient>,
+    mut clients: Query<(&NetClient, &CanSee, &mut HasSeen), With<NetSynchronized>>,
     net_entities: Query<&NetEntity>,
     new_items: Query<
         (Entity, &NetEntity, &Graphic, &ParentContainer, Option<&Quantity>),
         Without<ContainedItemState>,
     >,
     mut updated_items: Query<
-        (&mut ContainedItemState, &NetEntity, &Graphic, &ParentContainer, Option<&Quantity>),
+        (Entity, &mut ContainedItemState, &NetEntity, &Graphic, &ParentContainer, Option<&Quantity>),
         Or<(Changed<Graphic>, Changed<ParentContainer>, Changed<Quantity>)>,
     >,
     removed_items: Query<
@@ -214,11 +240,14 @@ pub fn update_items_in_containers(
             grid_index: parent.grid_index,
             quantity,
         };
-        broadcast(clients.iter(), state.to_update(net.id).into_arc());
+        send_update(
+            clients.iter_mut(),
+            entity,
+            || state.to_update(net.id).into_arc());
         commands.entity(entity).insert(state);
     }
 
-    for (mut state, net, graphic, parent, quantity) in updated_items.iter_mut() {
+    for (entity, mut state, net, graphic, parent, quantity) in updated_items.iter_mut() {
         let parent_id = match net_entities.get(parent.parent) {
             Ok(x) => x.id,
             _ => continue,
@@ -236,7 +265,10 @@ pub fn update_items_in_containers(
             continue;
         }
         *state = new_state;
-        broadcast(clients.iter(), state.to_update(net.id).into_arc());
+        send_update(
+            clients.iter_mut(),
+            entity,
+            || state.to_update(net.id).into_arc());
     }
 
     for entity in removed_items.iter() {
@@ -264,14 +296,14 @@ impl EquippedItemState {
 }
 
 pub fn update_equipped_items(
-    clients: Query<&NetClient>,
+    mut clients: Query<(&NetClient, &CanSee, &mut HasSeen), With<NetSynchronized>>,
     net_entities: Query<&NetEntity>,
     new_items: Query<
         (Entity, &NetEntity, &Graphic, &EquippedBy),
         Without<EquippedItemState>,
     >,
     mut updated_items: Query<
-        (&mut EquippedItemState, &NetEntity, &Graphic, &EquippedBy),
+        (Entity, &mut EquippedItemState, &NetEntity, &Graphic, &EquippedBy),
         Or<(Changed<Graphic>, Changed<EquippedBy>)>,
     >,
     removed_items: Query<
@@ -291,11 +323,14 @@ pub fn update_equipped_items(
             slot: equipped.slot,
             graphic,
         };
-        broadcast(clients.iter(), state.to_update(net.id).into_arc());
+        send_update(
+            clients.iter_mut(),
+            entity,
+            || state.to_update(net.id).into_arc());
         commands.entity(entity).insert(state);
     }
 
-    for (mut state, net, graphic, equipped) in updated_items.iter_mut() {
+    for (entity, mut state, net, graphic, equipped) in updated_items.iter_mut() {
         let parent_id = match net_entities.get(equipped.parent) {
             Ok(x) => x.id,
             _ => continue,
@@ -310,7 +345,10 @@ pub fn update_equipped_items(
             continue;
         }
         *state = new_state;
-        broadcast(clients.iter(), state.to_update(net.id).into_arc());
+        send_update(
+            clients.iter_mut(),
+            entity,
+            || state.to_update(net.id).into_arc());
     }
 
     for entity in removed_items.iter() {
@@ -361,13 +399,13 @@ impl CharacterState {
 }
 
 pub fn update_characters(
-    clients: Query<&NetClient>,
+    mut clients: Query<(&NetClient, &CanSee, &mut HasSeen), With<NetSynchronized>>,
     new_characters: Query<
         (Entity, &NetEntity, &Flags, &Character, &MapPosition, &Notorious),
         Without<CharacterState>,
     >,
     mut updated_characters: Query<
-        (&mut CharacterState, &NetEntity, &Flags, &Character, &MapPosition, &Notorious),
+        (Entity, &mut CharacterState, &NetEntity, &Flags, &Character, &MapPosition, &Notorious),
         Or<(Changed<Character>, Changed<MapPosition>, Changed<Notorious>)>,
     >,
     removed_characters: Query<
@@ -387,11 +425,14 @@ pub fn update_characters(
             notoriety,
             flags: flags.flags,
         };
-        broadcast(clients.iter(), state.to_update(net.id, &all_equipment_query).into_arc());
+        send_update(
+            clients.iter_mut(),
+            entity,
+            || state.to_update(net.id, &all_equipment_query).into_arc());
         commands.entity(entity).insert(state);
     }
 
-    for (mut state, net, flags, character, position, notorious) in updated_characters.iter_mut() {
+    for (entity, mut state, net, flags, character, position, notorious) in updated_characters.iter_mut() {
         let character = character.clone();
         let position = *position;
         let notoriety = notorious.0;
@@ -405,7 +446,10 @@ pub fn update_characters(
             continue;
         }
         *state = new_state;
-        broadcast(clients.iter(), state.to_update(net.id, &all_equipment_query).into_arc());
+        send_update(
+            clients.iter_mut(),
+            entity,
+            || state.to_update(net.id, &all_equipment_query).into_arc());
     }
 
     for entity in removed_characters.iter() {
@@ -443,9 +487,27 @@ pub fn make_container_contents_packet(
     }
 }
 
+pub fn send_hidden_entities(
+    lookup: Res<NetEntityLookup>,
+    mut clients: Query<(&NetClient, &CanSee, &mut HasSeen), Changed<CanSee>>,
+) {
+    for (client, can_see, mut has_seen) in &mut clients {
+        let to_remove = has_seen.entities.difference(&can_see.entities)
+            .cloned()
+            .collect::<Vec<_>>();
+        for entity in to_remove {
+            has_seen.entities.remove(&entity);
+
+            if let Some(id) = lookup.ecs_to_net(entity) {
+                client.send_packet(DeleteEntity { id }.into());
+            }
+        }
+    }
+}
+
 pub fn send_remove_entity(
     lookup: Res<NetEntityLookup>,
-    clients: Query<&NetClient>,
+    mut clients: Query<(&NetClient, &mut HasSeen)>,
     removals: RemovedComponents<NetEntity>,
 ) {
     for entity in removals.iter() {
@@ -454,68 +516,105 @@ pub fn send_remove_entity(
             None => continue,
         };
 
-        broadcast(clients.iter(), DeleteEntity { id }.into_arc());
+        let mut packet = None;
+        for (client, mut has_seen) in &mut clients {
+            if !has_seen.entities.contains(&entity) {
+                continue;
+            }
+
+            has_seen.entities.remove(&entity);
+            let packet = packet.get_or_insert_with(|| DeleteEntity { id }.into_arc()).clone();
+            client.send_packet_arc(packet);
+        }
     }
 }
 
 pub fn send_updated_stats(
-    clients: Query<&NetClient>,
-    query: Query<(&NetEntity, &Stats), Changed<Stats>>,
+    mut clients: Query<(&NetClient, &CanSee, &mut HasSeen), With<NetSynchronized>>,
+    query: Query<(Entity, &NetEntity, &Stats), Changed<Stats>>,
 ) {
-    for (net, stats) in query.iter() {
-        broadcast(clients.iter(), stats.upsert(net.id, true).into_arc());
+    for (entity, net, stats) in &query {
+        send_update(
+            clients.iter_mut(),
+            entity,
+            || stats.upsert(net.id, true).into_arc());
     }
 }
 
 pub fn sync_entities(
     tick: Res<Tick>,
-    clients: Query<&NetClient, With<NetSynchronizing>>,
-    characters: Query<(&NetEntity, &CharacterState)>,
-    world_items: Query<(&NetEntity, &WorldItemState)>,
-    contained_items: Query<(&NetEntity, &ContainedItemState)>,
-    equipped_items: Query<(&NetEntity, &EquippedItemState)>,
-    stats: Query<(&NetEntity, &Stats)>,
-    tooltips: Query<&NetEntity, With<Tooltip>>,
+    mut clients: Query<(&NetClient, &CanSee, &mut HasSeen), With<NetSynchronizing>>,
+    characters: Query<(Entity, &NetEntity, &CharacterState)>,
+    world_items: Query<(Entity, &NetEntity, &WorldItemState)>,
+    contained_items: Query<(Entity, &NetEntity, &ContainedItemState)>,
+    equipped_items: Query<(Entity, &NetEntity, &EquippedItemState)>,
+    stats: Query<(Entity, &NetEntity, &Stats)>,
+    tooltips: Query<(Entity, &NetEntity), With<Tooltip>>,
     all_equipment_query: Query<(&NetEntity, &Graphic, &EquippedBy)>,
 ) {
-    for (net, state) in characters.iter() {
-        broadcast(clients.iter(), state.to_update(net.id, &all_equipment_query).into_arc());
+    if clients.is_empty() {
+        return;
     }
 
-    for (net, state) in equipped_items.iter() {
-        broadcast(clients.iter(), state.to_update(net.id).into_arc());
+    for (entity, net, state) in characters.iter() {
+        send_update(
+            clients.iter_mut(),
+            entity,
+            || state.to_update(net.id, &all_equipment_query).into_arc());
     }
 
-    for (net, state) in world_items.iter() {
-        broadcast(clients.iter(), state.to_update(net.id).into_arc());
+    for (entity, net, state) in equipped_items.iter() {
+        send_update(
+            clients.iter_mut(),
+            entity,
+            || state.to_update(net.id).into_arc());
     }
 
-    for (net, state) in contained_items.iter() {
-        broadcast(clients.iter(), state.to_update(net.id).into_arc());
+    for (entity, net, state) in world_items.iter() {
+        send_update(
+            clients.iter_mut(),
+            entity,
+            || state.to_update(net.id).into_arc());
     }
 
-    for (net, stats) in stats.iter() {
-        broadcast(clients.iter(), stats.upsert(net.id, true).into_arc());
+    for (entity, net, state) in contained_items.iter() {
+        send_update(
+            clients.iter_mut(),
+            entity,
+            || state.to_update(net.id).into_arc());
     }
 
-    for net in tooltips.iter() {
-        broadcast(clients.iter(), EntityTooltipVersion {
-            id: net.id,
-            revision: tick.tick,
-        }.into_arc());
+    for (entity, net, stats) in stats.iter() {
+        send_update(
+            clients.iter_mut(),
+            entity,
+            || stats.upsert(net.id, true).into_arc());
+    }
+
+    for (entity, net) in tooltips.iter() {
+        send_update(
+            clients.iter_mut(),
+            entity,
+            || EntityTooltipVersion {
+                id: net.id,
+                revision: tick.tick,
+            }.into_arc());
     }
 }
 
 pub fn update_tooltips(
     tick: Res<Tick>,
-    clients: Query<&NetClient>,
-    tooltips: Query<&NetEntity, Changed<Tooltip>>,
+    mut clients: Query<(&NetClient, &CanSee, &mut HasSeen)>,
+    tooltips: Query<(Entity, &NetEntity), Changed<Tooltip>>,
 ) {
     let tick = tick.tick;
-    for net in tooltips.iter() {
-        broadcast(clients.iter(), EntityTooltipVersion {
-            id: net.id,
-            revision: tick,
-        }.into_arc());
+    for (entity, net) in tooltips.iter() {
+        send_update(
+            clients.iter_mut(),
+            entity,
+            || EntityTooltipVersion {
+                id: net.id,
+                revision: tick,
+            }.into_arc());
     }
 }

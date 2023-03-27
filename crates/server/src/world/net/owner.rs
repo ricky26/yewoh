@@ -1,10 +1,10 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bevy_ecs::prelude::*;
 use bevy_reflect::prelude::*;
-use glam::UVec2;
+use glam::{IVec3, UVec2};
 
-use yewoh::protocol::{BeginEnterWorld, ChangeSeason, EndEnterWorld, ExtendedCommand, SetTime};
+use yewoh::protocol::{BeginEnterWorld, ChangeSeason, EndEnterWorld, ExtendedCommand};
 
 use crate::world::entity::{Character, MapPosition};
 use crate::world::events::NewPrimaryEntityEvent;
@@ -21,11 +21,30 @@ pub struct NetOwner {
     pub client_entity: Entity,
 }
 
+#[derive(Debug, Clone, Component, Reflect)]
+pub struct View {
+    pub map_id: u8,
+    pub position: IVec3,
+}
+
+#[derive(Debug, Clone, Component)]
+pub struct CanSee {
+    pub entities: HashSet<Entity>,
+}
+
+#[derive(Debug, Clone, Component)]
+pub struct HasSeen {
+    pub entities: HashSet<Entity>,
+}
+
 #[derive(Debug, Clone, Copy, Component, Reflect)]
 pub struct NetSynchronizing;
 
 #[derive(Debug, Clone, Copy, Component, Reflect)]
 pub struct NetSynchronized;
+
+#[derive(Debug, Clone, Copy, Component, Reflect)]
+pub struct EnteredWorld;
 
 #[derive(Debug, Clone)]
 pub struct MapInfo {
@@ -47,8 +66,8 @@ pub fn start_synchronizing(
     mut commands: Commands,
 ) {
     for event in events.iter() {
-        let entity = event.client_entity;
-        let (client, owned) = match clients.get(entity) {
+        let client_entity = event.client_entity;
+        let (client, owned) = match clients.get(client_entity) {
             Ok(x) => x,
             _ => continue,
         };
@@ -65,13 +84,13 @@ pub fn start_synchronizing(
         let primary_entity = match event.primary_entity {
             Some(x) => x,
             None => {
-                commands.entity(entity).remove::<NetOwned>();
+                commands.entity(client_entity).remove::<NetOwned>();
                 continue;
             }
         };
 
-        commands.entity(primary_entity).insert(NetOwner { client_entity: entity });
-        commands.entity(entity)
+        commands.entity(primary_entity).insert(NetOwner { client_entity });
+        commands.entity(client_entity)
             .insert(NetOwned { primary_entity })
             .remove::<NetSynchronized>()
             .insert(NetSynchronizing);
@@ -92,6 +111,8 @@ pub fn start_synchronizing(
         let entity_id = primary_net.id;
         let body_type = character.body_type;
 
+        commands.entity(client_entity)
+            .insert(View { map_id, position });
         client.send_packet(BeginEnterWorld {
             entity_id,
             body_type,
@@ -104,19 +125,50 @@ pub fn start_synchronizing(
     }
 }
 
-pub fn finish_synchronizing(
-    clients: Query<(Entity, &NetClient), With<NetSynchronizing>>,
+pub fn update_view(
+    maps: Res<MapInfos>,
+    mut clients: Query<(Entity, &NetClient, &mut View)>,
+    characters: Query<(&NetOwner, &MapPosition), Changed<MapPosition>>,
     mut commands: Commands,
 ) {
-    for (entity, client) in clients.iter() {
+    for (owner, MapPosition { map_id, position, .. }) in characters.iter() {
+        let (entity, client, mut view) = match clients.get_mut(owner.client_entity) {
+            Ok(x) => x,
+            _ => continue,
+        };
+
+        let map_id = *map_id;
+        view.position = *position;
+        if view.map_id == map_id {
+            continue;
+        }
+
+        view.map_id = map_id;
+        let map = match maps.maps.get(&map_id) {
+            Some(v) => v,
+            None => continue,
+        };
+
+        commands.entity(entity)
+            .remove::<NetSynchronized>()
+            .insert(NetSynchronizing);
+        client.send_packet(ExtendedCommand::ChangeMap(map_id).into());
+        client.send_packet(ChangeSeason { season: map.season, play_sound: true }.into());
+    }
+}
+
+pub fn finish_synchronizing(
+    clients: Query<(Entity, &NetClient, Option<&EnteredWorld>), With<NetSynchronizing>>,
+    mut commands: Commands,
+) {
+    for (entity, client, entered_world) in clients.iter() {
         commands.entity(entity)
             .remove::<NetSynchronizing>()
-            .insert(NetSynchronized);
-        client.send_packet(EndEnterWorld.into());
-        client.send_packet(SetTime {
-            hour: 12,
-            minute: 16,
-            second: 31,
-        }.into());
+            .insert(NetSynchronized)
+            .insert(EnteredWorld);
+
+        if entered_world.is_none() {
+            client.send_packet(EndEnterWorld.into());
+        }
     }
 }

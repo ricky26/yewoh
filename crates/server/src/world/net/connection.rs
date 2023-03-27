@@ -52,7 +52,7 @@ impl NetClient {
 }
 
 #[derive(Debug, Clone, Component, Reflect)]
-pub struct NetInWorld;
+pub struct SentCharacterList;
 
 pub struct NetServer {
     encrypted: bool,
@@ -264,8 +264,7 @@ pub fn handle_new_packets(
 }
 
 pub fn handle_login_packets(
-    clients: Query<&NetClient>,
-    in_world: Query<&NetInWorld>,
+    clients: Query<(&NetClient, Option<&SentCharacterList>)>,
     mut events: EventReader<ReceivedPacketEvent>,
     mut character_list_events: EventWriter<CharacterListEvent>,
     mut character_creation_events: EventWriter<CreateCharacterEvent>,
@@ -274,14 +273,14 @@ pub fn handle_login_packets(
 ) {
     for ReceivedPacketEvent { client_entity: connection, packet } in events.iter() {
         let connection = *connection;
-        let client = match clients.get(connection) {
+        let (client, sent_character_list) = match clients.get(connection) {
             Ok(x) => x,
             _ => continue,
         };
 
         if let Some(_version_response) = packet.downcast::<ClientVersionRequest>() {
-            if !in_world.contains(connection) {
-                commands.entity(connection).insert(NetInWorld);
+            if sent_character_list.is_none() {
+                commands.entity(connection).insert(SentCharacterList);
 
                 client.send_packet(SupportedFeatures {
                     feature_flags: FeatureFlags::T2A

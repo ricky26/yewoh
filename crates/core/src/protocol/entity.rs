@@ -693,6 +693,55 @@ impl Packet for UpsertContainerContents {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ContainerEquipment {
+    pub id: EntityId,
+    pub slot: EquipmentSlot,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct UpsertContainerEquipment {
+    pub container_id: EntityId,
+    pub equipment: Vec<ContainerEquipment>,
+}
+
+impl Packet for UpsertContainerEquipment {
+    fn packet_kind() -> u8 { 0x89 }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let container_id = payload.read_entity_id()?;
+        let mut equipment = Vec::new();
+
+        loop {
+            let raw_slot = payload.read_u8()?;
+            if raw_slot == 0 {
+                break;
+            }
+
+            let slot = EquipmentSlot::from_repr(raw_slot - 1)
+                .ok_or_else(|| anyhow!("invalid equipment slot"))?;
+            let id = payload.read_entity_id()?;
+            equipment.push(ContainerEquipment { slot, id });
+        }
+
+        Ok(Self { container_id, equipment })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_entity_id(self.container_id)?;
+
+        for ContainerEquipment { slot, id } in self.equipment.iter() {
+            writer.write_u8(*slot as u8 + 1)?;
+            writer.write_entity_id(*id)?;
+        }
+
+        writer.write_u8(0)?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct UpsertEntityStats {
     pub id: EntityId,

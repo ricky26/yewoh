@@ -187,6 +187,7 @@ fn packet_registry() -> &'static PacketRegistry {
 
             // Sound
             PacketRegistration::for_type::<PlayMusic>(),
+            PacketRegistration::for_type::<PlaySoundEffect>(),
 
             // Map
             PacketRegistration::for_type::<SetTime>(),
@@ -203,6 +204,7 @@ fn packet_registry() -> &'static PacketRegistry {
             PacketRegistration::for_type::<UpsertEntityEquipped>(),
             PacketRegistration::for_type::<UpsertEntityContained>(),
             PacketRegistration::for_type::<UpsertContainerContents>(),
+            PacketRegistration::for_type::<UpsertContainerEquipment>(),
             PacketRegistration::for_type::<EntityTooltipVersion>(),
             PacketRegistration::for_type::<EntityTooltip>(),
             PacketRegistration::for_type::<UpsertEntityStats>(),

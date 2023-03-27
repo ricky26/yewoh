@@ -193,3 +193,30 @@ pub fn update_entity_surfaces(
         storage.tree.remove(entity);
     }
 }
+
+#[derive(Debug, Clone, Default, Component)]
+pub struct Size {
+    min: IVec3,
+    max: IVec3,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct EntityPositions {
+    pub tree: SpatialEntityTree,
+}
+
+pub fn update_entity_positions(
+    mut storage: ResMut<EntityPositions>,
+    entities: Query<(Entity, &MapPosition, &Size)>,
+    removed_entities: RemovedComponents<Size>,
+) {
+    for (entity, position, size) in &entities {
+        let min = position.position - size.min;
+        let max = position.position + size.max;
+        storage.tree.insert_aabb(entity, position.map_id, min, max);
+    }
+
+    for entity in removed_entities.iter() {
+        storage.tree.remove(entity);
+    }
+}

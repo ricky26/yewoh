@@ -12,10 +12,16 @@ pub use connection::{
 pub use owner::{
     NetOwner,
     NetOwned,
+    NetSynchronizing,
+    NetSynchronized,
+    View,
+    CanSee,
+    HasSeen,
     MapInfo,
     MapInfos,
     start_synchronizing,
     finish_synchronizing,
+    update_view,
 };
 pub use entity::{
     NetEntity,
@@ -30,6 +36,7 @@ pub use update::{
     EquippedItemState,
     CharacterState,
     send_remove_entity,
+    send_hidden_entities,
     make_container_contents_packet,
     send_updated_stats,
     update_items_in_world,

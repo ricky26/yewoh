@@ -6,6 +6,7 @@ use crate::actions::{handle_context_menu, handle_double_click, handle_drop, hand
 use crate::chat::handle_incoming_chat;
 use crate::commands::TextCommands;
 use crate::npc::{init_npcs, spawn_npcs};
+use crate::time::send_time;
 
 pub mod accounts;
 
@@ -18,6 +19,8 @@ pub mod chat;
 pub mod commands;
 
 pub mod npc;
+
+pub mod time;
 
 #[derive(Default)]
 pub struct DefaultGamePlugin;
@@ -47,7 +50,9 @@ impl Plugin for DefaultGamePlugin {
             .add_system(handle_context_menu)
             .add_system(handle_profile_requests)
             .add_system(handle_skills_requests)
+            .add_system(send_time)
             .add_system(commands::info::info)
+            .add_system(commands::go::go)
             .add_system(commands::test::echo)
             .add_system(commands::test::frypan)
             .add_system(commands::test::test_gump);
