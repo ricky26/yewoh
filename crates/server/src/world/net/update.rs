@@ -508,7 +508,7 @@ pub fn send_hidden_entities(
 pub fn send_remove_entity(
     lookup: Res<NetEntityLookup>,
     mut clients: Query<(&NetClient, &mut HasSeen)>,
-    removals: RemovedComponents<NetEntity>,
+    mut removals: RemovedComponents<NetEntity>,
 ) {
     for entity in removals.iter() {
         let id = match lookup.ecs_to_net(entity) {

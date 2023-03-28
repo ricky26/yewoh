@@ -1,8 +1,12 @@
+use std::any::TypeId;
+use std::cell::UnsafeCell;
 use std::collections::HashMap;
-use bevy_ecs::archetype::Archetype;
+use std::marker::PhantomData;
+use std::mem::ManuallyDrop;
 
+use bevy_app::App;
 use bevy_ecs::prelude::*;
-use bevy_ecs::system::{ResMutState, Resource, ResState, SystemMeta, SystemParam, SystemParamFetch, SystemParamState};
+use bevy_ecs::system::{Resource, SystemParam};
 use clap::Parser;
 
 use yewoh::protocol::{MessageKind, UnicodeTextMessage};
@@ -12,15 +16,100 @@ pub trait TextCommand: Parser + Resource {
     fn aliases() -> &'static [&'static str];
 }
 
-#[derive(Clone)]
-struct Registration {
-    exec: fn(&World, &NetClient, Entity, &[String]),
+struct QueueDrain<T> {
+    ptr: *mut T,
+    index: usize,
+    length: usize,
 }
 
-#[derive(Clone)]
+impl<T> Drop for QueueDrain<T> {
+    fn drop(&mut self) {
+        unsafe {
+            for i in self.index..self.length {
+                std::ptr::read(self.ptr.add(i));
+            }
+        }
+    }
+}
+
+impl<T> Iterator for QueueDrain<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.length {
+            let value = unsafe {
+                std::ptr::read(self.ptr.add(self.index))
+            };
+            self.index += 1;
+            Some(value)
+        } else {
+            None
+        }
+    }
+}
+
+struct TextCommandQueueStorage {
+    ptr: usize,
+    length: usize,
+    capacity: usize,
+    drop: fn(&mut TextCommandQueueStorage),
+}
+
+impl TextCommandQueueStorage {
+    pub fn new<T>() -> TextCommandQueueStorage {
+        let mut vec = ManuallyDrop::new(Vec::<T>::new());
+        let length = vec.len();
+        let capacity = vec.capacity();
+        let ptr = vec.as_mut_ptr() as usize;
+        let drop = |me: &mut TextCommandQueueStorage| {
+            let ptr = me.ptr as *mut T;
+            unsafe {
+                Vec::from_raw_parts(ptr, me.length, me.capacity);
+            }
+        };
+        Self { ptr, length, capacity, drop }
+    }
+
+    pub unsafe fn push<T>(&mut self, value: T) {
+        unsafe {
+            let ptr = self.ptr as *mut T;
+            let mut vec = ManuallyDrop::new(Vec::from_raw_parts(ptr, self.length, self.capacity));
+            vec.push(value);
+            self.length = vec.len();
+            self.capacity = vec.capacity();
+            self.ptr = vec.as_mut_ptr() as usize;
+        }
+    }
+
+    pub unsafe fn drain<T>(&mut self) -> QueueDrain<T> {
+        let length = self.length;
+        self.length = 0;
+        QueueDrain {
+            ptr: self.ptr as *mut T,
+            index: 0,
+            length,
+        }
+    }
+}
+
+impl Drop for TextCommandQueueStorage {
+    fn drop(&mut self) {
+        (self.drop)(self)
+    }
+}
+
+struct Registration {
+    enqueue: fn(&mut TextCommandQueueStorage, &NetClient, Entity, &[String]),
+    queue: UnsafeCell<TextCommandQueueStorage>,
+}
+
+unsafe impl Sync for Registration {}
+
+#[derive(Default, Resource)]
 pub struct TextCommands {
     start_character: char,
-    commands: HashMap<String, Registration>,
+    commands: HashMap<TypeId, Registration>,
+    aliases: HashMap<String, TypeId>,
 }
 
 impl TextCommands {
@@ -28,23 +117,31 @@ impl TextCommands {
         Self {
             start_character,
             commands: HashMap::new(),
+            aliases: HashMap::new(),
         }
     }
 
     pub fn is_command(&self, name: &str) -> bool {
-        self.commands.contains_key(name)
+        self.aliases.contains_key(name)
+    }
+
+    pub fn register<T: TextCommand>(&mut self) {
+        let type_id = TypeId::of::<T>();
+        self.commands.insert(type_id, Registration {
+            enqueue: TextCommandExecutor::enqueue::<T>,
+            queue: UnsafeCell::new(TextCommandQueueStorage::new::<(Entity, T)>()),
+        });
+
+        for alias in T::aliases() {
+            self.aliases.insert(alias.to_string(), type_id);
+        }
     }
 }
 
+#[derive(SystemParam)]
 pub struct TextCommandExecutor<'w, 's> {
-    world: &'w World,
     clients: Query<'w, 's, &'static NetClient>,
     commands: ResMut<'w, TextCommands>,
-}
-
-pub struct TextCommandExecutorState {
-    clients: QueryState<&'static NetClient>,
-    commands: ResMutState<TextCommands>,
 }
 
 impl<'w, 's> TextCommandExecutor<'w, 's> {
@@ -67,22 +164,23 @@ impl<'w, 's> TextCommandExecutor<'w, 's> {
             return false;
         }
 
-        if let Some((registration, client)) = self.commands.commands.get(&args[0])
+        if let Some((type_id, client)) = self.commands.aliases.get(&args[0]).cloned()
             .zip(self.clients.get(from).ok()) {
-            (registration.exec)(self.world, client, from, &args);
+            let registration = self.commands.commands.get_mut(&type_id).unwrap();
+            let queue = unsafe { &mut *registration.queue.get() };
+            (registration.enqueue)(queue, client, from, &args);
             true
         } else {
             false
         }
     }
 
-    fn exec<T: TextCommand>(world: &World, client: &NetClient, from: Entity, args: &[String]) {
+    fn enqueue<T: TextCommand>(
+        queue: &mut TextCommandQueueStorage, client: &NetClient, from: Entity, args: &[String],
+    ) {
         match T::try_parse_from(args.iter()) {
             Ok(instance) => {
-                unsafe {
-                    let mut queue = world.get_resource_unchecked_mut::<TextCommandQueueImpl<T>>().unwrap();
-                    queue.0.push((from, instance));
-                }
+                unsafe { queue.push((from, instance)) };
             }
             Err(err) => {
                 client.send_packet(UnicodeTextMessage {
@@ -100,93 +198,47 @@ impl<'w, 's> TextCommandExecutor<'w, 's> {
     }
 }
 
-impl<'w, 's> SystemParam for TextCommandExecutor<'w, 's> {
-    type Fetch = TextCommandExecutorState;
-}
+#[derive(Resource)]
+struct TextCommandQueueImpl<T>(PhantomData<T>);
 
-unsafe impl SystemParamState for TextCommandExecutorState {
-    fn init(world: &mut World, system_meta: &mut SystemMeta) -> Self {
-        let commands = ResMutState::init(world, system_meta);
-        let clients = QueryState::init(world, system_meta);
-        Self { commands, clients }
-    }
-
-    fn new_archetype(&mut self, archetype: &Archetype, system_meta: &mut SystemMeta) {
-        SystemParamState::new_archetype(&mut self.clients, archetype, system_meta);
-    }
-}
-
-impl<'w, 's> SystemParamFetch<'w, 's> for TextCommandExecutorState {
-    type Item = TextCommandExecutor<'w, 's>;
-
-    #[inline]
-    unsafe fn get_param(
-        state: &'s mut Self,
-        system_meta: &SystemMeta,
-        world: &'w World,
-        change_tick: u32,
-    ) -> Self::Item {
-        TextCommandExecutor {
-            world,
-            clients: QueryState::get_param(&mut state.clients, system_meta, world, change_tick),
-            commands: ResMutState::get_param(&mut state.commands, system_meta, world, change_tick),
-        }
-    }
-}
-
-struct TextCommandQueueImpl<T: Resource>(pub Vec<(Entity, T)>);
-
-impl<T: Resource> Default for TextCommandQueueImpl<T> {
+impl<T> Default for TextCommandQueueImpl<T> {
     fn default() -> Self {
-        TextCommandQueueImpl(Vec::new())
+        Self(PhantomData)
     }
 }
 
-pub struct TextCommandQueue<'a, T: Resource>(ResMut<'a, TextCommandQueueImpl<T>>);
-
-pub struct TextCommandQueueState<T: Resource>(ResMutState<TextCommandQueueImpl<T>>);
+#[derive(SystemParam)]
+pub struct TextCommandQueue<'w, T: Send + Sync + 'static> {
+    _lock: ResMut<'w, TextCommandQueueImpl<T>>,
+    commands: Res<'w, TextCommands>,
+}
 
 impl<'a, T: Resource> TextCommandQueue<'a, T> {
     pub fn iter(&mut self) -> impl Iterator<Item=(Entity, T)> + '_ {
-        self.0.0.drain(..)
-    }
-}
-
-impl<'a, T: TextCommand> SystemParam for TextCommandQueue<'a, T> {
-    type Fetch = TextCommandQueueState<T>;
-}
-
-unsafe impl<T: Resource + TextCommand> SystemParamState for TextCommandQueueState<T> {
-    fn init(world: &mut World, system_meta: &mut SystemMeta) -> Self {
-        world.init_resource::<TextCommandQueueImpl<T>>();
-        let mut text_commands = world.resource_mut::<TextCommands>();
-
-        for alias in T::aliases() {
-            text_commands.commands.insert(
-                alias.to_string(),
-                Registration {
-                    exec: TextCommandExecutor::exec::<T>,
-                });
+        let registration = self.commands.commands.get(&TypeId::of::<T>())
+            .expect("tried to execute unregistered text command");
+        unsafe {
+            (*registration.queue.get()).drain()
         }
-
-        ResState::<TextCommands>::init(world, system_meta);
-        let res_state = ResMutState::init(world, system_meta);
-        Self(res_state)
     }
 }
 
-impl<'w, 's, T: TextCommand> SystemParamFetch<'w, 's> for TextCommandQueueState<T> {
-    type Item = TextCommandQueue<'w, T>;
+pub trait TextCommandRegistrationExt {
+    fn add_text_command<T: TextCommand>(&mut self) -> &mut Self;
+}
 
-    #[inline]
-    unsafe fn get_param(
-        state: &'s mut Self,
-        system_meta: &SystemMeta,
-        world: &'w World,
-        change_tick: u32,
-    ) -> Self::Item {
-        TextCommandQueue(ResMutState::get_param(&mut state.0, system_meta, world, change_tick))
+impl TextCommandRegistrationExt for World {
+    fn add_text_command<T: TextCommand>(&mut self) -> &mut Self {
+        self.init_resource::<TextCommands>();
+        self.init_resource::<TextCommandQueueImpl<T>>();
+        self.resource_mut::<TextCommands>().register::<T>();
+        self
     }
 }
 
-
+impl TextCommandRegistrationExt for App {
+    fn add_text_command<T: TextCommand>(&mut self) -> &mut Self {
+        self.world.add_text_command::<T>();
+        self
+    }
+}

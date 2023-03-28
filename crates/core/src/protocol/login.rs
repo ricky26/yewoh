@@ -250,7 +250,7 @@ impl Packet for GameServerLogin {
 }
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Default, Debug, Clone, Copy)]
     pub struct FeatureFlags : u32 {
         const T2A = 0x1;
         const UOR = 0x2;
@@ -344,7 +344,7 @@ pub struct StartingCity {
 }
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Default, Clone, Copy, Debug)]
     pub struct CharacterListFlags : u32 {
         const ALLOW_OVERWRITE_CONFIG = 0x2;
         const SINGLE_CHARACTER_SLOT = 0x4;

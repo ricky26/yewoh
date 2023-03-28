@@ -4,7 +4,10 @@ use crate::accounts::{handle_create_character, handle_list_characters, handle_li
 use crate::accounts::repository::MemoryAccountRepository;
 use crate::actions::{handle_context_menu, handle_double_click, handle_drop, handle_equip, handle_move, handle_pick_up, handle_profile_requests, handle_single_click, handle_skills_requests, handle_war_mode};
 use crate::chat::handle_incoming_chat;
-use crate::commands::TextCommands;
+use crate::commands::go::Go;
+use crate::commands::info::Info;
+use crate::commands::test::{Echo, FryPan, TestGump};
+use crate::commands::{TextCommands, TextCommandRegistrationExt};
 use crate::npc::{init_npcs, spawn_npcs};
 use crate::time::send_time;
 
@@ -32,6 +35,11 @@ impl Plugin for DefaultGamePlugin {
             .init_resource::<PendingCharacterLists>()
             .init_resource::<PendingCharacterInfo>()
             .insert_resource(TextCommands::new('['))
+            .add_text_command::<Go>()
+            .add_text_command::<Info>()
+            .add_text_command::<Echo>()
+            .add_text_command::<FryPan>()
+            .add_text_command::<TestGump>()
             .add_startup_system(init_npcs)
             .add_system(spawn_npcs)
             .add_system(handle_list_characters::<MemoryAccountRepository>)

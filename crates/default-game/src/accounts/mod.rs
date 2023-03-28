@@ -1,10 +1,10 @@
 use bevy_ecs::prelude::*;
 use glam::{IVec2, IVec3};
-use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 
 use yewoh::{Direction, Notoriety};
 use yewoh::protocol::{CharacterList, CharacterListFlags, EntityFlags, EntityTooltipLine, EquipmentSlot, UnicodeTextMessage};
+use yewoh_server::async_runtime::AsyncRuntime;
 use yewoh_server::world::entity::{Character, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer, Tooltip};
 use yewoh_server::world::events::{CharacterListEvent, CreateCharacterEvent, NewPrimaryEntityEvent, SelectCharacterEvent};
 use yewoh_server::world::net::{NetClient, NetEntity, NetEntityAllocator, User};
@@ -14,6 +14,7 @@ use crate::data::static_data::StaticData;
 
 pub mod repository;
 
+#[derive(Resource)]
 pub struct PendingCharacterLists {
     tx: mpsc::UnboundedSender<(Entity, anyhow::Result<CharacterList>)>,
     rx: mpsc::UnboundedReceiver<(Entity, anyhow::Result<CharacterList>)>,
@@ -26,6 +27,7 @@ impl Default for PendingCharacterLists {
     }
 }
 
+#[derive(Resource)]
 pub struct PendingCharacterInfo {
     tx: mpsc::UnboundedSender<(Entity, anyhow::Result<CharacterInfo>)>,
     rx: mpsc::UnboundedReceiver<(Entity, anyhow::Result<CharacterInfo>)>,
@@ -39,7 +41,7 @@ impl Default for PendingCharacterInfo {
 }
 
 pub fn handle_list_characters<T: AccountRepository>(
-    runtime: Res<Handle>,
+    runtime: Res<AsyncRuntime>,
     account_repository: Res<T>,
     users: Query<&User>,
     pending: Res<PendingCharacterLists>,
@@ -104,13 +106,13 @@ pub fn handle_list_characters_callback(
 }
 
 pub fn handle_create_character<T: AccountRepository>(
-    runtime: Res<Handle>,
+    runtime: Res<AsyncRuntime>,
     repository: Res<T>,
     users: Query<&User>,
     pending: Res<PendingCharacterInfo>,
     mut events: EventReader<CreateCharacterEvent>,
 ) {
-    for CreateCharacterEvent { client_entity, request} in events.iter() {
+    for CreateCharacterEvent { client_entity, request } in events.iter() {
         let client_entity = *client_entity;
         let user = match users.get(client_entity) {
             Ok(x) => x,
@@ -128,7 +130,7 @@ pub fn handle_create_character<T: AccountRepository>(
 }
 
 pub fn handle_select_character<T: AccountRepository>(
-    runtime: Res<Handle>,
+    runtime: Res<AsyncRuntime>,
     repository: Res<T>,
     users: Query<&User>,
     pending: Res<PendingCharacterInfo>,
@@ -188,49 +190,49 @@ pub fn handle_spawn_character(
         };
 
         let child_backpack_id = entity_allocator.allocate_item();
-        let child_entity = commands.spawn()
-            .insert(NetEntity { id: child_backpack_id })
-            .insert(Flags { flags: EntityFlags::default() })
-            .insert(Graphic { id: 0x9b2, hue: 120 })
-            .insert(Container { gump_id: 0x3c, items: vec![] })
-            .insert(Tooltip {
+        let child_entity = commands.spawn((
+            NetEntity { id: child_backpack_id },
+            Flags { flags: EntityFlags::default() },
+            Graphic { id: 0x9b2, hue: 120 },
+            Container { gump_id: 0x3c, items: vec![] },
+            Tooltip {
                 entries: vec![
-                  EntityTooltipLine { text_id: 1042971, params: "Hello, world!".into() },
+                    EntityTooltipLine { text_id: 1042971, params: "Hello, world!".into() },
                 ],
-            })
+            }))
             .id();
 
-        let knife_entity = commands.spawn()
-            .insert(NetEntity { id: entity_allocator.allocate_item() })
-            .insert(Flags { flags: EntityFlags::default() })
-            .insert(Graphic { id: 0xec3, hue: 16 })
-            .insert(Tooltip {
+        let knife_entity = commands.spawn((
+            NetEntity { id: entity_allocator.allocate_item() },
+            Flags { flags: EntityFlags::default() },
+            Graphic { id: 0xec3, hue: 16 },
+            Tooltip {
                 entries: vec![
                     EntityTooltipLine { text_id: 1042971, params: "Stabby stabby".into() },
                 ],
-            })
+            }))
             .id();
 
-        let backpack_entity = commands.spawn()
-            .insert(NetEntity { id: entity_allocator.allocate_item() })
-            .insert(Flags::default())
-            .insert(Graphic { id: 0xe75, hue: 0 })
-            .insert(Container { gump_id: 0x3c, items: vec![child_entity] })
+        let backpack_entity = commands.spawn((
+            NetEntity { id: entity_allocator.allocate_item() },
+            Flags::default(),
+            Graphic { id: 0xe75, hue: 0 },
+            Container { gump_id: 0x3c, items: vec![child_entity] }))
             .id();
-        let top_entity = commands.spawn()
-            .insert(NetEntity { id: entity_allocator.allocate_item() })
-            .insert(Flags::default())
-            .insert(Graphic { id: 0x1517, hue: info.shirt_hue })
+        let top_entity = commands.spawn((
+            NetEntity { id: entity_allocator.allocate_item() },
+            Flags::default(),
+            Graphic { id: 0x1517, hue: info.shirt_hue }))
             .id();
-        let bottom_entity = commands.spawn()
-            .insert(NetEntity { id: entity_allocator.allocate_item() })
-            .insert(Flags::default())
-            .insert(Graphic { id: bottom_graphic, hue: info.pants_hue })
+        let bottom_entity = commands.spawn((
+            NetEntity { id: entity_allocator.allocate_item() },
+            Flags::default(),
+            Graphic { id: bottom_graphic, hue: info.pants_hue }))
             .id();
-        let shoes_entity = commands.spawn()
-            .insert(NetEntity { id: entity_allocator.allocate_item() })
-            .insert(Flags::default())
-            .insert(Graphic { id: 0x170f, hue: 0 })
+        let shoes_entity = commands.spawn((
+            NetEntity { id: entity_allocator.allocate_item() },
+            Flags::default(),
+            Graphic { id: 0x170f, hue: 0 }))
             .id();
 
         let mut equipment = vec![
@@ -242,19 +244,19 @@ pub fn handle_spawn_character(
         ];
 
         if info.hair != 0 {
-            let entity = commands.spawn()
-                .insert(NetEntity { id: entity_allocator.allocate_item() })
-                .insert(Flags::default())
-                .insert(Graphic { id: info.hair, hue: info.hair_hue })
+            let entity = commands.spawn((
+                NetEntity { id: entity_allocator.allocate_item() },
+                Flags::default(),
+                Graphic { id: info.hair, hue: info.hair_hue }))
                 .id();
             equipment.push((EquipmentSlot::Hair, entity));
         }
 
         if info.beard != 0 {
-            let entity = commands.spawn()
-                .insert(NetEntity { id: entity_allocator.allocate_item() })
-                .insert(Flags::default())
-                .insert(Graphic { id: info.beard, hue: info.beard_hue })
+            let entity = commands.spawn((
+                NetEntity { id: entity_allocator.allocate_item() },
+                Flags::default(),
+                Graphic { id: info.beard, hue: info.beard_hue }))
                 .id();
             equipment.push((EquipmentSlot::FacialHair, entity));
         }
@@ -267,21 +269,21 @@ pub fn handle_spawn_character(
             });
 
         let primary_entity_id = entity_allocator.allocate_character();
-        let primary_entity = commands.spawn()
-            .insert(NetEntity { id: primary_entity_id })
-            .insert(Flags { flags: EntityFlags::default() })
-            .insert(MapPosition {
+        let primary_entity = commands.spawn((
+            NetEntity { id: primary_entity_id },
+            Flags { flags: EntityFlags::default() },
+            MapPosition {
                 map_id: 1,
                 position: IVec3::new(1325, 1624, 55),
                 direction: Direction::North,
-            })
-            .insert(Character {
+            },
+            Character {
                 body_type,
                 hue: info.hue,
                 equipment: equipment.iter().map(|(_, e)| e).copied().collect(),
-            })
-            .insert(Notorious(Notoriety::Innocent))
-            .insert(info.stats)
+            },
+            Notorious(Notoriety::Innocent),
+            info.stats))
             .id();
 
         for (slot, equipment_entity) in equipment {

@@ -13,13 +13,14 @@ pub struct Spawner {
 }
 
 pub fn init_npcs(tick: Res<Tick>, mut commands: Commands) {
-    commands.spawn()
-        .insert(MapPosition {
+    commands.spawn((
+        MapPosition {
             map_id: 0,
             position: IVec3::new(1325, 1624, 55),
             direction: Direction::North,
-        })
-        .insert(Spawner { next_spawn: tick.tick + 10 });
+        },
+        Spawner { next_spawn: tick.tick + 10 },
+    ));
 }
 
 pub fn spawn_npcs(
@@ -33,21 +34,21 @@ pub fn spawn_npcs(
             continue;
         }
 
-        commands.spawn()
-            .insert(NetEntity { id: allocator.allocate_character() })
-            .insert(Flags::default())
-            .insert(*position)
-            .insert(Notorious(Notoriety::Enemy))
-            .insert(Character {
+        commands.spawn((
+            NetEntity { id: allocator.allocate_character() },
+            Flags::default(),
+            *position,
+            Notorious(Notoriety::Enemy),
+            Character {
                 body_type: 0xee,
                 hue: 0x43,
-                equipment: vec![]
-            })
-            .insert(Stats {
+                equipment: vec![],
+            },
+            Stats {
                 name: "Mr Rat".into(),
                 hp: 13,
                 max_hp: 112,
                 ..Default::default()
-            });
+            }));
     }
 }

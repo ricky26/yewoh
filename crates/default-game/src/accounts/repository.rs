@@ -42,7 +42,7 @@ struct LockedMemoryAccountRepository {
     users: HashMap<String, MemoryUser>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Resource)]
 pub struct MemoryAccountRepository {
     locked: Arc<Mutex<LockedMemoryAccountRepository>>,
 }

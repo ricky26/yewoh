@@ -22,7 +22,7 @@ pub enum Command {
     Coordinates(GoCoordinates),
 }
 
-#[derive(Parser)]
+#[derive(Parser, Resource)]
 pub struct Go {
     #[clap(subcommand)]
     command: Option<Command>,

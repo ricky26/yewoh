@@ -1,6 +1,5 @@
 use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
-use tokio::runtime::Handle;
 
 use crate::world::events::{CharacterListEvent, ChatRequestEvent, ContextMenuEvent, CreateCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, NewPrimaryEntityEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::input::{handle_context_menu_packets, send_context_menu, update_targets};
@@ -34,7 +33,6 @@ impl Plugin for ServerPlugin {
             .init_resource::<NetEntityAllocator>()
             .init_resource::<NetEntityLookup>()
             .init_resource::<EntitySurfaces>()
-            .insert_resource(Handle::current())
             .add_event::<ReceivedPacketEvent>()
             .add_event::<SentPacketEvent>()
             .add_event::<CharacterListEvent>()
@@ -51,30 +49,40 @@ impl Plugin for ServerPlugin {
             .add_event::<RequestSkillsEvent>()
             .add_event::<NewPrimaryEntityEvent>()
             .add_event::<ChatRequestEvent>()
-            .add_system_to_stage(CoreStage::First, accept_new_clients)
-            .add_system_to_stage(CoreStage::First, send_context_menu.before(handle_new_packets))
-            .add_system_to_stage(CoreStage::First, send_tooltips.before(handle_new_packets))
-            .add_system_to_stage(CoreStage::First, send_hidden_entities.before(handle_new_packets))
-            .add_system_to_stage(CoreStage::First, update_players.before(handle_new_packets))
-            .add_system_to_stage(CoreStage::First, send_updated_stats.before(handle_new_packets))
-            .add_system_to_stage(CoreStage::First, update_items_in_world.before(handle_new_packets))
-            .add_system_to_stage(CoreStage::First, update_items_in_containers.before(handle_new_packets))
-            .add_system_to_stage(CoreStage::First, update_equipped_items.before(handle_new_packets))
-            .add_system_to_stage(CoreStage::First, update_characters.before(handle_new_packets))
-            .add_system_to_stage(CoreStage::First, handle_new_packets.after(accept_new_clients))
-            .add_system_to_stage(CoreStage::PreUpdate, start_synchronizing)
-            .add_system_to_stage(CoreStage::PreUpdate, update_view)
-            .add_system_to_stage(CoreStage::PreUpdate, handle_login_packets)
-            .add_system_to_stage(CoreStage::PreUpdate, handle_input_packets)
-            .add_system_to_stage(CoreStage::PreUpdate, handle_context_menu_packets)
-            .add_system_to_stage(CoreStage::Update, sync_entities)
-            .add_system_to_stage(CoreStage::PostUpdate, finish_synchronizing)
-            .add_system_to_stage(CoreStage::Last, send_remove_entity.before(update_entity_lookup))
-            .add_system_to_stage(CoreStage::Last, update_targets)
-            .add_system_to_stage(CoreStage::Last, update_tooltips)
-            .add_system_to_stage(CoreStage::Last, update_entity_lookup)
-            .add_system_to_stage(CoreStage::Last, update_entity_surfaces)
-            .add_system_to_stage(CoreStage::Last, limit_tick_rate);
+            .add_systems((
+                accept_new_clients,
+                send_context_menu.before(handle_new_packets),
+                send_tooltips.before(handle_new_packets),
+                send_hidden_entities.before(handle_new_packets),
+                update_players.before(handle_new_packets),
+                send_updated_stats.before(handle_new_packets),
+                update_items_in_world.before(handle_new_packets),
+                update_items_in_containers.before(handle_new_packets),
+                update_equipped_items.before(handle_new_packets),
+                update_characters.before(handle_new_packets),
+                handle_new_packets.after(accept_new_clients),
+            ).in_base_set(CoreSet::First))
+            .add_systems((
+                start_synchronizing,
+                update_view,
+                handle_login_packets,
+                handle_input_packets,
+                handle_context_menu_packets,
+            ).in_base_set(CoreSet::PreUpdate))
+            .add_systems((
+                sync_entities,
+            ).in_base_set(CoreSet::Update))
+            .add_systems((
+                finish_synchronizing,
+            ).in_base_set(CoreSet::PostUpdate))
+            .add_systems((
+                send_remove_entity.before(update_entity_lookup),
+                update_targets,
+                update_tooltips,
+                update_entity_lookup,
+                update_entity_surfaces,
+                limit_tick_rate,
+            ).in_base_set(CoreSet::Last));
     }
 
     fn name(&self) -> &str { "Yewoh Server" }

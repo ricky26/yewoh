@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use anyhow::anyhow;
-use bevy_app::App;
-use bevy_ecs::prelude::*;
+use bevy::log::LogPlugin;
+use bevy::prelude::*;
 use clap::Parser;
 use futures::future::join;
 use log::info;
@@ -14,6 +14,7 @@ use tokio::sync::mpsc;
 use yewoh::assets::tiles::load_tile_data;
 use yewoh_default_game::data::static_data;
 use yewoh_default_game::DefaultGamePlugin;
+use yewoh_server::async_runtime::AsyncRuntime;
 use yewoh_server::game_server::listen_for_game;
 use yewoh_server::lobby::{listen_for_lobby, LocalLobby};
 use yewoh_server::world::map::{Chunk, create_map_entities, create_statics, Static};
@@ -44,15 +45,15 @@ struct Args {
     advertise_address: String,
 
     /// The bind address for the HTTP server.
-    #[clap(short, long, default_value = "0.0.0.0:2595", env = "YEWOH_HTTP_BIND")]
+    #[clap(long, default_value = "0.0.0.0:2595", env = "YEWOH_HTTP_BIND")]
     http_bind: String,
 
     /// The bind address for the lobby server.
-    #[clap(short, long, default_value = "0.0.0.0:2593", env = "YEWOH_LOBBY_BIND")]
+    #[clap(long, default_value = "0.0.0.0:2593", env = "YEWOH_LOBBY_BIND")]
     lobby_bind: String,
 
     /// The bind address for the game server.
-    #[clap(short, long, default_value = "0.0.0.0:2594", env = "YEWOH_GAME_BIND")]
+    #[clap(long, default_value = "0.0.0.0:2594", env = "YEWOH_GAME_BIND")]
     game_bind: String,
 }
 
@@ -62,14 +63,11 @@ fn main() -> anyhow::Result<()> {
         .build()?;
     let _guard = rt.enter();
 
-    env_logger::builder()
-        .parse_filters("warn,yewoh=info,yewoh-server=info,yewoh-default-game=info,yewoh-default-server=info")
-        .parse_default_env()
-        .init();
-
     let args = Args::parse();
     let mut app = App::new();
     app
+        .add_plugins(MinimalPlugins)
+        .add_plugin(LogPlugin::default())
         .add_plugin(ServerPlugin)
         .add_plugin(DefaultGamePlugin);
 
@@ -118,10 +116,10 @@ fn main() -> anyhow::Result<()> {
         .serve(http_app.into_make_service()));
 
     app
+        .insert_resource(AsyncRuntime::from(rt.handle().clone()))
         .insert_resource(NetServer::new(args.encryption, new_session_requests, new_session_rx))
         .insert_resource(map_infos)
-        .insert_resource(static_data)
-        .insert_resource(tile_data);
+        .insert_resource(static_data);
 
     info!("Listening for http connections on {}", &args.http_bind);
     info!("Listening for lobby connections on {}", &args.lobby_bind);

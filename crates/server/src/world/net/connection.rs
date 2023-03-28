@@ -4,11 +4,11 @@ use std::sync::Arc;
 use bevy_ecs::prelude::*;
 use bevy_reflect::prelude::*;
 use log::{info, warn};
-use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 
 use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, CharacterProfile, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DoubleClick, DropEntity, EntityRequest, EntityRequestKind, EntityTooltip, EquipEntity, FeatureFlags, GameServerLogin, Move, PickUpEntity, SelectCharacter, SingleClick, SupportedFeatures, UnicodeTextMessageRequest};
 use yewoh::protocol::encryption::Encryption;
+use crate::async_runtime::AsyncRuntime;
 
 use crate::game_server::NewSessionAttempt;
 use crate::lobby::{NewSessionRequest, SessionAllocator};
@@ -54,6 +54,7 @@ impl NetClient {
 #[derive(Debug, Clone, Component, Reflect)]
 pub struct SentCharacterList;
 
+#[derive(Resource)]
 pub struct NetServer {
     encrypted: bool,
 
@@ -103,8 +104,17 @@ pub fn broadcast<'a>(clients: impl Iterator<Item=&'a NetClient>, packet: Arc<Any
     }
 }
 
-pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<NetServer>,
-    connections: Query<&NetClient>, mut commands: Commands) {
+#[derive(Bundle)]
+struct NetClientBundle {
+    pub client: NetClient,
+    pub user: User,
+    pub targeting: Targeting,
+}
+
+pub fn accept_new_clients(
+    runtime: Res<AsyncRuntime>, mut server: ResMut<NetServer>,
+    connections: Query<&NetClient>, mut commands: Commands,
+) {
     while let Ok(new_session_request) = server.new_session_requests.try_recv() {
         server.session_allocator.allocate_session(new_session_request);
     }
@@ -200,10 +210,12 @@ pub fn accept_new_clients(runtime: Res<Handle>, mut server: ResMut<NetServer>,
         });
 
         let client = NetClient { address, client_version, tx };
-        let entity = commands.spawn()
-            .insert(client.clone())
-            .insert(User { username })
-            .insert(Targeting::default())
+        let entity = commands
+            .spawn(NetClientBundle {
+                client: client.clone(),
+                user: User { username },
+                targeting: Targeting::default(),
+            })
             .id();
 
         let internal_tx = server.received_packets_tx.clone();

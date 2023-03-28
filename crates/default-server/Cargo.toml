@@ -11,14 +11,12 @@ edition = "2021"
 yewoh = { path = "../core" }
 yewoh-server = { path = "../server" }
 yewoh-default-game = { path = "../default-game" }
-tokio = { version = "1.21.0", default_features = false, features = ["net", "rt-multi-thread"] }
-clap = { version = "3.2.20", features = ["derive", "env"] }
-async-trait = "0.1.57"
-futures = "0.3.24"
-anyhow = "1.0.64"
+tokio = { version = "1.26.0", default_features = false, features = ["net", "rt-multi-thread"] }
+clap = { version = "4.1.13", features = ["derive", "env"] }
+bevy = { version = "0.10.0", default_features = false }
+async-trait = "0.1.68"
+futures = "0.3.27"
+anyhow = "1.0.70"
 log = "0.4.17"
-env_logger = "0.9.0"
-bevy_ecs = "0.8.1"
-bevy_app = "0.8.1"
-axum = "0.6.0-rc.2"
-glam = "0.21.3"
+axum = "0.6.12"
+glam = "0.23.0"

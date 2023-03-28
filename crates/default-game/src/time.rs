@@ -31,8 +31,8 @@ impl<T: TimeZone> From<DateTime<T>> for WorldTime {
     fn from(real_time: DateTime<T>) -> Self {
         let epoch = DateTime::from_utc(
             NaiveDateTime::new(
-                NaiveDate::from_ymd(1997, 9, 24),
-                NaiveTime::from_hms(0, 0, 0),
+                NaiveDate::from_ymd_opt(1997, 9, 24).unwrap(),
+                NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
             ), real_time.offset().clone());
         let duration = real_time - epoch;
         let seconds = duration.num_milliseconds() as f64 * (MULTIPLIER as f64);

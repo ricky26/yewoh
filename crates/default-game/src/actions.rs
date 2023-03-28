@@ -87,12 +87,11 @@ pub fn handle_single_click(
             None => continue,
         };
 
-        commands.spawn()
-            .insert(ContextMenuRequest {
-                client_entity,
-                target,
-                entries: Vec::new(),
-            });
+        commands.spawn(ContextMenuRequest {
+            client_entity,
+            target,
+            entries: Vec::new(),
+        });
     }
 }
 
@@ -316,7 +315,7 @@ pub fn handle_context_menu(
             id: 0,
             text_id: 3000489,
             hue: None,
-            flags: Default::default()
+            flags: Default::default(),
         });
     }
 
@@ -384,7 +383,7 @@ pub fn handle_profile_requests(
             target_id,
             header: "Supreme Commander".to_string(),
             footer: "Static Profile".to_string(),
-            profile: "Bio".to_string()
+            profile: "Bio".to_string(),
         }).into());
     }
 }
@@ -410,7 +409,7 @@ pub fn handle_skills_requests(
                     lock: SkillLock::Up,
                     cap: 1200,
                 }
-            ]
+            ],
         }).into());
     }
 }

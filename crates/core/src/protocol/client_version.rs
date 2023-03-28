@@ -93,6 +93,7 @@ impl FromStr for ExtendedClientVersion {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy, Default)]
     pub struct ClientFlags: u32 {
         const RE = 0x1;
         const TD = 0x2;

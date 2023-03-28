@@ -51,7 +51,7 @@ impl Packet for EntityRequest {
 }
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Default, Debug, Clone, Copy, Eq, PartialEq)]
     pub struct EntityFlags : u8 {
         const FEMALE = 0x2;
         const POISONED = 0x4;

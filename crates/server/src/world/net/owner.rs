@@ -53,7 +53,7 @@ pub struct MapInfo {
     pub is_virtual: bool,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Resource)]
 pub struct MapInfos {
     pub maps: HashMap<u8, MapInfo>,
 }

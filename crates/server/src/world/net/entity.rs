@@ -10,7 +10,7 @@ pub struct NetEntity {
     pub id: EntityId,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Resource)]
 pub struct NetEntityAllocator {
     next_character: AtomicU32,
     next_item: AtomicU32,
@@ -35,7 +35,7 @@ impl NetEntityAllocator {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Resource)]
 pub struct NetEntityLookup {
     net_to_ecs: HashMap<EntityId, Entity>,
     ecs_to_net: HashMap<Entity, EntityId>,
@@ -73,7 +73,7 @@ impl NetEntityLookup {
 pub fn update_entity_lookup(
     mut lookup: ResMut<NetEntityLookup>,
     query: Query<(Entity, &NetEntity), Changed<NetEntity>>,
-    removals: RemovedComponents<NetEntity>,
+    mut removals: RemovedComponents<NetEntity>,
 ) {
     for (entity, net_entity) in query.iter() {
         lookup.insert(entity, net_entity.id);

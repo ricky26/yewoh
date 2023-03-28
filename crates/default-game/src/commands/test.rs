@@ -9,7 +9,7 @@ use yewoh_server::world::net::{NetClient, NetEntity, NetEntityAllocator, NetOwne
 
 use crate::commands::{TextCommand, TextCommandQueue};
 
-#[derive(Parser)]
+#[derive(Parser, Resource)]
 pub struct Echo {
     pub what: Vec<String>,
 }
@@ -26,7 +26,7 @@ pub fn echo(mut exec: TextCommandQueue<Echo>) {
     }
 }
 
-#[derive(Parser)]
+#[derive(Parser, Resource)]
 pub struct FryPan;
 
 impl TextCommand for FryPan {
@@ -47,23 +47,23 @@ pub fn frypan(
             .ok()
             .and_then(|owner| characters.get(owner.primary_entity).ok()) {
             let id = allocator.allocate_item();
-            commands.spawn()
-                .insert(NetEntity { id })
-                .insert(Flags { flags: EntityFlags::default() })
-                .insert(MapPosition {
+            commands.spawn((
+                NetEntity { id },
+                Flags { flags: EntityFlags::default() },
+                MapPosition {
                     map_id: 1,
                     position: position.position,
                     direction: Direction::North,
-                })
-                .insert(Graphic {
+                },
+                Graphic {
                     id: 0x97f,
                     hue: 0x7d0,
-                });
+                }));
         }
     }
 }
 
-#[derive(Parser)]
+#[derive(Parser, Resource)]
 pub struct TestGump;
 
 impl TextCommand for TestGump {

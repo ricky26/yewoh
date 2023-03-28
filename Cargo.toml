@@ -1,4 +1,5 @@
 [workspace]
+resolver = "2"
 members = [
     "crates/core",
     "crates/server",
@@ -12,5 +13,11 @@ members = [
 opt-level = 1
 
 # Enable high optimizations for dependencies (incl. Bevy), but not for our code:
-[profile.dev.package."*"]
-opt-level = 3
+[profile.dev.package]
+"*" = { opt-level = 3 }
+yewoh-bevy-client = { opt-level = 1 }
+yewoh-client = { opt-level = 1 }
+yewoh = { opt-level = 1 }
+yewoh-default-game = { opt-level = 1 }
+yewoh-default-server = { opt-level = 1 }
+yewoh-server = { opt-level = 1 }

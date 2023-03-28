@@ -64,8 +64,8 @@ pub fn update_targets(
         (Entity, Option<&WorldTargetRequest>, Option<&EntityTargetRequest>),
         (Without<WorldTargetResponse>, Without<EntityTargetResponse>),
     >,
-    removed_world_targets: RemovedComponents<WorldTargetRequest>,
-    removed_entity_targets: RemovedComponents<EntityTargetRequest>,
+    mut removed_world_targets: RemovedComponents<WorldTargetRequest>,
+    mut removed_entity_targets: RemovedComponents<EntityTargetRequest>,
     mut events: EventReader<ReceivedPacketEvent>,
     mut commands: Commands,
 ) {
@@ -125,7 +125,7 @@ pub fn update_targets(
         let packet = PickTarget {
             target_ground,
             target_type,
-            id: entity.id(),
+            id: entity.index(),
             ..Default::default()
         };
 
@@ -187,12 +187,11 @@ pub fn handle_context_menu_packets(
                     _ => continue,
                 };
 
-                commands.spawn()
-                    .insert(ContextMenuRequest {
-                        client_entity,
-                        target,
-                        entries: vec![],
-                    });
+                commands.spawn(ContextMenuRequest {
+                    client_entity,
+                    target,
+                    entries: vec![],
+                });
             }
             ExtendedCommand::ContextMenuResponse(response) => {
                 let target = match lookup.net_to_ecs(response.target_id) {

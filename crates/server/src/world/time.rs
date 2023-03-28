@@ -2,12 +2,12 @@ use std::time::{Duration, Instant};
 
 use bevy_ecs::prelude::*;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Resource)]
 pub struct Tick {
     pub tick: u32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Resource)]
 pub struct TickRate {
     tick_rate: f32,
     interval: Duration,

@@ -162,7 +162,7 @@ impl SpatialEntityTree {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Resource)]
 pub struct EntitySurfaces {
     pub tree: SpatialEntityTree,
 }
@@ -171,8 +171,8 @@ pub fn update_entity_surfaces(
     mut storage: ResMut<EntitySurfaces>,
     chunks: Query<(Entity, &MapPosition), (With<Chunk>, Or<(Changed<MapPosition>, Changed<Chunk>)>)>,
     surfaces: Query<(Entity, &MapPosition, &Surface), Or<(Changed<MapPosition>, Changed<Surface>)>>,
-    removed_chunks: RemovedComponents<Chunk>,
-    removed_surfaces: RemovedComponents<Surface>,
+    mut removed_chunks: RemovedComponents<Chunk>,
+    mut removed_surfaces: RemovedComponents<Surface>,
 ) {
     for (entity, position) in chunks.iter() {
         let min = position.position - IVec3::new(0, 0, 1000);
@@ -200,7 +200,7 @@ pub struct Size {
     max: IVec3,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Resource)]
 pub struct EntityPositions {
     pub tree: SpatialEntityTree,
 }
@@ -208,7 +208,7 @@ pub struct EntityPositions {
 pub fn update_entity_positions(
     mut storage: ResMut<EntityPositions>,
     entities: Query<(Entity, &MapPosition, &Size)>,
-    removed_entities: RemovedComponents<Size>,
+    mut removed_entities: RemovedComponents<Size>,
 ) {
     for (entity, position, size) in &entities {
         let min = position.position - size.min;

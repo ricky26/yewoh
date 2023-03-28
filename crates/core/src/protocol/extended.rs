@@ -16,7 +16,7 @@ pub struct ScreenSize {
 }
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Default, Debug, Clone, Copy)]
     pub struct ContextMenuFlags : u16 {
         const DISABLED = 0x01;
         const ARROW = 0x02;

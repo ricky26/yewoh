@@ -1,5 +1,6 @@
 use bevy_ecs::archetype::Archetypes;
 use bevy_ecs::component::Components;
+use bevy_ecs::entity::Entities;
 use bevy_ecs::prelude::*;
 use bevy_reflect::prelude::*;
 use clap::Parser;
@@ -10,7 +11,7 @@ use yewoh_server::world::net::NetClient;
 
 use crate::commands::{TextCommand, TextCommandQueue};
 
-#[derive(Parser)]
+#[derive(Parser, Resource)]
 pub struct Info;
 
 impl TextCommand for Info {
@@ -25,18 +26,19 @@ pub struct ShowInfoCommand;
 pub fn info(
     archetypes: &Archetypes,
     components: &Components,
+    entities: &Entities,
     clients: Query<&NetClient>,
     completed: Query<(Entity, &EntityTargetRequest, &EntityTargetResponse), With<ShowInfoCommand>>,
     mut exec: TextCommandQueue<Info>,
     mut commands: Commands,
 ) {
     for (from, _) in exec.iter() {
-        commands.spawn()
-            .insert(EntityTargetRequest {
+        commands.spawn((
+            EntityTargetRequest {
                 client_entity: from,
                 target_type: TargetType::Neutral,
-            })
-            .insert(ShowInfoCommand);
+            },
+            ShowInfoCommand));
     }
 
     for (entity, request, response) in completed.iter() {
@@ -56,7 +58,8 @@ pub fn info(
                 ..Default::default()
             }.into());
 
-            if let Some(archetype) = archetypes.iter().filter(|a| a.entities().contains(&target)).next() {
+            if let Some(archetype) = entities.get(target)
+                .and_then(|l| archetypes.get(l.archetype_id)) {
                 for component in archetype.components() {
                     if let Some(info) = components.get_info(component) {
                         client.send_packet(UnicodeTextMessage {

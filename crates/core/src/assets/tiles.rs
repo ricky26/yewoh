@@ -7,6 +7,7 @@ use byteorder::{LittleEndian as Endian, ReadBytesExt};
 use crate::assets::mul::MulReader;
 
 bitflags! {
+    #[derive(Debug, Clone, Copy)]
     pub struct TileFlags : u64 {
         const BACKGROUND = 1 << 0;
         const WEAPON = 1 << 1;
