@@ -1,36 +1,39 @@
+use std::time::Duration;
 use bevy_ecs::prelude::*;
 use bevy_reflect::prelude::*;
+use bevy_time::{Time, Timer, TimerMode};
 use glam::IVec3;
 
 use yewoh::{Direction, Notoriety};
 use yewoh_server::world::entity::{Character, Flags, MapPosition, Notorious, Stats};
 use yewoh_server::world::net::{NetEntity, NetEntityAllocator};
-use yewoh_server::world::time::Tick;
 
 #[derive(Debug, Clone, Component, Reflect)]
 pub struct Spawner {
-    pub next_spawn: u32,
+    pub next_spawn: Timer,
 }
 
-pub fn init_npcs(tick: Res<Tick>, mut commands: Commands) {
+pub fn init_npcs(mut commands: Commands) {
     commands.spawn((
         MapPosition {
             map_id: 0,
             position: IVec3::new(1325, 1624, 55),
             direction: Direction::North,
         },
-        Spawner { next_spawn: tick.tick + 10 },
+        Spawner {
+            next_spawn: Timer::new(Duration::from_secs(5), TimerMode::Repeating),
+        },
     ));
 }
 
 pub fn spawn_npcs(
-    tick: Res<Tick>,
+    time: Res<Time>,
     allocator: Res<NetEntityAllocator>,
-    spawners: Query<(&mut Spawner, &MapPosition)>,
+    mut spawners: Query<(&mut Spawner, &MapPosition)>,
     mut commands: Commands,
 ) {
-    for (spawner, position) in spawners.iter() {
-        if spawner.next_spawn != tick.tick {
+    for (mut spawner, position) in spawners.iter_mut() {
+        if !spawner.next_spawn.tick(time.delta()).finished() {
             continue;
         }
 

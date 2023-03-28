@@ -28,21 +28,15 @@ pub struct Surface {
     pub offset: u8,
 }
 
-#[derive(Bundle)]
-struct ChunkBundle {
-    pub chunk: Chunk,
-    pub position: MapPosition,
-}
-
 pub fn spawn_chunk(commands: &mut Commands, map_id: u8, chunk_x: usize, chunk_y: usize, map_chunk: MapChunk) {
     let x = (chunk_x * CHUNK_SIZE) as i32;
     let y = (chunk_y * CHUNK_SIZE) as i32;
     let position = IVec3::new(x, y, 0);
 
-    commands.spawn(ChunkBundle {
-        chunk: Chunk { map_chunk },
-        position: MapPosition { map_id, position, direction: Direction::default() },
-    });
+    commands.spawn((
+        Chunk { map_chunk },
+        MapPosition { map_id, position, direction: Direction::default() },
+    ));
 }
 
 pub async fn create_map_entities(world: &mut World, map_infos: &MapInfos, uo_data_path: &Path) -> anyhow::Result<()> {
@@ -77,13 +71,6 @@ pub async fn create_map_entities(world: &mut World, map_infos: &MapInfos, uo_dat
     Ok(())
 }
 
-#[derive(Bundle)]
-struct StaticBundle {
-    pub position: MapPosition,
-    pub graphic: Graphic,
-    pub is_static: Static,
-}
-
 pub async fn create_statics(
     world: &mut World,
     map_infos: &MapInfos,
@@ -113,11 +100,11 @@ pub async fn create_statics(
     let mut commands = Commands::new(&mut queue, &world);
 
     while let Some((map_id, s)) = rx.recv().await {
-        let mut entity = commands.spawn(StaticBundle {
-            position: MapPosition { map_id, position: s.position, direction: Direction::default() },
-            graphic: Graphic { id: s.graphic_id, hue: s.hue },
-            is_static: Static,
-        });
+        let mut entity = commands.spawn((
+            MapPosition { map_id, position: s.position, direction: Direction::default() },
+            Graphic { id: s.graphic_id, hue: s.hue },
+            Static,
+        ));
 
         if let Some(info) = tile_data.items.get(s.graphic_id as usize) {
             if info.flags.contains(TileFlags::SURFACE) {

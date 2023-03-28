@@ -25,6 +25,7 @@ pub struct NetOwner {
 pub struct View {
     pub map_id: u8,
     pub position: IVec3,
+    pub range: i32,
 }
 
 #[derive(Debug, Clone, Component)]
@@ -52,6 +53,8 @@ pub struct MapInfo {
     pub season: u8,
     pub is_virtual: bool,
 }
+
+pub const DEFAULT_VIEW_RANGE: i32 = 18;
 
 #[derive(Debug, Clone, Default, Resource)]
 pub struct MapInfos {
@@ -112,7 +115,7 @@ pub fn start_synchronizing(
         let body_type = character.body_type;
 
         commands.entity(client_entity)
-            .insert(View { map_id, position });
+            .insert(View { map_id, position, range: DEFAULT_VIEW_RANGE });
         client.send_packet(BeginEnterWorld {
             entity_id,
             body_type,

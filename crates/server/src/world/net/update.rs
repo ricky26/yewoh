@@ -9,7 +9,6 @@ use yewoh::protocol::{AnyPacket, CharacterEquipment, DeleteEntity, EntityFlags, 
 use crate::world::entity::{Character, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer, Quantity, Stats, Tooltip};
 use crate::world::net::{CanSee, HasSeen, NetClient, NetEntity, NetEntityLookup, NetOwner, NetSynchronized};
 use crate::world::net::owner::NetSynchronizing;
-use crate::world::time::Tick;
 
 fn send_update<'a>(
     mut clients: impl Iterator<Item=(&'a NetClient, &'a CanSee, Mut<'a, HasSeen>)>,
@@ -542,14 +541,13 @@ pub fn send_updated_stats(
 }
 
 pub fn sync_entities(
-    tick: Res<Tick>,
     mut clients: Query<(&NetClient, &CanSee, &mut HasSeen), With<NetSynchronizing>>,
     characters: Query<(Entity, &NetEntity, &CharacterState)>,
     world_items: Query<(Entity, &NetEntity, &WorldItemState)>,
     contained_items: Query<(Entity, &NetEntity, &ContainedItemState)>,
     equipped_items: Query<(Entity, &NetEntity, &EquippedItemState)>,
     stats: Query<(Entity, &NetEntity, &Stats)>,
-    tooltips: Query<(Entity, &NetEntity), With<Tooltip>>,
+    tooltips: Query<(Entity, &NetEntity, Ref<Tooltip>), With<Tooltip>>,
     all_equipment_query: Query<(&NetEntity, &Graphic, &EquippedBy)>,
 ) {
     if clients.is_empty() {
@@ -591,30 +589,28 @@ pub fn sync_entities(
             || stats.upsert(net.id, true).into_arc());
     }
 
-    for (entity, net) in tooltips.iter() {
+    for (entity, net, tooltip) in tooltips.iter() {
         send_update(
             clients.iter_mut(),
             entity,
             || EntityTooltipVersion {
                 id: net.id,
-                revision: tick.tick,
+                revision: tooltip.last_changed(),
             }.into_arc());
     }
 }
 
 pub fn update_tooltips(
-    tick: Res<Tick>,
     mut clients: Query<(&NetClient, &CanSee, &mut HasSeen)>,
-    tooltips: Query<(Entity, &NetEntity), Changed<Tooltip>>,
+    tooltips: Query<(Entity, &NetEntity, Ref<Tooltip>), Changed<Tooltip>>,
 ) {
-    let tick = tick.tick;
-    for (entity, net) in tooltips.iter() {
+    for (entity, net, tooltip) in tooltips.iter() {
         send_update(
             clients.iter_mut(),
             entity,
             || EntityTooltipVersion {
                 id: net.id,
-                revision: tick,
+                revision: tooltip.last_changed(),
             }.into_arc());
     }
 }

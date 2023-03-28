@@ -5,9 +5,6 @@ use crate::world::events::{CharacterListEvent, ChatRequestEvent, ContextMenuEven
 use crate::world::input::{handle_context_menu_packets, send_context_menu, update_targets};
 use crate::world::net::{accept_new_clients, finish_synchronizing, update_view, handle_input_packets, handle_login_packets, handle_new_packets, MapInfos, NetEntityAllocator, NetEntityLookup, send_remove_entity, send_tooltips, send_updated_stats, start_synchronizing, sync_entities, update_characters, update_entity_lookup, update_equipped_items, update_items_in_containers, update_items_in_world, update_players, update_tooltips, send_hidden_entities};
 use crate::world::spatial::{EntitySurfaces, update_entity_surfaces};
-use crate::world::time::{limit_tick_rate, Tick, TickRate};
-
-pub mod time;
 
 pub mod net;
 
@@ -21,14 +18,19 @@ pub mod map;
 
 pub mod input;
 
+#[derive(SystemSet, Hash, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServerSet {
+    Receive,
+    UpdateVisibility,
+    Send,
+}
+
 #[derive(Default)]
 pub struct ServerPlugin;
 
 impl Plugin for ServerPlugin {
     fn build(&self, app: &mut App) {
         app
-            .init_resource::<Tick>()
-            .init_resource::<TickRate>()
             .init_resource::<MapInfos>()
             .init_resource::<NetEntityAllocator>()
             .init_resource::<NetEntityLookup>()
@@ -49,6 +51,13 @@ impl Plugin for ServerPlugin {
             .add_event::<RequestSkillsEvent>()
             .add_event::<NewPrimaryEntityEvent>()
             .add_event::<ChatRequestEvent>()
+            .configure_sets((
+                ServerSet::Receive.in_base_set(CoreSet::PreUpdate),
+                ServerSet::UpdateVisibility
+                    .in_base_set(CoreSet::PostUpdate)
+                    .before(ServerSet::Send),
+                ServerSet::Send.in_base_set(CoreSet::PostUpdate),
+            ))
             .add_systems((
                 accept_new_clients,
                 send_context_menu.before(handle_new_packets),
@@ -68,21 +77,20 @@ impl Plugin for ServerPlugin {
                 handle_login_packets,
                 handle_input_packets,
                 handle_context_menu_packets,
-            ).in_base_set(CoreSet::PreUpdate))
+            ).in_set(ServerSet::Receive))
             .add_systems((
                 sync_entities,
             ).in_base_set(CoreSet::Update))
             .add_systems((
                 finish_synchronizing,
-            ).in_base_set(CoreSet::PostUpdate))
+            ).in_base_set(CoreSet::PostUpdate).after(ServerSet::Send))
             .add_systems((
                 send_remove_entity.before(update_entity_lookup),
                 update_targets,
                 update_tooltips,
                 update_entity_lookup,
                 update_entity_surfaces,
-                limit_tick_rate,
-            ).in_base_set(CoreSet::Last));
+            ).in_set(ServerSet::Send));
     }
 
     fn name(&self) -> &str { "Yewoh Server" }

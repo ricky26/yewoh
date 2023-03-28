@@ -1,8 +1,10 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::time::Duration;
 
 use anyhow::anyhow;
+use bevy::app::ScheduleRunnerSettings;
 use bevy::log::LogPlugin;
 use bevy::prelude::*;
 use clap::Parser;
@@ -66,6 +68,7 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let mut app = App::new();
     app
+        .insert_resource(ScheduleRunnerSettings::run_loop(Duration::from_millis(20)))
         .add_plugins(MinimalPlugins)
         .add_plugin(LogPlugin::default())
         .add_plugin(ServerPlugin)

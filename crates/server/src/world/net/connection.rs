@@ -104,13 +104,6 @@ pub fn broadcast<'a>(clients: impl Iterator<Item=&'a NetClient>, packet: Arc<Any
     }
 }
 
-#[derive(Bundle)]
-struct NetClientBundle {
-    pub client: NetClient,
-    pub user: User,
-    pub targeting: Targeting,
-}
-
 pub fn accept_new_clients(
     runtime: Res<AsyncRuntime>, mut server: ResMut<NetServer>,
     connections: Query<&NetClient>, mut commands: Commands,
@@ -211,11 +204,11 @@ pub fn accept_new_clients(
 
         let client = NetClient { address, client_version, tx };
         let entity = commands
-            .spawn(NetClientBundle {
-                client: client.clone(),
-                user: User { username },
-                targeting: Targeting::default(),
-            })
+            .spawn((
+                client.clone(),
+                User { username },
+                Targeting::default(),
+            ))
             .id();
 
         let internal_tx = server.received_packets_tx.clone();

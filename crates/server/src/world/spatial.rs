@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::ops::Sub;
 
 use bevy_ecs::prelude::*;
-use glam::{IVec2, IVec3, Vec3};
+use glam::{IVec2, IVec3};
 use rstar::{AABB, Point, PointDistance, RTree, RTreeObject};
 use rstar::primitives::Rectangle;
 use yewoh::assets::map::CHUNK_SIZE;
@@ -11,25 +11,23 @@ use crate::world::entity::MapPosition;
 use crate::world::map::{Chunk, Surface};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SpatialPoint(pub Vec3);
+pub struct SpatialPoint(pub IVec2);
 
 impl Point for SpatialPoint {
-    type Scalar = f32;
+    type Scalar = i32;
 
-    const DIMENSIONS: usize = 3;
+    const DIMENSIONS: usize = 2;
 
     fn generate(mut generator: impl FnMut(usize) -> Self::Scalar) -> Self {
         let x = generator(0);
         let y = generator(1);
-        let z = generator(2);
-        SpatialPoint(Vec3::new(x, y, z))
+        SpatialPoint(IVec2::new(x, y))
     }
 
     fn nth(&self, index: usize) -> Self::Scalar {
         match index {
             0 => self.0.x,
             1 => self.0.y,
-            2 => self.0.z,
             _ => unreachable!(),
         }
     }
@@ -38,7 +36,6 @@ impl Point for SpatialPoint {
         match index {
             0 => &mut self.0.x,
             1 => &mut self.0.y,
-            2 => &mut self.0.z,
             _ => unreachable!(),
         }
     }
@@ -59,16 +56,16 @@ impl RTreeObject for Entry {
 }
 
 impl PointDistance for Entry {
-    fn distance_2(&self, point: &SpatialPoint) -> f32 {
+    fn distance_2(&self, point: &SpatialPoint) -> i32 {
         let delta = self.aabb.nearest_point(point).0.sub(point.0);
-        delta.x * delta.x + delta.y * delta.y + delta.z * delta.z
+        delta.x * delta.x + delta.y * delta.y
     }
 
     fn contains_point(&self, point: &SpatialPoint) -> bool {
         self.aabb.contains_point(point)
     }
 
-    fn distance_2_if_less_or_equal(&self, point: &SpatialPoint, max_distance_2: f32) -> Option<f32> {
+    fn distance_2_if_less_or_equal(&self, point: &SpatialPoint, max_distance_2: i32) -> Option<i32> {
         let distance_2 = self.distance_2(point);
         if distance_2 <= max_distance_2 {
             Some(distance_2)
@@ -115,13 +112,13 @@ impl SpatialEntityTree {
         self.entities.insert(entity, (map, aabb));
     }
 
-    pub fn insert_aabb(&mut self, entity: Entity, map: u8, min: IVec3, max: IVec3) {
-        let aabb = Rectangle::from_corners(SpatialPoint(min.as_vec3()), SpatialPoint(max.as_vec3()));
+    pub fn insert_aabb(&mut self, entity: Entity, map: u8, min: IVec2, max: IVec2) {
+        let aabb = Rectangle::from_corners(SpatialPoint(min), SpatialPoint(max));
         self.insert(entity, map, aabb);
     }
 
-    pub fn insert_point(&mut self, entity: Entity, map: u8, position: IVec3) {
-        let aabb = AABB::from_point(SpatialPoint(position.as_vec3())).into();
+    pub fn insert_point(&mut self, entity: Entity, map: u8, position: IVec2) {
+        let aabb = AABB::from_point(SpatialPoint(position)).into();
         self.insert(entity, map, aabb);
     }
 
@@ -134,28 +131,16 @@ impl SpatialEntityTree {
         }
     }
 
-    pub fn iter(&self, map_id: u8) -> impl Iterator<Item=(Entity, IVec3, IVec3)> + '_ {
+    pub fn iter(&self, map_id: u8) -> impl Iterator<Item=(Entity, IVec2, IVec2)> + '_ {
         self.trees.get(&map_id).unwrap()
             .iter()
-            .map(|e| (e.entity, e.aabb.lower().0.as_ivec3(), e.aabb.upper().0.as_ivec3()))
+            .map(|e| (e.entity, e.aabb.lower().0, e.aabb.upper().0))
     }
 
-    pub fn iter_at_point(&self, map: u8, position: IVec3) -> impl Iterator<Item=(Entity, IVec3, IVec3)> + '_ {
+    pub fn iter_at_point(&self, map: u8, position: IVec2) -> impl Iterator<Item=Entity> + '_ {
         MaybeIter(if let Some(tree) = self.trees.get(&map) {
-            Some(tree.locate_all_at_point(&SpatialPoint(position.as_vec3()))
-                .map(|e| (e.entity, e.aabb.lower().0.as_ivec3(), e.aabb.upper().0.as_ivec3())))
-        } else {
-            None
-        })
-    }
-
-    pub fn iter_at_column(&self, map: u8, position: IVec2) -> impl Iterator<Item=(Entity, IVec3, IVec3)> + '_ {
-        let min = SpatialPoint(position.extend(-1000).as_vec3());
-        let max = SpatialPoint(position.extend(1000).as_vec3());
-        let aabb = AABB::from_corners(min, max);
-        MaybeIter(if let Some(tree) = self.trees.get(&map) {
-            Some(tree.locate_in_envelope_intersecting(&aabb)
-                .map(|e| (e.entity, e.aabb.lower().0.as_ivec3(), e.aabb.upper().0.as_ivec3())))
+            Some(tree.locate_all_at_point(&SpatialPoint(position))
+                .map(|e| e.entity))
         } else {
             None
         })
@@ -170,19 +155,18 @@ pub struct EntitySurfaces {
 pub fn update_entity_surfaces(
     mut storage: ResMut<EntitySurfaces>,
     chunks: Query<(Entity, &MapPosition), (With<Chunk>, Or<(Changed<MapPosition>, Changed<Chunk>)>)>,
-    surfaces: Query<(Entity, &MapPosition, &Surface), Or<(Changed<MapPosition>, Changed<Surface>)>>,
+    surfaces: Query<(Entity, &MapPosition), (With<Surface>, Or<(Changed<MapPosition>, Changed<Surface>)>)>,
     mut removed_chunks: RemovedComponents<Chunk>,
     mut removed_surfaces: RemovedComponents<Surface>,
 ) {
     for (entity, position) in chunks.iter() {
-        let min = position.position - IVec3::new(0, 0, 1000);
-        let max = position.position + IVec3::new(CHUNK_SIZE as i32 - 1, CHUNK_SIZE as i32 - 1, 1000);
+        let min = position.position.truncate();
+        let max = min + IVec2::new(CHUNK_SIZE as i32 - 1, CHUNK_SIZE as i32 - 1);
         storage.tree.insert_aabb(entity, position.map_id, min, max);
     }
 
-    for (entity, position, surface) in surfaces.iter() {
-        storage.tree.insert_point(entity, position.map_id,
-            position.position + IVec3::new(0, 0, surface.offset as i32));
+    for (entity, position) in surfaces.iter() {
+        storage.tree.insert_point(entity, position.map_id, position.position.truncate());
     }
 
     for entity in removed_chunks.iter() {
@@ -207,13 +191,13 @@ pub struct EntityPositions {
 
 pub fn update_entity_positions(
     mut storage: ResMut<EntityPositions>,
-    entities: Query<(Entity, &MapPosition, &Size)>,
+    entities: Query<(Entity, &MapPosition, &Size), Or<(Changed<MapPosition>, Changed<Size>)>>,
     mut removed_entities: RemovedComponents<Size>,
 ) {
     for (entity, position, size) in &entities {
         let min = position.position - size.min;
         let max = position.position + size.max;
-        storage.tree.insert_aabb(entity, position.map_id, min, max);
+        storage.tree.insert_aabb(entity, position.map_id, min.truncate(), max.truncate());
     }
 
     for entity in removed_entities.iter() {

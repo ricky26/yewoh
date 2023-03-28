@@ -1,11 +1,11 @@
 use bevy_ecs::prelude::*;
 use bevy_reflect::prelude::*;
 
-use yewoh::protocol::{Swing, CharacterProfile, ContextMenuEntry, DamageDealt, EntityFlags, MoveConfirm, MoveEntityReject, OpenContainer, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, WarMode, CharacterAnimation};
+use yewoh::protocol::{CharacterAnimation, CharacterProfile, ContextMenuEntry, DamageDealt, EntityFlags, MoveConfirm, MoveEntityReject, OpenContainer, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, Swing, WarMode};
 use yewoh_server::world::entity::{Character, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer, Quantity};
 use yewoh_server::world::events::{ContextMenuEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SingleClickEvent};
 use yewoh_server::world::input::ContextMenuRequest;
-use yewoh_server::world::map::Chunk;
+use yewoh_server::world::map::{Chunk, Surface};
 use yewoh_server::world::net::{make_container_contents_packet, NetClient, NetEntity, NetEntityLookup, NetOwned, PlayerState};
 use yewoh_server::world::spatial::EntitySurfaces;
 
@@ -22,9 +22,11 @@ pub struct Holder {
 pub fn handle_move(
     mut events: EventReader<MoveEvent>,
     surfaces: Res<EntitySurfaces>,
-    map_chunks: Query<&Chunk>,
     connection_query: Query<(&NetClient, &NetOwned)>,
-    mut character_query: Query<(&mut MapPosition, &mut PlayerState, &Notorious)>,
+    mut character_and_surfaces: ParamSet<(
+        Query<(&mut MapPosition, &mut PlayerState, &Notorious)>,
+        Query<(&MapPosition, AnyOf<(&Chunk, &Surface)>)>,
+    )>,
 ) {
     for MoveEvent { client_entity: connection, request } in events.iter() {
         let connection = *connection;
@@ -34,8 +36,8 @@ pub fn handle_move(
         };
 
         let primary_entity = owned.primary_entity;
-        let (mut map_position, mut state, notoriety) = match character_query.get_mut(primary_entity) {
-            Ok(x) => x,
+        let mut map_position = match character_and_surfaces.p0().get_mut(primary_entity) {
+            Ok((position, ..)) => position.clone(),
             _ => continue,
         };
 
@@ -46,19 +48,24 @@ pub fn handle_move(
             let mut test_position = map_position.position + request.direction.as_vec2().extend(10);
             let mut new_z = 0;
 
-            for (entity, min, _) in surfaces.tree.iter_at_column(map_position.map_id, test_position.truncate()) {
-                if let Ok(chunk) = map_chunks.get(entity) {
-                    let chunk_pos = test_position - min;
-                    let (_, z) = chunk.map_chunk.get(chunk_pos.x as usize, chunk_pos.y as usize);
-                    let z = z as i32;
-                    if z <= test_position.z {
-                        new_z = new_z.max(z);
+            for entity in surfaces.tree.iter_at_point(map_position.map_id, test_position.truncate()) {
+                match character_and_surfaces.p1().get(entity) {
+                    Ok((position, (Some(chunk), _))) => {
+                        let chunk_pos = test_position - position.position;
+                        let (_, z) = chunk.map_chunk.get(chunk_pos.x as usize, chunk_pos.y as usize);
+                        let z = z as i32;
+                        if z <= test_position.z {
+                            new_z = new_z.max(z);
+                        }
                     }
-                } else {
-                    let z = min.z;
-                    if z <= test_position.z {
-                        new_z = new_z.max(z);
+                    Ok((position, (_, Some(surface)))) => {
+                        let z = position.position.z + surface.offset as i32;
+                        if z <= test_position.z {
+                            new_z = new_z.max(z);
+                        }
                     }
+                    Err(_) => {}
+                    _ => unreachable!(),
                 }
             }
 
@@ -66,7 +73,10 @@ pub fn handle_move(
             map_position.position = test_position;
         }
 
-        state.position = *map_position;
+        let mut characters = character_and_surfaces.p0();
+        let (mut position, mut state, notoriety) = characters.get_mut(primary_entity).unwrap();
+        state.position = map_position;
+        *position = map_position;
 
         let notoriety = **notoriety;
         client.send_packet(MoveConfirm {
