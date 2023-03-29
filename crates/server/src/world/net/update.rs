@@ -1,15 +1,20 @@
-use std::sync::Arc;
-
 use bevy_ecs::prelude::*;
 use glam::IVec2;
 
-use yewoh::{EntityId, EntityKind, Notoriety};
-use yewoh::protocol::{AnyPacket, CharacterEquipment, DeleteEntity, EntityFlags, EntityTooltipVersion, EquipmentSlot, Packet, UpsertContainerContents, UpsertEntityCharacter, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityWorld, UpsertLocalPlayer};
+use yewoh::{EntityId, EntityKind};
+use yewoh::protocol::{CharacterEquipment, UpsertContainerContents, UpsertEntityCharacter, UpsertEntityContained, UpsertEntityWorld, UpsertLocalPlayer};
 
-use crate::world::entity::{Character, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer, Quantity, Stats, Tooltip};
-use crate::world::net::{CanSee, HasSeen, NetClient, NetEntity, NetEntityLookup, NetOwner, NetSynchronized};
-use crate::world::net::owner::NetSynchronizing;
+use crate::world::entity::{Character, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer, Quantity, Stats};
+use crate::world::net::{NetClient, NetEntity, Possessing};
+use crate::world::net::connection::View;
+use crate::world::net::view::PartiallyVisible;
+use crate::world::spatial::EntityPositions;
 
+pub fn is_visible_to(viewer: Entity, visibility: &Option<Ref<PartiallyVisible>>) -> bool {
+    visibility.as_ref().map_or(true, |v| v.is_visible_to(viewer))
+}
+
+/*
 fn send_update<'a>(
     mut clients: impl Iterator<Item=(&'a NetClient, &'a CanSee, Mut<'a, HasSeen>)>,
     entity: Entity,
@@ -539,7 +544,227 @@ pub fn send_updated_stats(
             || stats.upsert(net.id, true).into_arc());
     }
 }
+ */
 
+/*
+fn send_child_items(
+    client: &NetClient, possessed: Entity, sync: bool,
+    id: EntityId, container: Ref<Container>,
+    child_items: &Query<(
+        &NetEntity, Option<Ref<PartiallyVisible>>,
+        Ref<Graphic>, Ref<ParentContainer>, Option<Ref<Quantity>>, Option<Ref<Container>>,
+    )>,
+) {
+    // If the container contents has changed, re-send the whole thing.
+    // TODO: only do this for initial send
+    if container.is_changed() {
+        let mut items = Vec::with_capacity(container.items.len());
+
+        for item in container.items.iter().cloned() {
+            let (net_id, visibility, graphic, parent, quantity, _) = match child_items.get(item) {
+                Ok(x) => x,
+                _ => continue,
+            };
+
+            if !is_visible_to(possessed, &visibility) {
+                continue;
+            }
+
+            items.push(UpsertEntityContained {
+                id: net_id.id,
+                graphic_id: graphic.id,
+                graphic_inc: 0,
+                quantity: quantity.map_or(1, |q| q.quantity),
+                position: parent.position,
+                grid_index: parent.grid_index,
+                parent_id: id,
+                hue: graphic.hue,
+            });
+        }
+
+        client.send_packet(UpsertContainerContents {
+            items,
+        }.into());
+
+        for item in container.items.iter().cloned() {
+            let (_, visibility, _, _, _, container) = match child_items.get(item) {
+                Ok(x) => x,
+                _ => continue,
+            };
+
+            if !is_visible_to(possessed, &visibility) {
+                continue;
+            }
+
+            if let Some(container) = container {
+                send_child_items(client, possessed, sync, id, container, child_items);
+            }
+        }
+
+        return;
+    }
+
+    for child_entity in container.items.iter().cloned() {
+        let (net_id, visibility, graphic, parent, quantity, container) = match child_items.get(child_entity) {
+            Ok(x) => x,
+            _ => continue,
+        };
+
+        if (sync || visibility.as_ref().map_or(false, |r| r.is_changed()) || graphic.is_changed() || parent.is_changed() || quantity.as_ref().map_or(false, |r| r.is_changed())) && is_visible_to(possessed, &visibility) {
+            client.send_packet(UpsertEntityContained {
+                id: net_id.id,
+                graphic_id: graphic.id,
+                graphic_inc: 0,
+                quantity: quantity.as_ref().map_or(1, |q| q.quantity),
+                position: parent.position,
+                grid_index: parent.grid_index,
+                parent_id: id,
+                hue: graphic.hue,
+            }.into());
+        }
+
+        if let Some(container) = container {
+            send_child_items(client, possessed, sync, id, container, child_items);
+        }
+    }
+}
+
+fn send_ghost_updates_to_client(
+    client: &NetClient, view: &View, position: MapPosition, possessed: Entity, sync: bool,
+    characters: &Query<(
+        &NetEntity, Option<Ref<PartiallyVisible>>,
+        Ref<Flags>, Ref<Character>, Ref<MapPosition>, Ref<Notorious>, Ref<Stats>,
+    )>,
+    world_items: &Query<(
+        &NetEntity, Option<Ref<PartiallyVisible>>,
+        Ref<Graphic>, Ref<Flags>, Option<Ref<Quantity>>, Ref<MapPosition>, Option<Ref<Container>>,
+    )>,
+    equipped_items: &Query<(&NetEntity, Ref<Graphic>, Ref<EquippedBy>)>,
+    child_items: &Query<(
+        &NetEntity, Option<Ref<PartiallyVisible>>,
+        Ref<Graphic>, Ref<ParentContainer>, Option<Ref<Quantity>>, Option<Ref<Container>>,
+    )>,
+    positions: &EntityPositions,
+) {
+    let position2 = position.position.truncate();
+    let range2 = IVec2::new(view.range as i32, view.range as i32);
+    let min = position2 - range2;
+    let max = position2 + range2;
+
+    for entity in positions.tree.iter_aabb(position.map_id, min, max) {
+        if let Ok((net, visibility, flags, character, position, notoriety, stats)) = characters.get(entity) {
+            if (sync || flags.is_changed() || character.is_changed() || position.is_changed() || notoriety.is_changed() || stats.is_changed()) && is_visible_to(possessed, &visibility) {
+                let mut equipment = Vec::new();
+
+                for child_entity in character.equipment.iter().copied() {
+                    let (net, graphic, equipped_by) = match equipped_items.get(child_entity) {
+                        Ok(x) => x,
+                        _ => continue,
+                    };
+                    equipment.push(CharacterEquipment {
+                        id: net.id,
+                        slot: equipped_by.slot,
+                        graphic_id: graphic.id,
+                        hue: graphic.hue,
+                    });
+                }
+
+                client.send_packet(UpsertEntityCharacter {
+                    id: net.id,
+                    body_type: character.body_type,
+                    position: position.position,
+                    direction: position.direction,
+                    hue: character.hue,
+                    flags: flags.flags,
+                    notoriety: notoriety.0,
+                    equipment,
+                }.into());
+
+                // TODO: should this be limited to the local player?
+                client.send_packet(stats.upsert(net.id, true).into());
+            }
+        } else if let Ok((net, visibility, graphic, flags, quantity, position, container)) = world_items.get(entity) {
+            if (sync || graphic.is_changed() || flags.is_changed() || quantity.as_ref().map_or(false, |r| r.is_changed()) || position.is_changed()) && is_visible_to(possessed, &visibility) {
+                client.send_packet(UpsertEntityWorld {
+                    id: net.id,
+                    kind: EntityKind::Item,
+                    graphic_id: graphic.id,
+                    graphic_inc: 0,
+                    direction: position.direction,
+                    quantity: quantity.map_or(1, |q| q.quantity),
+                    position: position.position,
+                    hue: graphic.hue,
+                    flags: flags.flags,
+                }.into());
+            }
+
+            if let Some(container) = container {
+                send_child_items(client, possessed, sync, net.id, container, &child_items);
+            }
+        }
+    }
+}
+
+pub fn send_ghost_updates(
+    mut clients: Query<(&NetClient, &View, &Possessing), Without<NetSynchronizing>>,
+    mut sync_clients: Query<(&NetClient, &View, &Possessing), With<NetSynchronizing>>,
+    characters: Query<(
+        &NetEntity, Option<Ref<PartiallyVisible>>,
+        Ref<Flags>, Ref<Character>, Ref<MapPosition>, Ref<Notorious>, Ref<Stats>,
+    )>,
+    world_items: Query<(
+        &NetEntity, Option<Ref<PartiallyVisible>>,
+        Ref<Graphic>, Ref<Flags>, Option<Ref<Quantity>>, Ref<MapPosition>, Option<Ref<Container>>,
+    )>,
+    equipped_items: Query<(&NetEntity, Ref<Graphic>, Ref<EquippedBy>)>,
+    child_items: Query<(
+        &NetEntity, Option<Ref<PartiallyVisible>>,
+        Ref<Graphic>, Ref<ParentContainer>, Option<Ref<Quantity>>, Option<Ref<Container>>,
+    )>,
+    positions: Res<EntityPositions>,
+) {
+    for (client, view, possessing) in clients.iter_mut() {
+        let (net, _, flags, character, position, ..) = match characters.get(possessing.entity) {
+            Ok(x) => x,
+            _ => continue,
+        };
+
+        if character.is_changed() || flags.is_changed() || position.is_changed() {
+            client.send_packet(UpsertLocalPlayer {
+                id: net.id,
+                body_type: character.body_type,
+                server_id: 0,
+                hue: character.hue,
+                flags: flags.flags,
+                position: position.position,
+                direction: position.direction,
+            }.into());
+        }
+
+        send_ghost_updates_to_client(client, view, *position, possessing.entity, false, &characters, &world_items, &equipped_items, &child_items, &positions);
+    }
+
+    for (client, view, possessing) in sync_clients.iter_mut() {
+        let (net, _, flags, character, position, ..) = match characters.get(possessing.entity) {
+            Ok(x) => x,
+            _ => continue,
+        };
+
+        client.send_packet(UpsertLocalPlayer {
+            id: net.id,
+            body_type: character.body_type,
+            server_id: 0,
+            hue: character.hue,
+            flags: flags.flags,
+            position: position.position,
+            direction: position.direction,
+        }.into());
+
+        send_ghost_updates_to_client(client, view, *position, possessing.entity, true, &characters, &world_items, &equipped_items, &child_items, &positions);
+    }
+}
+*/
+/*
 pub fn sync_entities(
     mut clients: Query<(&NetClient, &CanSee, &mut HasSeen), With<NetSynchronizing>>,
     characters: Query<(Entity, &NetEntity, &CharacterState)>,
@@ -600,17 +825,4 @@ pub fn sync_entities(
     }
 }
 
-pub fn update_tooltips(
-    mut clients: Query<(&NetClient, &CanSee, &mut HasSeen)>,
-    tooltips: Query<(Entity, &NetEntity, Ref<Tooltip>), Changed<Tooltip>>,
-) {
-    for (entity, net, tooltip) in tooltips.iter() {
-        send_update(
-            clients.iter_mut(),
-            entity,
-            || EntityTooltipVersion {
-                id: net.id,
-                revision: tooltip.last_changed(),
-            }.into_arc());
-    }
-}
+*/

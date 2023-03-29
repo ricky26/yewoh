@@ -76,12 +76,6 @@ pub struct EquipEvent {
 }
 
 #[derive(Debug, Clone)]
-pub struct NewPrimaryEntityEvent {
-    pub client_entity: Entity,
-    pub primary_entity: Option<Entity>,
-}
-
-#[derive(Debug, Clone)]
 pub struct ChatRequestEvent {
     pub client_entity: Entity,
     pub request: UnicodeTextMessageRequest,

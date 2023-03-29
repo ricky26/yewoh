@@ -6,7 +6,7 @@ use yewoh_server::world::entity::{Character, Container, EquippedBy, Flags, Graph
 use yewoh_server::world::events::{ContextMenuEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SingleClickEvent};
 use yewoh_server::world::input::ContextMenuRequest;
 use yewoh_server::world::map::{Chunk, Surface};
-use yewoh_server::world::net::{make_container_contents_packet, NetClient, NetEntity, NetEntityLookup, NetOwned, PlayerState};
+use yewoh_server::world::net::{/*make_container_contents_packet,*/ NetClient, NetEntity, NetEntityLookup, Possessing};
 use yewoh_server::world::spatial::EntitySurfaces;
 
 #[derive(Debug, Clone, Component, Reflect)]
@@ -22,9 +22,9 @@ pub struct Holder {
 pub fn handle_move(
     mut events: EventReader<MoveEvent>,
     surfaces: Res<EntitySurfaces>,
-    connection_query: Query<(&NetClient, &NetOwned)>,
+    connection_query: Query<(&NetClient, &Possessing)>,
     mut character_and_surfaces: ParamSet<(
-        Query<(&mut MapPosition, &mut PlayerState, &Notorious)>,
+        Query<(&mut MapPosition, &Notorious)>,
         Query<(&MapPosition, AnyOf<(&Chunk, &Surface)>)>,
     )>,
 ) {
@@ -35,7 +35,7 @@ pub fn handle_move(
             _ => continue,
         };
 
-        let primary_entity = owned.primary_entity;
+        let primary_entity = owned.entity;
         let mut map_position = match character_and_surfaces.p0().get_mut(primary_entity) {
             Ok((position, ..)) => position.clone(),
             _ => continue,
@@ -74,8 +74,8 @@ pub fn handle_move(
         }
 
         let mut characters = character_and_surfaces.p0();
-        let (mut position, mut state, notoriety) = characters.get_mut(primary_entity).unwrap();
-        state.position = map_position;
+        let (mut position, notoriety) = characters.get_mut(primary_entity).unwrap();
+        //state.position = map_position;
         *position = map_position;
 
         let notoriety = **notoriety;
@@ -139,14 +139,14 @@ pub fn handle_double_click(
                 id: net.id,
                 gump_id: container.gump_id,
             }.into());
-            client.send_packet(make_container_contents_packet(net.id, container, &content_query).into());
+            //client.send_packet(make_container_contents_packet(net.id, container, &content_query).into());
         }
     }
 }
 
 pub fn handle_pick_up(
     mut events: EventReader<PickUpEvent>,
-    clients: Query<(&NetClient, &NetOwned)>,
+    clients: Query<(&NetClient, &Possessing)>,
     characters: Query<Option<&Held>>,
     targets: Query<(Entity, Option<&MapPosition>, Option<&ParentContainer>, Option<&EquippedBy>)>,
     mut containers: Query<&mut Container>,
@@ -159,7 +159,7 @@ pub fn handle_pick_up(
             _ => continue,
         };
 
-        let character = owner.primary_entity;
+        let character = owner.entity;
         let held = match characters.get(character) {
             Ok(x) => x,
             _ => continue,
@@ -207,7 +207,7 @@ pub fn handle_pick_up(
 
 pub fn handle_drop(
     mut events: EventReader<DropEvent>,
-    clients: Query<(&NetClient, &NetOwned)>,
+    clients: Query<(&NetClient, &Possessing)>,
     characters: Query<(&MapPosition, &Held)>,
     mut containers: Query<&mut Container>,
     mut commands: Commands,
@@ -218,7 +218,7 @@ pub fn handle_drop(
             _ => continue,
         };
 
-        let character = owner.primary_entity;
+        let character = owner.entity;
         let (character_position, held) = match characters.get(character) {
             Ok(x) => x,
             _ => continue,
@@ -267,7 +267,7 @@ pub fn handle_drop(
 
 pub fn handle_equip(
     mut events: EventReader<EquipEvent>,
-    clients: Query<(&NetClient, &NetOwned)>,
+    clients: Query<(&NetClient, &Possessing)>,
     characters: Query<(&MapPosition, &Held)>,
     mut loadouts: Query<&mut Character>,
     mut commands: Commands,
@@ -278,7 +278,7 @@ pub fn handle_equip(
             _ => continue,
         };
 
-        let character = owner.primary_entity;
+        let character = owner.entity;
         let (character_position, held) = match characters.get(character) {
             Ok(x) => x,
             _ => continue,
@@ -315,7 +315,7 @@ pub fn handle_equip(
 
 pub fn handle_context_menu(
     lookup: Res<NetEntityLookup>,
-    clients: Query<(&NetClient, &NetOwned)>,
+    clients: Query<(&NetClient, &Possessing)>,
     characters: Query<&NetEntity>,
     mut context_requests: Query<&mut ContextMenuRequest>,
     mut context_events: EventReader<ContextMenuEvent>,
@@ -335,7 +335,7 @@ pub fn handle_context_menu(
             _ => continue,
         };
 
-        let net = match characters.get(owned.primary_entity) {
+        let net = match characters.get(owned.entity) {
             Ok(x) => x,
             _ => continue,
         };
@@ -425,7 +425,7 @@ pub fn handle_skills_requests(
 }
 
 pub fn handle_war_mode(
-    clients: Query<(&NetClient, &NetOwned)>,
+    clients: Query<(&NetClient, &Possessing)>,
     mut characters: Query<&mut Flags>,
     mut new_packets: EventReader<ReceivedPacketEvent>,
 ) {
@@ -440,7 +440,7 @@ pub fn handle_war_mode(
             _ => continue,
         };
 
-        let mut flags = match characters.get_mut(owned.primary_entity) {
+        let mut flags = match characters.get_mut(owned.entity) {
             Ok(x) => x,
             _ => continue,
         };

@@ -2,7 +2,7 @@ use bevy_ecs::prelude::*;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use yewoh::protocol::{Packet, SetTime};
 
-use yewoh_server::world::net::{NetClient, NetSynchronizing};
+use yewoh_server::world::net::{NetClient, Synchronizing};
 
 pub const MULTIPLIER: i32 = 12;
 
@@ -41,7 +41,7 @@ impl<T: TimeZone> From<DateTime<T>> for WorldTime {
 }
 
 pub fn send_time(
-    clients: Query<(&NetClient, &NetSynchronizing)>,
+    clients: Query<(&NetClient, &Synchronizing)>,
 ) {
     if clients.is_empty() {
         return;

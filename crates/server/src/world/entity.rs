@@ -187,7 +187,7 @@ impl Stats {
     }
 }
 
-#[derive(Debug, Clone, Default, Component)]
+#[derive(Debug, Clone, Default, Component, Eq, PartialEq)]
 pub struct Tooltip {
     pub entries: Vec<EntityTooltipLine>,
 }

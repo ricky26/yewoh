@@ -3,7 +3,7 @@ use std::path::Path;
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::CommandQueue;
 use bevy_reflect::prelude::*;
-use futures::future::{self, TryFutureExt};
+use futures::{future, TryFutureExt};
 use glam::IVec3;
 use tokio::spawn;
 use tokio::sync::mpsc;

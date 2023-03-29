@@ -1,6 +1,7 @@
 pub use connection::{
     NetServer,
     NetClient,
+    Possessing,
     User,
     broadcast,
     accept_new_clients,
@@ -9,49 +10,30 @@ pub use connection::{
     handle_new_packets,
     send_tooltips,
 };
-pub use owner::{
-    NetOwner,
-    NetOwned,
-    NetSynchronizing,
-    NetSynchronized,
-    View,
-    CanSee,
-    HasSeen,
+pub use view::{
+    Synchronizing,
+    Synchronized,
     MapInfo,
     MapInfos,
+    View,
+    ViewState,
     start_synchronizing,
     finish_synchronizing,
-    update_view,
+    send_change_map,
+    send_ghost_updates,
+    set_view_position,
 };
 pub use entity::{
     NetEntity,
     NetEntityLookup,
     NetEntityAllocator,
-    update_entity_lookup,
-};
-pub use update::{
-    PlayerState,
-    WorldItemState,
-    ContainedItemState,
-    EquippedItemState,
-    CharacterState,
-    send_remove_entity,
-    send_hidden_entities,
-    make_container_contents_packet,
-    send_updated_stats,
-    update_items_in_world,
-    update_equipped_items,
-    update_items_in_containers,
-    update_characters,
-    update_players,
-    update_tooltips,
-    sync_entities,
+    NetOwner,
+    add_new_entities_to_lookup,
+    remove_old_entities_from_lookup,
 };
 
 mod connection;
 
-mod owner;
-
 mod entity;
 
-mod update;
+mod view;

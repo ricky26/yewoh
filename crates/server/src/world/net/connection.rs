@@ -8,14 +8,17 @@ use tokio::sync::mpsc;
 
 use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, CharacterProfile, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DoubleClick, DropEntity, EntityRequest, EntityRequestKind, EntityTooltip, EquipEntity, FeatureFlags, GameServerLogin, Move, PickUpEntity, SelectCharacter, SingleClick, SupportedFeatures, UnicodeTextMessageRequest};
 use yewoh::protocol::encryption::Encryption;
-use crate::async_runtime::AsyncRuntime;
 
+use crate::async_runtime::AsyncRuntime;
 use crate::game_server::NewSessionAttempt;
 use crate::lobby::{NewSessionRequest, SessionAllocator};
 use crate::world::entity::Tooltip;
 use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::input::Targeting;
 use crate::world::net::entity::NetEntityLookup;
+use crate::world::net::view::View;
+
+pub const DEFAULT_VIEW_RANGE: u32 = 18;
 
 pub enum WriterAction {
     Send(ClientVersion, AnyPacket),
@@ -27,6 +30,11 @@ pub struct NetClient {
     address: SocketAddr,
     client_version: ClientVersion,
     tx: mpsc::UnboundedSender<WriterAction>,
+}
+
+#[derive(Debug, Clone, Component, Reflect)]
+pub struct Possessing {
+    pub entity: Entity,
 }
 
 #[derive(Debug, Clone, Component, Reflect)]
@@ -208,6 +216,7 @@ pub fn accept_new_clients(
                 client.clone(),
                 User { username },
                 Targeting::default(),
+                View { map_id: 0xff, range: DEFAULT_VIEW_RANGE },
             ))
             .id();
 

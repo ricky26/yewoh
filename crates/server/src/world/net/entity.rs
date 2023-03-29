@@ -2,12 +2,18 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use bevy_ecs::prelude::*;
+use bevy_reflect::Reflect;
 
 use yewoh::EntityId;
 
 #[derive(Debug, Clone, Copy, Component)]
 pub struct NetEntity {
     pub id: EntityId,
+}
+
+#[derive(Debug, Clone, Copy, Component, Reflect)]
+pub struct NetOwner {
+    pub client_entity: Entity,
 }
 
 #[derive(Debug, Resource)]
@@ -70,15 +76,19 @@ impl NetEntityLookup {
     }
 }
 
-pub fn update_entity_lookup(
+pub fn add_new_entities_to_lookup(
     mut lookup: ResMut<NetEntityLookup>,
     query: Query<(Entity, &NetEntity), Changed<NetEntity>>,
-    mut removals: RemovedComponents<NetEntity>,
 ) {
     for (entity, net_entity) in query.iter() {
         lookup.insert(entity, net_entity.id);
     }
+}
 
+pub fn remove_old_entities_from_lookup(
+    mut lookup: ResMut<NetEntityLookup>,
+    mut removals: RemovedComponents<NetEntity>,
+) {
     for entity in removals.iter() {
         lookup.remove(entity);
     }

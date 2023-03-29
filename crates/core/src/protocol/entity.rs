@@ -518,7 +518,7 @@ impl Packet for EntityTooltipVersion {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct EntityTooltipLine {
     pub text_id: u32,
     pub params: String,

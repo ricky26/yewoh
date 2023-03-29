@@ -5,7 +5,7 @@ use glam::IVec2;
 use yewoh::Direction;
 use yewoh::protocol::{EntityFlags, GumpLayout, OpenGump};
 use yewoh_server::world::entity::{Flags, Graphic, MapPosition};
-use yewoh_server::world::net::{NetClient, NetEntity, NetEntityAllocator, NetOwned};
+use yewoh_server::world::net::{NetClient, NetEntity, NetEntityAllocator, Possessing};
 
 use crate::commands::{TextCommand, TextCommandQueue};
 
@@ -38,14 +38,14 @@ impl TextCommand for FryPan {
 pub fn frypan(
     mut exec: TextCommandQueue<FryPan>,
     allocator: Res<NetEntityAllocator>,
-    owners: Query<&NetOwned>,
+    owners: Query<&Possessing>,
     characters: Query<&MapPosition>,
     mut commands: Commands,
 ) {
     for (from, _) in exec.iter() {
         if let Some(position) = owners.get(from)
             .ok()
-            .and_then(|owner| characters.get(owner.primary_entity).ok()) {
+            .and_then(|owner| characters.get(owner.entity).ok()) {
             let id = allocator.allocate_item();
             commands.spawn((
                 NetEntity { id },

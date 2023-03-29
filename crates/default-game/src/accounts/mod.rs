@@ -6,8 +6,8 @@ use yewoh::{Direction, Notoriety};
 use yewoh::protocol::{CharacterList, CharacterListFlags, EntityFlags, EntityTooltipLine, EquipmentSlot, UnicodeTextMessage};
 use yewoh_server::async_runtime::AsyncRuntime;
 use yewoh_server::world::entity::{Character, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer, Tooltip};
-use yewoh_server::world::events::{CharacterListEvent, CreateCharacterEvent, NewPrimaryEntityEvent, SelectCharacterEvent};
-use yewoh_server::world::net::{NetClient, NetEntity, NetEntityAllocator, User};
+use yewoh_server::world::events::{CharacterListEvent, CreateCharacterEvent, SelectCharacterEvent};
+use yewoh_server::world::net::{NetClient, NetEntity, NetEntityAllocator, NetOwner, Possessing, User};
 
 use crate::accounts::repository::{AccountRepository, CharacterInfo};
 use crate::data::static_data::StaticData;
@@ -157,7 +157,6 @@ pub fn handle_spawn_character(
     entity_allocator: Res<NetEntityAllocator>,
     clients: Query<&NetClient>,
     mut pending: ResMut<PendingCharacterInfo>,
-    mut out_events: EventWriter<NewPrimaryEntityEvent>,
     mut commands: Commands,
 ) {
     while let Ok((entity, result)) = pending.rx.try_recv() {
@@ -271,6 +270,7 @@ pub fn handle_spawn_character(
         let primary_entity_id = entity_allocator.allocate_character();
         let primary_entity = commands.spawn((
             NetEntity { id: primary_entity_id },
+            NetOwner { client_entity },
             Flags { flags: EntityFlags::default() },
             MapPosition {
                 map_id: 1,
@@ -291,7 +291,7 @@ pub fn handle_spawn_character(
                 .insert(EquippedBy { parent: primary_entity, slot });
         }
 
-        out_events.send(NewPrimaryEntityEvent { client_entity: client_entity, primary_entity: Some(primary_entity) });
+        commands.entity(client_entity).insert(Possessing { entity: primary_entity });
         client.send_packet(UnicodeTextMessage {
             text: "Avast me hearties".to_string(),
             hue: 120,

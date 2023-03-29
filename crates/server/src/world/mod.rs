@@ -1,10 +1,10 @@
 use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
 
-use crate::world::events::{CharacterListEvent, ChatRequestEvent, ContextMenuEvent, CreateCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, NewPrimaryEntityEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
+use crate::world::events::{CharacterListEvent, ChatRequestEvent, ContextMenuEvent, CreateCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::input::{handle_context_menu_packets, send_context_menu, update_targets};
-use crate::world::net::{accept_new_clients, finish_synchronizing, update_view, handle_input_packets, handle_login_packets, handle_new_packets, MapInfos, NetEntityAllocator, NetEntityLookup, send_remove_entity, send_tooltips, send_updated_stats, start_synchronizing, sync_entities, update_characters, update_entity_lookup, update_equipped_items, update_items_in_containers, update_items_in_world, update_players, update_tooltips, send_hidden_entities};
-use crate::world::spatial::{EntitySurfaces, update_entity_surfaces};
+use crate::world::net::{accept_new_clients, add_new_entities_to_lookup, finish_synchronizing, handle_input_packets, handle_login_packets, handle_new_packets, MapInfos, NetEntityAllocator, NetEntityLookup, remove_old_entities_from_lookup, send_change_map, send_ghost_updates, send_tooltips, start_synchronizing};
+use crate::world::spatial::{EntityPositions, EntitySurfaces, update_entity_positions, update_entity_surfaces};
 
 pub mod net;
 
@@ -21,8 +21,12 @@ pub mod input;
 #[derive(SystemSet, Hash, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerSet {
     Receive,
+    HandlePackets,
     UpdateVisibility,
+    SendFirst,
+    SendGhosts,
     Send,
+    SendLast,
 }
 
 #[derive(Default)]
@@ -35,6 +39,7 @@ impl Plugin for ServerPlugin {
             .init_resource::<NetEntityAllocator>()
             .init_resource::<NetEntityLookup>()
             .init_resource::<EntitySurfaces>()
+            .init_resource::<EntityPositions>()
             .add_event::<ReceivedPacketEvent>()
             .add_event::<SentPacketEvent>()
             .add_event::<CharacterListEvent>()
@@ -49,48 +54,48 @@ impl Plugin for ServerPlugin {
             .add_event::<ContextMenuEvent>()
             .add_event::<ProfileEvent>()
             .add_event::<RequestSkillsEvent>()
-            .add_event::<NewPrimaryEntityEvent>()
             .add_event::<ChatRequestEvent>()
             .configure_sets((
-                ServerSet::Receive.in_base_set(CoreSet::PreUpdate),
+                ServerSet::Receive.in_base_set(CoreSet::First),
+                ServerSet::HandlePackets.in_base_set(CoreSet::First).after(ServerSet::Receive),
                 ServerSet::UpdateVisibility
                     .in_base_set(CoreSet::PostUpdate)
                     .before(ServerSet::Send),
-                ServerSet::Send.in_base_set(CoreSet::PostUpdate),
+                ServerSet::SendFirst.in_base_set(CoreSet::Last),
+                ServerSet::SendGhosts.in_base_set(CoreSet::Last).after(ServerSet::SendFirst),
+                ServerSet::Send.in_base_set(CoreSet::Last).after(ServerSet::SendGhosts),
+                ServerSet::SendLast.in_base_set(CoreSet::Last).after(ServerSet::Send),
             ))
-            .add_systems((
-                accept_new_clients,
-                send_context_menu.before(handle_new_packets),
-                send_tooltips.before(handle_new_packets),
-                send_hidden_entities.before(handle_new_packets),
-                update_players.before(handle_new_packets),
-                send_updated_stats.before(handle_new_packets),
-                update_items_in_world.before(handle_new_packets),
-                update_items_in_containers.before(handle_new_packets),
-                update_equipped_items.before(handle_new_packets),
-                update_characters.before(handle_new_packets),
-                handle_new_packets.after(accept_new_clients),
-            ).in_base_set(CoreSet::First))
+            .add_systems(
+                (accept_new_clients, handle_new_packets)
+                    .chain()
+                    .in_set(ServerSet::Receive))
             .add_systems((
                 start_synchronizing,
-                update_view,
                 handle_login_packets,
                 handle_input_packets,
                 handle_context_menu_packets,
-            ).in_set(ServerSet::Receive))
+            ).in_set(ServerSet::HandlePackets))
             .add_systems((
-                sync_entities,
-            ).in_base_set(CoreSet::Update))
+                send_change_map,
+                add_new_entities_to_lookup,
+            ).in_set(ServerSet::SendFirst))
+            /*.add_systems((
+            ).in_set(ServerSet::SendGhosts))*/
             .add_systems((
+                send_context_menu,
+                send_tooltips,
+                send_ghost_updates.before(finish_synchronizing),
                 finish_synchronizing,
-            ).in_base_set(CoreSet::PostUpdate).after(ServerSet::Send))
-            .add_systems((
-                send_remove_entity.before(update_entity_lookup),
                 update_targets,
-                update_tooltips,
-                update_entity_lookup,
+            ).in_set(ServerSet::Send))
+            .add_systems((
+                remove_old_entities_from_lookup,
+            ).in_set(ServerSet::SendLast))
+            .add_systems((
                 update_entity_surfaces,
-            ).in_set(ServerSet::Send));
+                update_entity_positions,
+            ).in_set(ServerSet::UpdateVisibility));
     }
 
     fn name(&self) -> &str { "Yewoh Server" }
