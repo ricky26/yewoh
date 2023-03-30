@@ -12,11 +12,11 @@ use futures::future::join;
 use log::info;
 use tokio::net::{lookup_host, TcpListener};
 use tokio::sync::mpsc;
-use yewoh::assets::multi::load_multi_data;
 
+use yewoh::assets::multi::load_multi_data;
 use yewoh::assets::tiles::load_tile_data;
+use yewoh_default_game::DefaultGamePlugins;
 use yewoh_default_game::data::static_data;
-use yewoh_default_game::DefaultGamePlugin;
 use yewoh_server::async_runtime::AsyncRuntime;
 use yewoh_server::game_server::listen_for_game;
 use yewoh_server::lobby::{listen_for_lobby, LocalLobby};
@@ -73,7 +73,7 @@ fn main() -> anyhow::Result<()> {
         .add_plugins(MinimalPlugins)
         .add_plugin(LogPlugin::default())
         .add_plugin(ServerPlugin)
-        .add_plugin(DefaultGamePlugin);
+        .add_plugins(DefaultGamePlugins);
 
     let static_data = rt.block_on(static_data::load_from_directory(&args.data_path))?;
     let map_infos = static_data.maps.map_infos();

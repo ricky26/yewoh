@@ -1,3 +1,4 @@
+use bevy_app::{App, CoreSet, Plugin};
 use bevy_ecs::prelude::*;
 use glam::{IVec2, IVec3};
 use tokio::sync::mpsc;
@@ -299,5 +300,24 @@ pub fn handle_spawn_character(
             ..Default::default()
         }.into());
         log::info!("Spawned character for {:?} = {:?}", client_entity, primary_entity);
+    }
+}
+
+#[derive(Default)]
+pub struct AccountsPlugin;
+
+impl Plugin for AccountsPlugin {
+    fn build(&self, app: &mut App) {
+        app
+            .init_resource::<repository::MemoryAccountRepository>()
+            .init_resource::<PendingCharacterLists>()
+            .init_resource::<PendingCharacterInfo>()
+            .add_systems((
+                handle_list_characters::<repository::MemoryAccountRepository>,
+                handle_list_characters_callback,
+                handle_create_character::<repository::MemoryAccountRepository>,
+                handle_select_character::<repository::MemoryAccountRepository>,
+                handle_spawn_character,
+            ).in_base_set(CoreSet::Update));
     }
 }
