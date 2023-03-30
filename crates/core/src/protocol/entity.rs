@@ -473,7 +473,7 @@ pub struct UpdateCharacter {
 
 impl Packet for UpdateCharacter {
     fn packet_kind() -> u8 { 0x77 }
-    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(17) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
