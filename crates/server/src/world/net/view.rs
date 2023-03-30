@@ -364,9 +364,9 @@ pub fn update_tooltips(
 
 pub fn update_stats(
     mut clients: Query<&mut ViewState>,
-    tooltips: Query<(Entity, Ref<Stats>), Changed<Stats>>,
+    stats: Query<(Entity, Ref<Stats>), Changed<Stats>>,
 ) {
-    for (entity, stats) in tooltips.iter() {
+    for (entity, stats) in stats.iter() {
         for mut view_state in clients.iter_mut() {
             match view_state.ghosts.get(&entity) {
                 Some(GhostState::Character(character)) => {

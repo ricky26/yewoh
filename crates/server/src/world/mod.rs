@@ -82,7 +82,7 @@ impl Plugin for ServerPlugin {
                 add_new_entities_to_lookup,
             ).in_set(ServerSet::SendFirst))
             .add_systems((
-                update_stats,
+                update_stats.after(update_nearby),
                 update_tooltips,
                 sync_nearby,
                 update_nearby,
