@@ -16,7 +16,7 @@ pub struct Spawner {
 pub fn init_npcs(mut commands: Commands) {
     commands.spawn((
         MapPosition {
-            map_id: 0,
+            map_id: 1,
             position: IVec3::new(1325, 1624, 55),
             direction: Direction::North,
         },
@@ -33,7 +33,7 @@ pub fn spawn_npcs(
     mut commands: Commands,
 ) {
     for (mut spawner, position) in spawners.iter_mut() {
-        if !spawner.next_spawn.tick(time.delta()).finished() {
+        if !spawner.next_spawn.tick(time.delta()).just_finished() {
             continue;
         }
 
