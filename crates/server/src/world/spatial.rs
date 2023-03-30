@@ -241,6 +241,25 @@ pub fn update_entity_positions(
     }
 }
 
+pub fn view_aabb(position: IVec2, range: u32) -> (IVec2, IVec2) {
+    let size = IVec2::splat(range as i32);
+    let min = position - size;
+    let max = position + size;
+    (min, max)
+}
+
+pub fn manhattan_magnitude2(a: IVec2) -> i32 {
+    a.x.abs() + a.y.abs()
+}
+
+pub fn in_range2(a: IVec2, b: IVec2, range: u32) -> bool {
+    manhattan_magnitude2(a - b) as u32 <= range
+}
+
+pub fn in_range(a: MapPosition, b: MapPosition, range: u32) -> bool {
+    a.map_id == b.map_id && in_range2(a.position.truncate(), b.position.truncate(), range)
+}
+
 #[derive(Debug, Clone, Default, Resource)]
 pub struct NetClientPositions {
     pub tree: SpatialEntityTree,
@@ -263,10 +282,8 @@ pub fn update_client_positions(
             _ => continue,
         };
 
-        let size = IVec2::splat(view.range as i32);
         let position = map_position.position.truncate();
-        let min = position - size;
-        let max = position + size;
+        let (min, max) = view_aabb(position, view.range);
         storage.tree.insert_aabb(entity, (), map_position.map_id, min, max);
     }
 
@@ -280,10 +297,8 @@ pub fn update_client_positions(
             continue;
         }
 
-        let size = IVec2::splat(view.range as i32);
         let position = map_position.position.truncate();
-        let min = position - size;
-        let max = position + size;
+        let (min, max) = view_aabb(position, view.range);
         storage.tree.insert_aabb(entity, (), map_position.map_id, min, max);
     }
 

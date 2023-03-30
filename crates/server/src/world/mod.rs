@@ -3,8 +3,8 @@ use bevy_ecs::prelude::*;
 
 use crate::world::events::{CharacterListEvent, ChatRequestEvent, ContextMenuEvent, CreateCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::input::{handle_context_menu_packets, send_context_menu, update_targets};
-use crate::world::net::{accept_new_clients, add_new_entities_to_lookup, finish_synchronizing, handle_input_packets, handle_login_packets, handle_new_packets, MapInfos, NetEntityAllocator, NetEntityLookup, remove_old_entities_from_lookup, send_change_map, send_ghost_updates, send_tooltips, start_synchronizing};
-use crate::world::spatial::{EntityPositions, EntitySurfaces, update_entity_positions, update_entity_surfaces};
+use crate::world::net::{accept_new_clients, add_new_entities_to_lookup, finish_synchronizing, handle_input_packets, handle_login_packets, handle_new_packets, MapInfos, NetEntityAllocator, NetEntityLookup, remove_old_entities_from_lookup, send_change_map, send_ghost_updates, send_tooltips, start_synchronizing, sync_nearby, update_equipped_items, update_items_in_containers, update_nearby, update_stats, update_tooltips};
+use crate::world::spatial::{EntityPositions, EntitySurfaces, NetClientPositions, update_client_positions, update_entity_positions, update_entity_surfaces};
 
 pub mod net;
 
@@ -40,6 +40,7 @@ impl Plugin for ServerPlugin {
             .init_resource::<NetEntityLookup>()
             .init_resource::<EntitySurfaces>()
             .init_resource::<EntityPositions>()
+            .init_resource::<NetClientPositions>()
             .add_event::<ReceivedPacketEvent>()
             .add_event::<SentPacketEvent>()
             .add_event::<CharacterListEvent>()
@@ -80,8 +81,14 @@ impl Plugin for ServerPlugin {
                 send_change_map,
                 add_new_entities_to_lookup,
             ).in_set(ServerSet::SendFirst))
-            /*.add_systems((
-            ).in_set(ServerSet::SendGhosts))*/
+            .add_systems((
+                update_stats,
+                update_tooltips,
+                sync_nearby,
+                update_nearby,
+                update_equipped_items,
+                update_items_in_containers,
+            ).in_set(ServerSet::SendGhosts))
             .add_systems((
                 send_context_menu,
                 send_tooltips,
@@ -95,6 +102,7 @@ impl Plugin for ServerPlugin {
             .add_systems((
                 update_entity_surfaces,
                 update_entity_positions,
+                update_client_positions,
             ).in_set(ServerSet::UpdateVisibility));
     }
 

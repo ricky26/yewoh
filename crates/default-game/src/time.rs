@@ -41,7 +41,7 @@ impl<T: TimeZone> From<DateTime<T>> for WorldTime {
 }
 
 pub fn send_time(
-    clients: Query<(&NetClient, &Synchronizing)>,
+    clients: Query<&NetClient, With<Synchronizing>>,
 ) {
     if clients.is_empty() {
         return;
@@ -50,7 +50,7 @@ pub fn send_time(
     let now = WorldTime::now();
     let (hour, minute, second) = now.hms();
     let packet = SetTime { hour, minute, second }.into_arc();
-    for (client, _) in clients.iter() {
+    for client in clients.iter() {
         client.send_packet_arc(packet.clone());
     }
 }

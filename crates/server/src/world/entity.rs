@@ -74,7 +74,7 @@ pub struct ParentContainer {
     pub grid_index: u8,
 }
 
-#[derive(Debug, Clone, Default, Component, Reflect)]
+#[derive(Debug, Clone, Default, Component, Reflect, Eq, PartialEq)]
 pub struct Stats {
     pub name: String,
     pub race_and_gender: u8,

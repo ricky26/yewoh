@@ -84,7 +84,7 @@ impl PacketRegistration {
 
         fn decode_packet<T: Packet>(client_version: ClientVersion, from_client: bool,
             payload: &[u8]) -> anyhow::Result<AnyPacket> {
-            log::debug!("Decoding {}", type_name::<T>());
+            log::trace!("Decoding {}", type_name::<T>());
             Ok(AnyPacket::from_packet(T::decode(client_version, from_client, payload)?))
         }
 
@@ -201,6 +201,7 @@ fn packet_registry() -> &'static PacketRegistry {
             PacketRegistration::for_type::<DeleteEntity>(),
             PacketRegistration::for_type::<UpsertLocalPlayer>(),
             PacketRegistration::for_type::<UpsertEntityCharacter>(),
+            PacketRegistration::for_type::<UpdateCharacter>(),
             PacketRegistration::for_type::<UpsertEntityEquipped>(),
             PacketRegistration::for_type::<UpsertEntityContained>(),
             PacketRegistration::for_type::<UpsertContainerContents>(),
@@ -376,7 +377,7 @@ impl Reader {
             Endian::read_u16(&bytes) as usize - 3
         };
 
-        log::debug!("Beginning {packet_kind:2x} length {length}");
+        log::trace!("Beginning {packet_kind:2x} length {length}");
 
         self.buffer.resize(length, 0u8);
         self.reader.read_exact(&mut self.buffer[..]).await?;

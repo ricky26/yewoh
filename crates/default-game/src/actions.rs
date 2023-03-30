@@ -2,11 +2,11 @@ use bevy_ecs::prelude::*;
 use bevy_reflect::prelude::*;
 
 use yewoh::protocol::{CharacterAnimation, CharacterProfile, ContextMenuEntry, DamageDealt, EntityFlags, MoveConfirm, MoveEntityReject, OpenContainer, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, Swing, WarMode};
-use yewoh_server::world::entity::{Character, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer, Quantity};
+use yewoh_server::world::entity::{Character, Container, EquippedBy, Flags, MapPosition, Notorious, ParentContainer};
 use yewoh_server::world::events::{ContextMenuEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SingleClickEvent};
 use yewoh_server::world::input::ContextMenuRequest;
 use yewoh_server::world::map::{Chunk, Surface};
-use yewoh_server::world::net::{/*make_container_contents_packet,*/ NetClient, NetEntity, NetEntityLookup, Possessing};
+use yewoh_server::world::net::{NetClient, NetEntity, NetEntityLookup, Possessing, VisibleContainers};
 use yewoh_server::world::spatial::EntitySurfaces;
 
 #[derive(Debug, Clone, Component, Reflect)]
@@ -107,12 +107,11 @@ pub fn handle_single_click(
 
 pub fn handle_double_click(
     mut events: EventReader<DoubleClickEvent>,
-    clients: Query<&NetClient>,
-    target_query: Query<(&NetEntity, Option<&Character>, Option<&Container>)>,
-    content_query: Query<(&NetEntity, &ParentContainer, &Graphic, Option<&Quantity>)>,
+    mut clients: Query<(&NetClient, &mut VisibleContainers)>,
+    target_query: Query<(Entity, &NetEntity, Option<&Character>, Option<&Container>)>,
 ) {
     for DoubleClickEvent { client_entity: client, target } in events.iter() {
-        let client = match clients.get(*client) {
+        let (client, mut visible_containers) = match clients.get_mut(*client) {
             Ok(x) => x,
             _ => continue,
         };
@@ -121,7 +120,7 @@ pub fn handle_double_click(
             None => continue,
         };
 
-        let (net, character, container) = match target_query.get(target) {
+        let (entity, net, character, container) = match target_query.get(target) {
             Ok(e) => e,
             _ => continue,
         };
@@ -139,7 +138,7 @@ pub fn handle_double_click(
                 id: net.id,
                 gump_id: container.gump_id,
             }.into());
-            //client.send_packet(make_container_contents_packet(net.id, container, &content_query).into());
+            visible_containers.containers.insert(entity);
         }
     }
 }

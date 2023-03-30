@@ -1,25 +1,24 @@
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use bevy_ecs::change_detection::DetectChanges;
 use bevy_ecs::component::Component;
 use bevy_ecs::entity::Entity;
-use bevy_ecs::query::{Changed, With, Without};
-use bevy_ecs::system::{Commands, Query, Res, Resource};
+use bevy_ecs::query::{Changed, Or, With, Without};
+use bevy_ecs::removal_detection::RemovedComponents;
+use bevy_ecs::system::{Commands, Local, Query, Res, Resource};
 use bevy_ecs::world::{Mut, Ref};
 use bevy_reflect::Reflect;
-use glam::IVec2;
 use glam::UVec2;
 
 use bitflags::bitflags;
-use yewoh::{EntityId, EntityKind, Notoriety};
-use yewoh::protocol::{AnyPacket, CharacterEquipment, DeleteEntity, EntityFlags, EntityTooltipVersion, EquipmentSlot, UpsertEntityCharacter, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityWorld, UpsertLocalPlayer};
+use yewoh::{EntityKind, Notoriety};
+use yewoh::protocol::{CharacterEquipment, DeleteEntity, EntityFlags, EntityTooltipVersion, UpdateCharacter, UpsertContainerContents, UpsertEntityCharacter, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityWorld, UpsertLocalPlayer};
 use yewoh::protocol::{BeginEnterWorld, ChangeSeason, EndEnterWorld, ExtendedCommand};
 
-use crate::world::entity::{Character, EquippedBy, Graphic, MapPosition, ParentContainer, Tooltip};
-use crate::world::net::{NetClient, NetEntity, NetEntityLookup};
+use crate::world::entity::{Character, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer, Quantity, Stats, Tooltip};
+use crate::world::net::{NetClient, NetEntity, NetEntityLookup, NetOwner};
 use crate::world::net::connection::Possessing;
-use crate::world::spatial::NetClientPositions;
+use crate::world::spatial::{EntityPositions, in_range, NetClientPositions, view_aabb};
 
 #[derive(Debug, Clone)]
 pub struct MapInfo {
@@ -35,8 +34,12 @@ pub struct MapInfos {
 
 #[derive(Debug, Clone, Component)]
 pub struct View {
-    pub map_id: u8,
     pub range: u32,
+}
+
+#[derive(Default, Debug, Clone, Component)]
+pub struct VisibleContainers {
+    pub containers: HashSet<Entity>,
 }
 
 #[derive(Debug, Clone, Component)]
@@ -62,16 +65,18 @@ pub struct EnteredWorld;
 bitflags! {
     #[derive(Default, Debug, Clone, Copy, Eq, PartialEq)]
     pub struct CharacterDirtyFlags : u8 {
-        const ALL = 1 << 0;
+        const UPSERT = 1 << 0;
         const REMOVE = 1 << 1;
-        const MOVE = 1 << 2;
+        const UPDATE = 1 << 2;
+        const STATS = 1 << 3;
     }
 
     #[derive(Default, Debug, Clone, Copy, Eq, PartialEq)]
     pub struct ItemDirtyFlags : u8 {
-        const ALL = 1 << 0;
+        const UPSERT = 1 << 0;
         const REMOVE = 1 << 1;
-        const MOVE = 1 << 2;
+        const CONTENTS = 1 << 2;
+        const TOOLTIP = 1 << 3;
     }
 }
 
@@ -79,8 +84,10 @@ bitflags! {
 pub struct CharacterState {
     pub dirty_flags: CharacterDirtyFlags,
     pub position: MapPosition,
-    pub character: Character,
+    pub body_type: u16,
+    pub hue: u16,
     pub notoriety: Notoriety,
+    pub stats: Stats,
     pub flags: EntityFlags,
 }
 
@@ -90,7 +97,7 @@ pub struct WorldItemState {
     pub flags: EntityFlags,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ItemPositionState {
     World(WorldItemState),
     Equipped(EquippedBy),
@@ -107,72 +114,231 @@ pub struct ItemState {
     pub tooltip_version: u32,
 }
 
+impl ItemState {
+    pub fn parent(&self) -> Option<Entity> {
+        match &self.position {
+            ItemPositionState::World(_) => None,
+            ItemPositionState::Equipped(by) =>
+                Some(by.parent),
+            ItemPositionState::Contained(parent) =>
+                Some(parent.parent),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum GhostState {
     Character(CharacterState),
     Item(ItemState),
 }
 
+impl GhostState {
+    pub fn is_dirty(&self) -> bool {
+        match self {
+            GhostState::Character(character) =>
+                character.dirty_flags != CharacterDirtyFlags::empty(),
+            GhostState::Item(item) =>
+                item.dirty_flags != ItemDirtyFlags::empty(),
+        }
+    }
+
+    pub fn parent(&self) -> Option<Entity> {
+        match self {
+            GhostState::Character(_) => None,
+            GhostState::Item(item) => item.parent(),
+        }
+    }
+}
+
 #[derive(Default, Debug, Component)]
 pub struct ViewState {
     ghosts: HashMap<Entity, GhostState>,
-    position: Option<MapPosition>,
+    children: HashMap<Entity, HashSet<Entity>>,
+    map_id: u8,
     possessed: Option<Entity>,
     dirty: bool,
 }
 
 impl ViewState {
+    pub fn new() -> ViewState {
+        Self {
+            ghosts: Default::default(),
+            children: Default::default(),
+            map_id: 0xff,
+            possessed: None,
+            dirty: false,
+        }
+    }
+
     pub fn is_dirty(&self) -> bool {
         self.dirty
     }
 
     pub fn flush(&mut self) {
         self.ghosts.clear();
+        self.children.clear();
         self.dirty = false;
+    }
+
+    pub fn has_ghost(&self, entity: Entity) -> bool {
+        self.ghosts.contains_key(&entity)
+    }
+
+    pub fn upsert_ghost(&mut self, entity: Entity, mut state: GhostState) {
+        let previous = self.ghosts.remove(&entity);
+        let previous_parent = previous.as_ref().and_then(|s| s.parent());
+
+        match (previous, &mut state) {
+            // Character update
+            (Some(GhostState::Character(old)), GhostState::Character(new)) => {
+                // Preserve stats, this is set otherwise.
+                new.stats = old.stats;
+
+                if old.body_type != new.body_type
+                    || old.hue != new.hue
+                    || old.flags != new.flags
+                    || old.notoriety != new.notoriety
+                    || old.position != new.position {
+                    new.dirty_flags = CharacterDirtyFlags::UPDATE;
+                }
+            }
+            // New character
+            (_, GhostState::Character(new)) => {
+                new.dirty_flags = CharacterDirtyFlags::UPSERT | CharacterDirtyFlags::STATS;
+            }
+            // Item Update
+            (Some(GhostState::Item(old)), GhostState::Item(new)) => {
+                // Preserve tooltip for now, as this is set by another method.
+                new.tooltip_version = old.tooltip_version;
+                new.dirty_flags = old.dirty_flags;
+
+                if new.quantity != old.quantity
+                    || new.graphic != old.graphic
+                    || new.position != old.position {
+                    new.dirty_flags = ItemDirtyFlags::UPSERT;
+                }
+            }
+            // New Item
+            (_, GhostState::Item(new)) => {
+                new.dirty_flags = ItemDirtyFlags::UPSERT | ItemDirtyFlags::CONTENTS | ItemDirtyFlags::TOOLTIP;
+            }
+        }
+
+        if state.is_dirty() {
+            self.dirty = true;
+        }
+
+        let parent = state.parent();
+        if previous_parent != parent {
+            if let Some(parent) = previous_parent {
+                self.remove_child(parent, entity);
+            }
+
+            if let Some(parent) = parent {
+                self.add_child(parent, entity);
+            }
+        }
+
+        self.ghosts.insert(entity, state);
+    }
+
+    pub fn remove_ghost(&mut self, entity: Entity) {
+        match self.ghosts.get_mut(&entity) {
+            Some(GhostState::Character(character)) =>
+                character.dirty_flags |= CharacterDirtyFlags::REMOVE,
+            Some(GhostState::Item(item)) =>
+                item.dirty_flags |= ItemDirtyFlags::REMOVE,
+            None => return,
+        }
+        self.dirty = true;
+    }
+
+    fn add_child(&mut self, parent: Entity, child: Entity) {
+        self.children.entry(parent).or_default().insert(child);
+    }
+
+    fn remove_child(&mut self, parent: Entity, child: Entity) {
+        if let Some(children) = self.children.get_mut(&parent) {
+            children.remove(&child);
+
+            if children.is_empty() {
+                self.children.remove(&parent);
+            }
+        }
+    }
+
+    fn remove_out_of_range(&mut self, position: MapPosition, range: u32, containers: &HashSet<Entity>) {
+        let position_in_range = |p: MapPosition| in_range(p, position, range);
+        let mut to_remove = Vec::new();
+
+        for (entity, ghost) in &self.ghosts {
+            let in_range = match ghost {
+                GhostState::Character(character) =>
+                    position_in_range(character.position),
+                GhostState::Item(item) => {
+                    match &item.position {
+                        ItemPositionState::World(world) =>
+                            position_in_range(world.position),
+                        ItemPositionState::Equipped(by) => {
+                            if let Some(GhostState::Character(character)) = self.ghosts.get(&by.parent) {
+                                position_in_range(character.position)
+                            } else {
+                                log::debug!("noq {:?}", entity);
+                                //false
+                                true
+                            }
+                        }
+                        ItemPositionState::Contained(container) =>
+                            containers.contains(&container.parent),
+                    }
+                }
+            };
+
+            if in_range {
+                continue;
+            }
+
+            log::debug!("REMOVE {:?}", entity);
+            to_remove.push((*entity, ghost.parent()));
+        }
+
+        for (entity, parent) in to_remove.into_iter() {
+            if let Some(parent) = parent {
+                self.remove_child(parent, entity);
+            }
+            self.ghosts.remove(&entity);
+        }
+    }
+
+    pub fn set_tooltip(&mut self, entity: Entity, tooltip: Tooltip) {
+        match self.ghosts.get_mut(&entity) {
+            Some(GhostState::Item(item)) => {
+                item.tooltip = tooltip;
+                item.tooltip_version += 1;
+                item.dirty_flags |= ItemDirtyFlags::TOOLTIP;
+                self.dirty = true;
+            }
+            _ => {}
+        }
+    }
+
+    pub fn set_stats(&mut self, entity: Entity, stats: Stats) {
+        match self.ghosts.get_mut(&entity) {
+            Some(GhostState::Character(character)) => {
+                character.stats = stats;
+                character.dirty_flags |= CharacterDirtyFlags::STATS;
+                self.dirty = true;
+            }
+            _ => {}
+        }
     }
 }
 
-pub fn is_visible_to(viewer: Entity, visibility: &Option<Ref<PartiallyVisible>>) -> bool {
+pub fn is_visible_to(viewer: Entity, visibility: &Option<&PartiallyVisible>) -> bool {
     visibility.as_ref().map_or(true, |v| v.is_visible_to(viewer))
 }
 
-pub fn set_view_position(view_state: &mut Mut<ViewState>, position: MapPosition) {
-    if view_state.position != Some(position) {
-        view_state.position = Some(position);
-    }
-}
-
-pub fn add_ghost(
-    view_state: &mut Mut<ViewState>, entity: Entity, state: GhostState,
-) {
-    let previous = view_state.ghosts.remove(&entity);
-
-    match (previous, &state) {
-        (Some(GhostState::Character(old)), GhostState::Character(new)) => {}
-        (old, GhostState::Character(new)) => {
-            if Some(entity) == view_state.possessed {
-                view_state.position = Some(new.position);
-            }
-        }
-        _ => {}
-    }
-    view_state.ghosts.insert(entity, state);
-}
-
-pub fn remove_ghost(view_state: &mut Mut<ViewState>, entity: Entity) {
-    if !view_state.ghosts.contains_key(&entity) {
-        return;
-    }
-
-    match view_state.ghosts.get_mut(&entity).unwrap() {
-        GhostState::Character(character) =>
-            character.dirty_flags |= CharacterDirtyFlags::REMOVE,
-        GhostState::Item(item) =>
-            item.dirty_flags |= ItemDirtyFlags::REMOVE,
-    }
-}
-
-pub fn set_tooltip(
+pub fn update_tooltip(
     view_state: &mut Mut<ViewState>, entity: Entity, tooltip: &Tooltip,
 ) {
     match view_state.ghosts.get(&entity) {
@@ -180,16 +346,11 @@ pub fn set_tooltip(
             if &item.tooltip == tooltip {
                 return;
             }
-        },
+        }
         _ => return,
     }
 
-    match view_state.ghosts.get_mut(&entity) {
-        Some(GhostState::Item(item)) => {
-            item.tooltip = tooltip.clone();
-        }
-        _ => unreachable!(),
-    }
+    view_state.set_tooltip(entity, tooltip.clone());
 }
 
 pub fn update_tooltips(
@@ -198,439 +359,568 @@ pub fn update_tooltips(
 ) {
     for (entity, tooltip) in tooltips.iter() {
         for mut view_state in clients.iter_mut() {
-            set_tooltip(&mut view_state, entity, &tooltip);
+            update_tooltip(&mut view_state, entity, &tooltip);
         }
     }
 }
 
-fn send_child_ghost_updates() {
+pub fn update_stats(
+    mut clients: Query<&mut ViewState>,
+    tooltips: Query<(Entity, Ref<Stats>), Changed<Stats>>,
+) {
+    for (entity, stats) in tooltips.iter() {
+        for mut view_state in clients.iter_mut() {
+            match view_state.ghosts.get(&entity) {
+                Some(GhostState::Character(character)) => {
+                    if &character.stats == stats.as_ref() {
+                        return;
+                    }
+                }
+                _ => return,
+            }
 
+            view_state.set_stats(entity, stats.clone());
+        }
+    }
 }
 
-pub fn send_ghost_updates(mut clients: Query<(&NetClient, &mut ViewState), Changed<ViewState>>) {
-    for (client, mut view_state) in clients.iter_mut() {
+pub fn send_ghost_updates(
+    entity_lookup: Res<NetEntityLookup>,
+    mut clients: Query<
+        (&NetClient, &View, &mut ViewState, &Possessing, &VisibleContainers),
+        Changed<ViewState>,
+    >,
+    positioned: Query<&MapPosition, With<NetOwner>>,
+    mut to_visit: Local<VecDeque<Entity>>,
+    mut to_remove: Local<Vec<(Entity, Option<Entity>)>>,
+) {
+    for (client, view, mut view_state, possessing, containers) in clients.iter_mut() {
+        let position = match positioned.get(possessing.entity) {
+            Ok(x) => x,
+            _ => continue,
+        };
+
         if !view_state.dirty {
             continue;
         }
 
         let mut view_state = view_state.as_mut();
         view_state.dirty = false;
+        view_state.remove_out_of_range(position.clone(), view.range, &containers.containers);
 
-        /*for packet in view_state.queued_packets.drain(..) {
-            client.send_packet_arc(packet);
-        }*/
+        let mut new_parents = HashSet::new();
+
+        to_remove.clear();
+        to_visit.clear();
+        to_visit.extend(view_state.ghosts.iter()
+            .filter(|(_, ghost)| ghost.parent().is_none())
+            .map(|(entity, _)| *entity));
+
+        while let Some(entity) = to_visit.pop_back() {
+            let id = match entity_lookup.ecs_to_net(entity) {
+                Some(x) => x,
+                None => continue,
+            };
+
+            let mut equipment = Vec::new();
+            let mut contents = Vec::new();
+
+            match view_state.ghosts.get(&entity) {
+                Some(GhostState::Character(character)) => {
+                    if character.dirty_flags.contains(CharacterDirtyFlags::UPSERT) {
+                        if let Some(children) = view_state.children.get(&entity) {
+                            for child_entity in children.iter().copied() {
+                                let item = match view_state.ghosts.get(&child_entity) {
+                                    Some(GhostState::Item(x)) => x,
+                                    _ => continue,
+                                };
+                                let by = match &item.position {
+                                    ItemPositionState::Equipped(by) => by,
+                                    _ => continue,
+                                };
+                                let child_id = match entity_lookup.ecs_to_net(child_entity) {
+                                    Some(x) => x,
+                                    None => continue,
+                                };
+                                equipment.push(CharacterEquipment {
+                                    id: child_id,
+                                    slot: by.slot,
+                                    graphic_id: item.graphic.id,
+                                    hue: item.graphic.hue,
+                                });
+                            }
+                        }
+                    }
+                }
+                Some(GhostState::Item(item)) => {
+                    if containers.containers.contains(&entity) && item.dirty_flags.contains(ItemDirtyFlags::CONTENTS) {
+                        if let Some(children) = view_state.children.get(&entity) {
+                            for child_entity in children.iter().copied() {
+                                let item = match view_state.ghosts.get(&child_entity) {
+                                    Some(GhostState::Item(x)) => x,
+                                    _ => continue,
+                                };
+                                let container = match &item.position {
+                                    ItemPositionState::Contained(x) => x,
+                                    _ => continue,
+                                };
+                                let child_id = match entity_lookup.ecs_to_net(child_entity) {
+                                    Some(x) => x,
+                                    None => continue,
+                                };
+                                contents.push(UpsertEntityContained {
+                                    id: child_id,
+                                    graphic_id: item.graphic.id,
+                                    graphic_inc: 0,
+                                    quantity: item.quantity,
+                                    position: container.position,
+                                    grid_index: container.grid_index,
+                                    parent_id: id,
+                                    hue: item.graphic.hue,
+                                });
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+
+            let state = match view_state.ghosts.get_mut(&entity) {
+                Some(x) => x,
+                None => continue,
+            };
+            match state {
+                GhostState::Character(character) => {
+                    let dirty_flags = std::mem::replace(&mut character.dirty_flags, CharacterDirtyFlags::empty());
+
+                    if dirty_flags.contains(CharacterDirtyFlags::REMOVE) {
+                        to_remove.push((entity, None));
+                        client.send_packet(DeleteEntity {
+                            id,
+                        }.into());
+                    } else {
+                        if dirty_flags.contains(CharacterDirtyFlags::UPSERT) {
+                            new_parents.insert(entity);
+                            client.send_packet(UpsertEntityCharacter {
+                                id,
+                                body_type: character.body_type,
+                                position: character.position.position,
+                                direction: character.position.direction,
+                                hue: character.hue,
+                                flags: character.flags,
+                                notoriety: character.notoriety,
+                                equipment,
+                            }.into());
+                        } else if dirty_flags.contains(CharacterDirtyFlags::UPDATE) {
+                            client.send_packet(UpdateCharacter {
+                                id,
+                                body_type: character.body_type,
+                                position: character.position.position,
+                                direction: character.position.direction,
+                                hue: character.hue,
+                                flags: character.flags,
+                                notoriety: character.notoriety,
+                            }.into());
+                        }
+
+                        if dirty_flags.contains(CharacterDirtyFlags::STATS) {
+                            client.send_packet(character.stats.upsert(id, Some(entity) == view_state.possessed).into());
+                        }
+
+                        if Some(entity) == view_state.possessed && dirty_flags.contains(CharacterDirtyFlags::UPSERT) {
+                            client.send_packet(UpsertLocalPlayer {
+                                id,
+                                body_type: character.body_type,
+                                server_id: 0,
+                                hue: character.hue,
+                                flags: character.flags,
+                                position: character.position.position,
+                                direction: character.position.direction,
+                            }.into());
+                        }
+                    }
+                }
+                GhostState::Item(item) => {
+                    let dirty_flags = std::mem::replace(&mut item.dirty_flags, ItemDirtyFlags::empty());
+
+                    if dirty_flags.contains(ItemDirtyFlags::REMOVE) {
+                        client.send_packet(DeleteEntity {
+                            id,
+                        }.into());
+                        to_remove.push((entity, item.parent()));
+                    } else {
+                        match &item.position {
+                            ItemPositionState::World(world) => {
+                                if !dirty_flags.is_empty() {
+                                    client.send_packet(UpsertEntityWorld {
+                                        id,
+                                        kind: EntityKind::Item,
+                                        graphic_id: item.graphic.id,
+                                        graphic_inc: 0,
+                                        direction: world.position.direction,
+                                        quantity: item.quantity,
+                                        position: world.position.position,
+                                        hue: item.graphic.hue,
+                                        flags: world.flags,
+                                    }.into());
+                                }
+                            }
+                            ItemPositionState::Contained(container) => {
+                                if !new_parents.contains(&container.parent) && !dirty_flags.is_empty() {
+                                    if let Some(parent_id) = entity_lookup.ecs_to_net(container.parent) {
+                                        client.send_packet(UpsertEntityContained {
+                                            id,
+                                            graphic_id: item.graphic.id,
+                                            graphic_inc: 0,
+                                            quantity: item.quantity,
+                                            position: container.position,
+                                            grid_index: container.grid_index,
+                                            parent_id,
+                                            hue: item.graphic.hue,
+                                        }.into());
+                                    }
+                                }
+                            }
+                            ItemPositionState::Equipped(by) => {
+                                if !new_parents.contains(&by.parent) && !dirty_flags.is_empty() {
+                                    if let Some(parent_id) = entity_lookup.ecs_to_net(by.parent) {
+                                        client.send_packet(UpsertEntityEquipped {
+                                            id,
+                                            parent_id,
+                                            slot: by.slot,
+                                            graphic_id: item.graphic.id,
+                                            hue: item.graphic.hue,
+                                        }.into());
+                                    }
+                                }
+                            }
+                        }
+
+                        if containers.containers.contains(&entity) && dirty_flags.contains(ItemDirtyFlags::CONTENTS) && !contents.is_empty() {
+                            new_parents.insert(entity);
+                            client.send_packet(UpsertContainerContents {
+                                contents,
+                            }.into());
+                        }
+
+                        if dirty_flags.contains(ItemDirtyFlags::TOOLTIP) && item.tooltip_version > 0 {
+                            client.send_packet(EntityTooltipVersion {
+                                id,
+                                revision: item.tooltip_version,
+                            }.into());
+                        }
+                    }
+                }
+            }
+
+            if let Some(kids) = view_state.children.get(&entity) {
+                to_visit.extend(kids.iter().cloned());
+            }
+        }
+
+        for (entity, parent) in to_remove.drain(..) {
+            if let Some(parent) = parent {
+                view_state.remove_child(parent, entity);
+            }
+
+            view_state.ghosts.remove(&entity);
+        }
     }
 }
 
-
-/*
-pub fn update_players(
-    clients: Query<&NetClient>,
-    added: Query<
-        (Entity, &NetEntity, &NetOwner, &Flags, &Character, &MapPosition),
-        Without<PlayerState>,
+pub fn sync_nearby(
+    entity_positions: Res<EntityPositions>,
+    mut clients: Query<
+        (&View, &mut ViewState, &Possessing, &VisibleContainers),
+        (With<Synchronizing>, Without<Synchronized>),
     >,
-    mut updated: Query<
-        (&mut PlayerState, &NetEntity, &NetOwner, &Flags, &Character, &MapPosition),
-        Or<(Changed<Character>, Changed<MapPosition>)>,
-    >,
-    removed: Query<
-        Entity,
-        (With<PlayerState>, Or<(Without<NetOwner>, Without<Flags>, Without<Character>, Without<MapPosition>)>),
-    >,
-    mut commands: Commands,
+    world_items: Query<(
+        Entity, &Flags, &Graphic, &MapPosition, Option<&Quantity>, Option<&Tooltip>,
+        Option<&PartiallyVisible>
+    )>,
+    characters: Query<(
+        Entity, &Flags, &Character, &MapPosition, &Notorious, Option<&PartiallyVisible>,
+    )>,
+    equipped_items: Query<(
+        Entity, &Graphic, &EquippedBy, Option<&Tooltip>, Option<&PartiallyVisible>
+    )>,
+    containers: Query<&Container>,
+    child_items: Query<(
+        &Graphic, &ParentContainer, Option<&Quantity>, Option<&Tooltip>,
+        Option<&PartiallyVisible>
+    )>,
 ) {
-    for (entity, net, owner, flags, character, position) in added.iter() {
-        let client = match clients.get(owner.client_entity) {
+    for (view, mut view_state, possessing, visible_containers) in clients.iter_mut() {
+        let (_, _, _, position, _, _) = match characters.get(possessing.entity) {
             Ok(x) => x,
             _ => continue,
         };
-        let state = PlayerState {
-            character: character.clone(),
-            flags: flags.flags,
-            position: position.clone(),
-        };
+        let (min, max) = view_aabb(position.position.truncate(), view.range);
+        for entity in entity_positions.tree.iter_aabb(position.map_id, min, max) {
+            if let Ok((entity, flags, graphic, position, quantity, tooltip, visibility)) = world_items.get(entity) {
+                if is_visible_to(possessing.entity, &visibility) {
+                    view_state.upsert_ghost(entity, GhostState::Item(ItemState {
+                        dirty_flags: ItemDirtyFlags::empty(),
+                        graphic: *graphic,
+                        position: ItemPositionState::World(WorldItemState {
+                            position: *position,
+                            flags: flags.flags,
+                        }),
+                        quantity: quantity.map_or(1, |q| q.quantity),
+                        tooltip: Default::default(),
+                        tooltip_version: 0,
+                    }));
 
-        client.send_packet(state.to_update(net.id).into());
-        commands.entity(entity).insert(state);
-    }
+                    if let Some(tooltip) = tooltip {
+                        update_tooltip(&mut view_state, entity, tooltip);
+                    }
+                }
+            } else if let Ok((entity, flags, character, position, notorious, visibility)) = characters.get(entity) {
+                if is_visible_to(possessing.entity, &visibility) {
+                    view_state.upsert_ghost(entity, GhostState::Character(CharacterState {
+                        dirty_flags: CharacterDirtyFlags::empty(),
+                        position: *position,
+                        body_type: character.body_type,
+                        hue: character.hue,
+                        notoriety: notorious.0,
+                        stats: Default::default(),
+                        flags: flags.flags,
+                    }));
 
-    for (mut state, net, owner, flags, character, position) in updated.iter_mut() {
-        let client = match clients.get(owner.client_entity) {
-            Ok(x) => x,
-            _ => continue,
-        };
-        let new_state = PlayerState {
-            character: character.clone(),
-            flags: flags.flags,
-            position: position.clone(),
-        };
-        if new_state == *state {
-            continue;
+                    for child_entity in character.equipment.iter().copied() {
+                        if let Ok((entity, graphic, parent, tooltip, visibility)) = equipped_items.get(child_entity) {
+                            if is_visible_to(possessing.entity, &visibility) {
+                                view_state.upsert_ghost(entity, GhostState::Item(ItemState {
+                                    dirty_flags: ItemDirtyFlags::empty(),
+                                    graphic: *graphic,
+                                    position: ItemPositionState::Equipped(parent.clone()),
+                                    quantity: 1,
+                                    tooltip: Default::default(),
+                                    tooltip_version: 0,
+                                }));
+
+                                if let Some(tooltip) = tooltip {
+                                    update_tooltip(&mut view_state, entity, tooltip);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
-        *state = new_state;
-        client.send_packet(state.to_update(net.id).into());
-    }
 
-    for entity in removed.iter() {
-        commands.entity(entity).remove::<PlayerState>();
+        for entity in visible_containers.containers.iter().copied() {
+            let container = match containers.get(entity) {
+                Ok(x) => x,
+                _ => continue,
+            };
+
+            for child_entity in container.items.iter().copied() {
+                if let Ok((graphic, parent, quantity, tooltip, visibility)) = child_items.get(child_entity) {
+                    if is_visible_to(possessing.entity, &visibility) {
+                        view_state.upsert_ghost(entity, GhostState::Item(ItemState {
+                            dirty_flags: ItemDirtyFlags::empty(),
+                            graphic: *graphic,
+                            position: ItemPositionState::Contained(parent.clone()),
+                            quantity: quantity.map_or(1, |q| q.quantity),
+                            tooltip: Default::default(),
+                            tooltip_version: 0,
+                        }));
+
+                        if let Some(tooltip) = tooltip {
+                            update_tooltip(&mut view_state, entity, tooltip);
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
-pub fn update_items_in_world(
-    mut clients: Query<(&NetClient, &CanSee, &mut HasSeen), With<NetSynchronized>>,
-    new_items: Query<
-        (Entity, &NetEntity, &Flags, &Graphic, &MapPosition, Option<&Quantity>),
-        Without<WorldItemState>,
+pub fn update_nearby(
+    client_positions: Res<NetClientPositions>,
+    mut clients: Query<(&mut ViewState, &Possessing), (With<Synchronized>, Without<Synchronizing>)>,
+    world_items: Query<
+        (Entity, &Flags, &Graphic, &MapPosition, Option<&Quantity>, Option<&PartiallyVisible>),
+        Or<(Changed<Flags>, Changed<Graphic>, Changed<MapPosition>, Changed<Quantity>, Changed<PartiallyVisible>)>,
     >,
-    mut updated_items: Query<
-        (Entity, &mut WorldItemState, &NetEntity, &Flags, &Graphic, &MapPosition, Option<&Quantity>),
-        Or<(Changed<Graphic>, Changed<MapPosition>, Changed<Quantity>)>,
+    characters: Query<
+        (Entity, &Flags, &Character, &MapPosition, &Notorious, Option<&PartiallyVisible>),
+        Or<(Changed<Flags>, Changed<Character>, Changed<MapPosition>, Changed<Notorious>, Changed<PartiallyVisible>)>,
     >,
-    removed_items: Query<
-        Entity,
-        (With<WorldItemState>, Or<(Without<Flags>, Without<Graphic>, Without<MapPosition>)>),
-    >,
-    mut commands: Commands,
+    equipped_items: Query<(
+        &Graphic, &EquippedBy, Option<&Tooltip>, Option<&PartiallyVisible>
+    )>,
+    mut removed_entities: RemovedComponents<NetEntity>,
 ) {
-    for (entity, net, flags, graphic, position, quantity) in new_items.iter() {
-        let position = *position;
-        let graphic = *graphic;
-        let quantity = quantity.map_or(1, |q| q.quantity);
-        let state = WorldItemState {
-            position,
-            graphic,
-            quantity,
-            flags: flags.flags,
-        };
-        send_update(
-            clients.iter_mut(),
-            entity,
-            || state.to_update(net.id).into_arc());
-        commands.entity(entity).insert(state);
-    }
+    for (entity, flags, graphic, position, quantity, visibility) in world_items.iter() {
+        for client_entity in client_positions.tree.iter_at_point(position.map_id, position.position.truncate()) {
+            let (mut view_state, possessing) = match clients.get_mut(client_entity) {
+                Ok(x) => x,
+                _ => continue,
+            };
 
-    for (entity, mut state, net, flags, graphic, position, quantity) in updated_items.iter_mut() {
-        let graphic = *graphic;
-        let position = *position;
-        let quantity = quantity.map_or(1, |q| q.quantity);
-        let new_state = WorldItemState {
-            position,
-            graphic,
-            quantity,
-            flags: flags.flags,
-        };
-        if new_state == *state {
-            continue;
+            if is_visible_to(possessing.entity, &visibility) {
+                view_state.upsert_ghost(entity, GhostState::Item(ItemState {
+                    dirty_flags: ItemDirtyFlags::empty(),
+                    graphic: *graphic,
+                    position: ItemPositionState::World(WorldItemState {
+                        position: *position,
+                        flags: flags.flags,
+                    }),
+                    quantity: quantity.map_or(1, |q| q.quantity),
+                    tooltip: Default::default(),
+                    tooltip_version: 0,
+                }));
+            } else if view_state.has_ghost(entity) {
+                view_state.remove_ghost(entity);
+            }
         }
-        *state = new_state;
-        send_update(
-            clients.iter_mut(),
-            entity,
-            || state.to_update(net.id).into_arc());
     }
 
-    for entity in removed_items.iter() {
-        commands.entity(entity).remove::<WorldItemState>();
+    for (entity, flags, character, position, notorious, visibility) in characters.iter() {
+        for client_entity in client_positions.tree.iter_at_point(position.map_id, position.position.truncate()) {
+            let (mut view_state, possessing) = match clients.get_mut(client_entity) {
+                Ok(x) => x,
+                _ => continue,
+            };
+
+            if is_visible_to(possessing.entity, &visibility) {
+                view_state.upsert_ghost(entity, GhostState::Character(CharacterState {
+                    dirty_flags: CharacterDirtyFlags::empty(),
+                    position: *position,
+                    body_type: character.body_type,
+                    hue: character.hue,
+                    notoriety: notorious.0,
+                    stats: Default::default(),
+                    flags: flags.flags,
+                }));
+
+                for child_entity in character.equipment.iter().copied() {
+                    if let Ok((graphic, parent, tooltip, visibility)) = equipped_items.get(child_entity) {
+                        if is_visible_to(possessing.entity, &visibility) {
+                            view_state.upsert_ghost(entity, GhostState::Item(ItemState {
+                                dirty_flags: ItemDirtyFlags::empty(),
+                                graphic: *graphic,
+                                position: ItemPositionState::Equipped(parent.clone()),
+                                quantity: 1,
+                                tooltip: Default::default(),
+                                tooltip_version: 0,
+                            }));
+
+                            if let Some(tooltip) = tooltip {
+                                update_tooltip(&mut view_state, entity, tooltip);
+                            }
+                        }
+                    }
+                }
+            } else if view_state.has_ghost(entity) {
+                view_state.remove_ghost(entity);
+            }
+        }
+    }
+
+    for entity in removed_entities.iter() {
+        for (mut view_state, _) in clients.iter_mut() {
+            if view_state.has_ghost(entity) {
+                view_state.remove_ghost(entity);
+            }
+        }
     }
 }
 
 pub fn update_items_in_containers(
-    mut clients: Query<(&NetClient, &CanSee, &mut HasSeen), With<NetSynchronized>>,
-    net_entities: Query<&NetEntity>,
-    new_items: Query<
-        (Entity, &NetEntity, &Graphic, &ParentContainer, Option<&Quantity>),
-        Without<ContainedItemState>,
+    mut clients: Query<(&mut ViewState, &Possessing, &VisibleContainers), (With<Synchronized>, Without<Synchronizing>)>,
+    items: Query<
+        (Entity, &Graphic, &ParentContainer, Option<&Quantity>, Option<&PartiallyVisible>),
+        Or<(Changed<Graphic>, Changed<ParentContainer>, Changed<Quantity>, Changed<PartiallyVisible>)>,
     >,
-    mut updated_items: Query<
-        (Entity, &mut ContainedItemState, &NetEntity, &Graphic, &ParentContainer, Option<&Quantity>),
-        Or<(Changed<Graphic>, Changed<ParentContainer>, Changed<Quantity>)>,
-    >,
-    removed_items: Query<
-        Entity,
-        (With<WorldItemState>, Or<(Without<Graphic>, Without<ParentContainer>)>),
-    >,
-    mut commands: Commands,
 ) {
-    for (entity, net, graphic, parent, quantity) in new_items.iter() {
-        let parent_id = match net_entities.get(parent.parent) {
-            Ok(x) => x.id,
-            _ => continue,
-        };
-        let graphic = *graphic;
-        let quantity = quantity.map_or(1, |q| q.quantity);
-        let state = ContainedItemState {
-            parent_id,
-            graphic,
-            position: parent.position,
-            grid_index: parent.grid_index,
-            quantity,
-        };
-        send_update(
-            clients.iter_mut(),
-            entity,
-            || state.to_update(net.id).into_arc());
-        commands.entity(entity).insert(state);
-    }
+    for (entity, graphic, parent, quantity, visibility) in items.iter() {
+        // TODO: we can recurse up to find the position of the root container first.
+        for (mut view_state, possessing, visible_containers) in clients.iter_mut() {
+            if !visible_containers.containers.contains(&parent.parent) {
+                continue;
+            }
 
-    for (entity, mut state, net, graphic, parent, quantity) in updated_items.iter_mut() {
-        let parent_id = match net_entities.get(parent.parent) {
-            Ok(x) => x.id,
-            _ => continue,
-        };
-        let graphic = *graphic;
-        let quantity = quantity.map_or(1, |q| q.quantity);
-        let new_state = ContainedItemState {
-            parent_id,
-            graphic,
-            position: parent.position,
-            grid_index: parent.grid_index,
-            quantity,
-        };
-        if new_state == *state {
-            continue;
+            if is_visible_to(possessing.entity, &visibility) {
+                view_state.upsert_ghost(entity, GhostState::Item(ItemState {
+                    dirty_flags: ItemDirtyFlags::empty(),
+                    graphic: *graphic,
+                    position: ItemPositionState::Contained(parent.clone()),
+                    quantity: quantity.map_or(1, |q| q.quantity),
+                    tooltip: Default::default(),
+                    tooltip_version: 0,
+                }));
+            } else if view_state.has_ghost(entity) {
+                view_state.remove_ghost(entity);
+            }
         }
-        *state = new_state;
-        send_update(
-            clients.iter_mut(),
-            entity,
-            || state.to_update(net.id).into_arc());
-    }
-
-    for entity in removed_items.iter() {
-        commands.entity(entity).remove::<ContainedItemState>();
     }
 }
 
 pub fn update_equipped_items(
-    mut clients: Query<(&NetClient, &CanSee, &mut HasSeen), With<NetSynchronized>>,
-    net_entities: Query<&NetEntity>,
-    new_items: Query<
-        (Entity, &NetEntity, &Graphic, &EquippedBy),
-        Without<EquippedItemState>,
+    client_positions: Res<NetClientPositions>,
+    mut clients: Query<(&mut ViewState, &Possessing), (With<Synchronized>, Without<Synchronizing>)>,
+    items: Query<
+        (Entity, &Graphic, &EquippedBy, Option<&PartiallyVisible>),
+        Or<(Changed<Graphic>, Changed<EquippedBy>, Changed<PartiallyVisible>)>,
     >,
-    mut updated_items: Query<
-        (Entity, &mut EquippedItemState, &NetEntity, &Graphic, &EquippedBy),
-        Or<(Changed<Graphic>, Changed<EquippedBy>)>,
-    >,
-    removed_items: Query<
-        Entity,
-        (With<EquippedItemState>, Or<(Without<Graphic>, Without<EquippedBy>)>),
-    >,
-    mut commands: Commands,
+    characters: Query<&MapPosition, With<Character>>,
 ) {
-    for (entity, net, graphic, equipped) in new_items.iter() {
-        let parent_id = match net_entities.get(equipped.parent) {
-            Ok(x) => x.id,
-            _ => continue,
-        };
-        let graphic = *graphic;
-        let state = EquippedItemState {
-            parent_id,
-            slot: equipped.slot,
-            graphic,
-        };
-        send_update(
-            clients.iter_mut(),
-            entity,
-            || state.to_update(net.id).into_arc());
-        commands.entity(entity).insert(state);
-    }
-
-    for (entity, mut state, net, graphic, equipped) in updated_items.iter_mut() {
-        let parent_id = match net_entities.get(equipped.parent) {
-            Ok(x) => x.id,
-            _ => continue,
-        };
-        let graphic = *graphic;
-        let new_state = EquippedItemState {
-            parent_id,
-            slot: equipped.slot,
-            graphic,
-        };
-        if new_state == *state {
-            continue;
-        }
-        *state = new_state;
-        send_update(
-            clients.iter_mut(),
-            entity,
-            || state.to_update(net.id).into_arc());
-    }
-
-    for entity in removed_items.iter() {
-        commands.entity(entity).remove::<EquippedItemState>();
-    }
-}
-
-pub fn update_characters(
-    mut clients: Query<(&NetClient, &CanSee, &mut HasSeen), With<NetSynchronized>>,
-    new_characters: Query<
-        (Entity, &NetEntity, &Flags, &Character, &MapPosition, &Notorious),
-        Without<CharacterState>,
-    >,
-    mut updated_characters: Query<
-        (Entity, &mut CharacterState, &NetEntity, &Flags, &Character, &MapPosition, &Notorious),
-        Or<(Changed<Character>, Changed<MapPosition>, Changed<Notorious>)>,
-    >,
-    removed_characters: Query<
-        Entity,
-        (With<CharacterState>, Or<(Without<Flags>, Without<Character>, Without<MapPosition>, Without<Notorious>)>),
-    >,
-    all_equipment_query: Query<(&NetEntity, &Graphic, &EquippedBy)>,
-    mut commands: Commands,
-) {
-    for (entity, net, flags, character, position, notorious) in new_characters.iter() {
-        let character = character.clone();
-        let position = *position;
-        let notoriety = notorious.0;
-        let state = CharacterState {
-            position,
-            character,
-            notoriety,
-            flags: flags.flags,
-        };
-        send_update(
-            clients.iter_mut(),
-            entity,
-            || state.to_update(net.id, &all_equipment_query).into_arc());
-        commands.entity(entity).insert(state);
-    }
-
-    for (entity, mut state, net, flags, character, position, notorious) in updated_characters.iter_mut() {
-        let character = character.clone();
-        let position = *position;
-        let notoriety = notorious.0;
-        let new_state = CharacterState {
-            position,
-            character,
-            notoriety,
-            flags: flags.flags,
-        };
-        if *state == new_state {
-            continue;
-        }
-        *state = new_state;
-        send_update(
-            clients.iter_mut(),
-            entity,
-            || state.to_update(net.id, &all_equipment_query).into_arc());
-    }
-
-    for entity in removed_characters.iter() {
-        commands.entity(entity).remove::<CharacterState>();
-    }
-}
-
-pub fn make_container_contents_packet(
-    id: EntityId, container: &Container,
-    content_query: &Query<(&NetEntity, &ParentContainer, &Graphic, Option<&Quantity>)>,
-) -> UpsertContainerContents {
-    let mut items = Vec::with_capacity(container.items.len());
-
-    for item in container.items.iter() {
-        let item = *item;
-        let (net_id, parent, graphic, quantity) = match content_query.get(item) {
+    for (entity, graphic, parent,visibility) in items.iter() {
+        let position = match characters.get(parent.parent) {
             Ok(x) => x,
             _ => continue,
         };
 
-        items.push(UpsertEntityContained {
-            id: net_id.id,
-            graphic_id: graphic.id,
-            graphic_inc: 0,
-            quantity: quantity.map_or(1, |q| q.quantity),
-            position: parent.position,
-            grid_index: parent.grid_index,
-            parent_id: id,
-            hue: graphic.hue,
-        });
-    }
+        for client_entity in client_positions.tree.iter_at_point(position.map_id, position.position.truncate()) {
+            let (mut view_state, possessing) = match clients.get_mut(client_entity) {
+                Ok(x) => x,
+                _ => continue,
+            };
 
-    UpsertContainerContents {
-        items,
-    }
-}
-
-pub fn send_hidden_entities(
-    lookup: Res<NetEntityLookup>,
-    mut clients: Query<(&NetClient, &CanSee, &mut HasSeen), Changed<CanSee>>,
-) {
-    for (client, can_see, mut has_seen) in &mut clients {
-        let to_remove = has_seen.entities.difference(&can_see.entities)
-            .cloned()
-            .collect::<Vec<_>>();
-        for entity in to_remove {
-            has_seen.entities.remove(&entity);
-
-            if let Some(id) = lookup.ecs_to_net(entity) {
-                client.send_packet(DeleteEntity { id }.into());
+            if is_visible_to(possessing.entity, &visibility) {
+                view_state.upsert_ghost(entity, GhostState::Item(ItemState {
+                    dirty_flags: ItemDirtyFlags::empty(),
+                    graphic: *graphic,
+                    position: ItemPositionState::Equipped(parent.clone()),
+                    quantity: 1,
+                    tooltip: Default::default(),
+                    tooltip_version: 0,
+                }));
+            } else if view_state.has_ghost(entity) {
+                view_state.remove_ghost(entity);
             }
         }
     }
 }
-
-pub fn send_remove_entity(
-    lookup: Res<NetEntityLookup>,
-    mut clients: Query<(&NetClient, &mut HasSeen)>,
-    mut removals: RemovedComponents<NetEntity>,
-) {
-    for entity in removals.iter() {
-        let id = match lookup.ecs_to_net(entity) {
-            Some(x) => x,
-            None => continue,
-        };
-
-        let mut packet = None;
-        for (client, mut has_seen) in &mut clients {
-            if !has_seen.entities.contains(&entity) {
-                continue;
-            }
-
-            has_seen.entities.remove(&entity);
-            let packet = packet.get_or_insert_with(|| DeleteEntity { id }.into_arc()).clone();
-            client.send_packet_arc(packet);
-        }
-    }
-}
-
-pub fn send_updated_stats(
-    mut clients: Query<(&NetClient, &CanSee, &mut HasSeen), With<NetSynchronized>>,
-    query: Query<(Entity, &NetEntity, &Stats), Changed<Stats>>,
-) {
-    for (entity, net, stats) in &query {
-        send_update(
-            clients.iter_mut(),
-            entity,
-            || stats.upsert(net.id, true).into_arc());
-    }
-}*/
 
 pub fn start_synchronizing(
-    clients: Query<(Entity, &View, Ref<Possessing>), Without<Synchronizing>>,
-    characters: Query<&MapPosition>,
+    clients: Query<(Entity, &ViewState, Ref<Possessing>), Without<Synchronizing>>,
+    characters: Query<&MapPosition, With<NetOwner>>,
     mut commands: Commands,
 ) {
-    for (entity, view, possessing) in clients.iter() {
+    for (entity, view_state, possessing) in clients.iter() {
         let map_position = match characters.get(possessing.entity) {
             Ok(x) => x,
             _ => continue,
         };
 
-        if !possessing.is_changed() && view.map_id == map_position.map_id {
+        if !possessing.is_changed() && view_state.map_id == map_position.map_id {
             continue;
         }
 
-        commands.entity(entity).insert(Synchronizing);
+        commands.entity(entity).remove::<Synchronized>().insert(Synchronizing);
     }
 }
 
 pub fn send_change_map(
-    mut clients: Query<(&NetClient, &mut View, &mut ViewState, Ref<Possessing>), With<Synchronizing>>,
+    mut clients: Query<(&NetClient, &mut ViewState, Ref<Possessing>), With<Synchronizing>>,
     characters: Query<(&NetEntity, &MapPosition, Ref<Character>)>,
     maps: Res<MapInfos>,
 ) {
-    for (client, mut view, mut view_state, possessing) in clients.iter_mut() {
+    for (client, mut view_state, possessing) in clients.iter_mut() {
         let (possessed_net, map_position, character) = match characters.get(possessing.entity) {
             Ok(x) => x,
             _ => continue,
@@ -643,12 +933,14 @@ pub fn send_change_map(
 
         if possessing.is_changed() {
             // should BeginEnterWorld be here?
-        } else if view.map_id == map_position.map_id {
+        } else if view_state.map_id == map_position.map_id {
             continue;
         }
 
+        view_state.map_id = map_position.map_id;
+        view_state.possessed = Some(possessing.entity);
         view_state.flush();
-        view.map_id = map_position.map_id;
+
         client.send_packet(BeginEnterWorld {
             entity_id: possessed_net.id,
             body_type: character.body_type,
@@ -676,119 +968,3 @@ pub fn finish_synchronizing(
         }
     }
 }
-
-/*
-impl CharacterState {
-    fn to_update(
-        &self,
-        id: EntityId,
-        all_equipment_query: &Query<(&NetEntity, &Graphic, &EquippedBy)>,
-    ) -> UpsertEntityCharacter {
-        let mut equipment = Vec::new();
-
-        for child_entity in self.character.equipment.iter().copied() {
-            let (net, graphic, equipped_by) = match all_equipment_query.get(child_entity) {
-                Ok(x) => x,
-                _ => continue,
-            };
-            equipment.push(CharacterEquipment {
-                id: net.id,
-                slot: equipped_by.slot,
-                graphic_id: graphic.id,
-                hue: graphic.hue,
-            });
-        }
-
-        UpsertEntityCharacter {
-            id,
-            body_type: self.character.body_type,
-            position: self.position.position,
-            direction: self.position.direction,
-            hue: self.character.hue,
-            flags: self.flags,
-            notoriety: self.notoriety,
-            equipment,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct PlayerState {
-    pub character: Character,
-    pub flags: EntityFlags,
-    pub position: MapPosition,
-}
-
-impl PlayerState {
-    fn to_update(&self, id: EntityId) -> UpsertLocalPlayer {
-        UpsertLocalPlayer {
-            id,
-            body_type: self.character.body_type,
-            server_id: 0,
-            hue: self.character.hue,
-            flags: self.flags,
-            position: self.position.position,
-            direction: self.position.direction,
-        }
-    }
-}
- */
-
-/*
-impl WorldItemState {
-    fn to_update(&self, id: EntityId) -> UpsertEntityWorld {
-        UpsertEntityWorld {
-            id,
-            kind: EntityKind::Item,
-            graphic_id: self.graphic.id,
-            graphic_inc: 0,
-            direction: self.position.direction,
-            quantity: self.quantity,
-            position: self.position.position,
-            hue: self.graphic.hue,
-            flags: self.flags,
-        }
-    }
-}
- */
-
-/*
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ContainedItemState {
-    pub parent: ParentContainer,
-}
-
-impl ContainedItemState {
-    fn to_update(&self, id: EntityId) -> UpsertEntityContained {
-        UpsertEntityContained {
-            id,
-            graphic_id: self.graphic.id,
-            graphic_inc: 0,
-            quantity: self.quantity,
-            position: self.position,
-            grid_index: self.grid_index,
-            parent_id: self.parent_id,
-            hue: self.graphic.hue,
-        }
-    }
-}
- */
-
-/*
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct EquippedItemState {
-    pub equipped: EquippedBy,
-}
-
-impl EquippedItemState {
-    fn to_update(&self, id: EntityId) -> UpsertEntityEquipped {
-        UpsertEntityEquipped {
-            id,
-            parent_id: self.parent_id,
-            slot: self.slot,
-            graphic_id: self.graphic.id,
-            hue: self.graphic.hue,
-        }
-    }
-}
- */

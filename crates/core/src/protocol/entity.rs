@@ -460,6 +460,57 @@ impl Packet for UpsertEntityCharacter {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct UpdateCharacter {
+    pub id: EntityId,
+    pub body_type: u16,
+    pub position: IVec3,
+    pub direction: Direction,
+    pub hue: u16,
+    pub flags: EntityFlags,
+    pub notoriety: Notoriety,
+}
+
+impl Packet for UpdateCharacter {
+    fn packet_kind() -> u8 { 0x77 }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let id = payload.read_entity_id()?;
+        let body_type = payload.read_u16::<Endian>()?;
+        let x = payload.read_i16::<Endian>()? as i32;
+        let y = payload.read_i16::<Endian>()? as i32;
+        let z = payload.read_i8()? as i32;
+        let direction = payload.read_direction()?;
+        let hue = payload.read_u16::<Endian>()?;
+        let flags = EntityFlags::from_bits_truncate(payload.read_u8()?);
+        let notoriety = Notoriety::from_repr(payload.read_u8()?)
+            .ok_or_else(|| anyhow!("invalid notoriety"))?;
+        Ok(Self {
+            id,
+            body_type,
+            position: IVec3::new(x, y, z),
+            direction,
+            hue,
+            flags,
+            notoriety,
+        })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_entity_id(self.id)?;
+        writer.write_u16::<Endian>(self.body_type)?;
+        writer.write_i16::<Endian>(self.position.x as i16)?;
+        writer.write_i16::<Endian>(self.position.y as i16)?;
+        writer.write_i8(self.position.z as i8)?;
+        writer.write_direction(self.direction)?;
+        writer.write_u16::<Endian>(self.hue)?;
+        writer.write_u8(self.flags.bits())?;
+        writer.write_u8(self.notoriety as u8)?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct UpsertEntityEquipped {
     pub id: EntityId,
@@ -661,7 +712,7 @@ impl Packet for UpsertEntityContained {
 
 #[derive(Debug, Clone)]
 pub struct UpsertContainerContents {
-    pub items: Vec<UpsertEntityContained>,
+    pub contents: Vec<UpsertEntityContained>,
 }
 
 impl Packet for UpsertContainerContents {
@@ -679,13 +730,13 @@ impl Packet for UpsertContainerContents {
             payload = &payload[19..];
         }
 
-        Ok(Self { items })
+        Ok(Self { contents: items })
     }
 
     fn encode(&self, client_version: ClientVersion, to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
-        writer.write_u16::<Endian>(self.items.len() as u16)?;
+        writer.write_u16::<Endian>(self.contents.len() as u16)?;
 
-        for item in self.items.iter() {
+        for item in self.contents.iter() {
             item.encode(client_version, to_client, writer)?;
         }
 

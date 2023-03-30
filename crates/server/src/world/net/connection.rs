@@ -17,6 +17,7 @@ use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacter
 use crate::world::input::Targeting;
 use crate::world::net::entity::NetEntityLookup;
 use crate::world::net::view::View;
+use crate::world::net::{ViewState, VisibleContainers};
 
 pub const DEFAULT_VIEW_RANGE: u32 = 18;
 
@@ -48,13 +49,13 @@ impl NetClient {
     pub fn client_version(&self) -> ClientVersion { self.client_version }
 
     pub fn send_packet(&self, packet: AnyPacket) {
-        log::debug!("OUT ({:?}): {:?}", self.address, packet);
+        log::trace!("OUT ({:?}): {:?}", self.address, packet);
         self.tx.send(WriterAction::Send(self.client_version, packet)).ok();
     }
 
     pub fn send_packet_arc(&self, packet: impl Into<Arc<AnyPacket>>) {
         let packet = packet.into();
-        log::debug!("OUT ({:?}): {:?}", self.address, packet);
+        log::trace!("OUT ({:?}): {:?}", self.address, packet);
         self.tx.send(WriterAction::SendArc(self.client_version, packet)).ok();
     }
 }
@@ -216,7 +217,9 @@ pub fn accept_new_clients(
                 client.clone(),
                 User { username },
                 Targeting::default(),
-                View { map_id: 0xff, range: DEFAULT_VIEW_RANGE },
+                VisibleContainers::default(),
+                View { range: DEFAULT_VIEW_RANGE },
+                ViewState::new(),
             ))
             .id();
 
@@ -227,7 +230,7 @@ pub fn accept_new_clients(
             loop {
                 match reader.recv(client_version).await {
                     Ok(packet) => {
-                        log::debug!("IN ({:?}): {:?}", address, packet);
+                        log::trace!("IN ({:?}): {:?}", address, packet);
                         if let Err(err) = internal_tx.send((entity, packet)) {
                             warn!("Error forwarding packet {err}");
                             break;
