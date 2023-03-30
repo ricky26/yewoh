@@ -5,9 +5,8 @@ use yewoh::protocol::{CharacterAnimation, CharacterProfile, ContextMenuEntry, Da
 use yewoh_server::world::entity::{Character, Container, EquippedBy, Flags, MapPosition, Notorious, ParentContainer};
 use yewoh_server::world::events::{ContextMenuEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SingleClickEvent};
 use yewoh_server::world::input::ContextMenuRequest;
-use yewoh_server::world::map::{Chunk, Surface};
 use yewoh_server::world::net::{NetClient, NetEntity, NetEntityLookup, Possessing, VisibleContainers};
-use yewoh_server::world::spatial::EntitySurfaces;
+use yewoh_server::world::spatial::{EntitySurfaces, SurfaceKind};
 
 #[derive(Debug, Clone, Component, Reflect)]
 pub struct Held {
@@ -23,10 +22,7 @@ pub fn handle_move(
     mut events: EventReader<MoveEvent>,
     surfaces: Res<EntitySurfaces>,
     connection_query: Query<(&NetClient, &Possessing)>,
-    mut character_and_surfaces: ParamSet<(
-        Query<(&mut MapPosition, &Notorious)>,
-        Query<(&MapPosition, AnyOf<(&Chunk, &Surface)>)>,
-    )>,
+    mut characters: Query<(&mut MapPosition, &Notorious)>,
 ) {
     for MoveEvent { client_entity: connection, request } in events.iter() {
         let connection = *connection;
@@ -36,8 +32,8 @@ pub fn handle_move(
         };
 
         let primary_entity = owned.entity;
-        let mut map_position = match character_and_surfaces.p0().get(primary_entity) {
-            Ok((position, ..)) => position.clone(),
+        let (mut map_position, notoriety) = match characters.get_mut(primary_entity) {
+            Ok(x) => x,
             _ => continue,
         };
 
@@ -48,35 +44,27 @@ pub fn handle_move(
             let mut test_position = map_position.position + request.direction.as_vec2().extend(10);
             let mut new_z = 0;
 
-            for (entity, _) in surfaces.tree.iter_at_point(map_position.map_id, test_position.truncate()) {
-                match character_and_surfaces.p1().get(entity) {
-                    Ok((position, (Some(chunk), _))) => {
-                        let chunk_pos = test_position - position.position;
-                        let (_, z) = chunk.map_chunk.get(chunk_pos.x as usize, chunk_pos.y as usize);
+            for (_, kind) in surfaces.tree.iter_at_point(map_position.map_id, test_position.truncate()) {
+                match kind {
+                    SurfaceKind::Chunk { position, chunk } => {
+                        let chunk_pos = test_position.truncate() - *position;
+                        let (_, z) = chunk.get(chunk_pos.x as usize, chunk_pos.y as usize);
                         let z = z as i32;
                         if z <= test_position.z {
                             new_z = new_z.max(z);
                         }
                     }
-                    Ok((position, (_, Some(surface)))) => {
-                        let z = position.position.z + surface.offset as i32;
-                        if z <= test_position.z {
-                            new_z = new_z.max(z);
+                    SurfaceKind::Surface { max_z, .. } => {
+                        if *max_z <= test_position.z {
+                            new_z = new_z.max(*max_z);
                         }
                     }
-                    Err(_) => {}
-                    _ => unreachable!(),
                 }
             }
 
             test_position.z = new_z;
             map_position.position = test_position;
         }
-
-        let mut characters = character_and_surfaces.p0();
-        let (mut position, notoriety) = characters.get_mut(primary_entity).unwrap();
-        //state.position = map_position;
-        *position = map_position;
 
         let notoriety = **notoriety;
         client.send_packet(MoveConfirm {

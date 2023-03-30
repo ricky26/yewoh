@@ -7,7 +7,7 @@ use glam::{IVec2, IVec3};
 use rstar::{AABB, Envelope, Point, PointDistance, RTree, RTreeObject, SelectionFunction};
 use rstar::primitives::Rectangle;
 
-use yewoh::assets::map::CHUNK_SIZE;
+use yewoh::assets::map::{CHUNK_SIZE, MapChunk};
 
 use crate::world::entity::MapPosition;
 use crate::world::map::{Chunk, Surface};
@@ -111,10 +111,19 @@ impl<T: Iterator> Iterator for MaybeIter<T> {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct SpatialEntityTree<T = ()> {
     trees: HashMap<u8, RTree<Entry<T>>>,
     entities: HashMap<Entity, (u8, Rectangle<SpatialPoint>)>,
+}
+
+impl<T> Default for SpatialEntityTree<T> {
+    fn default() -> Self {
+        Self {
+            trees: Default::default(),
+            entities: Default::default(),
+        }
+    }
 }
 
 impl<T> SpatialEntityTree<T> {
@@ -182,27 +191,41 @@ impl<T> SpatialEntityTree<T> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum SurfaceKind {
+    Chunk { position: IVec2, chunk: MapChunk },
+    Surface { position: IVec2, min_z: i32, max_z: i32 },
+}
+
 #[derive(Debug, Clone, Default, Resource)]
 pub struct EntitySurfaces {
-    pub tree: SpatialEntityTree<(i32, i32)>,
+    pub tree: SpatialEntityTree<SurfaceKind>,
 }
 
 pub fn update_entity_surfaces(
     mut storage: ResMut<EntitySurfaces>,
-    chunks: Query<(Entity, &MapPosition), (With<Chunk>, Or<(Changed<MapPosition>, Changed<Chunk>)>)>,
+    chunks: Query<(Entity, &MapPosition, &Chunk), Or<(Changed<MapPosition>, Changed<Chunk>)>>,
     surfaces: Query<(Entity, &MapPosition, &Surface), Or<(Changed<MapPosition>, Changed<Surface>)>>,
     mut removed_chunks: RemovedComponents<Chunk>,
     mut removed_surfaces: RemovedComponents<Surface>,
 ) {
-    for (entity, position) in chunks.iter() {
+    for (entity, position, chunk) in chunks.iter() {
         let min = position.position.truncate();
         let max = min + IVec2::new(CHUNK_SIZE as i32 - 1, CHUNK_SIZE as i32 - 1);
-        storage.tree.insert_aabb(entity, (0, 0), position.map_id, min, max);
+        let kind = SurfaceKind::Chunk {
+            position: min,
+            chunk: chunk.map_chunk.clone(),
+        };
+        storage.tree.insert_aabb(entity, kind, position.map_id, min, max);
     }
 
     for (entity, position, surface) in surfaces.iter() {
-        let meta = (position.position.z, position.position.z + surface.offset as i32);
-        storage.tree.insert_point(entity, meta, position.map_id, position.position.truncate());
+        let kind = SurfaceKind::Surface {
+            position: position.position.truncate(),
+            min_z: position.position.z,
+            max_z: position.position.z + surface.offset as i32,
+        };
+        storage.tree.insert_point(entity, kind, position.map_id, position.position.truncate());
     }
 
     for entity in removed_chunks.iter() {
