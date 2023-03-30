@@ -11,7 +11,7 @@ use crate::commands::{TextCommandRegistrationExt, TextCommands};
 use crate::commands::go::Go;
 use crate::commands::info::Info;
 use crate::commands::test::{Echo, FryPan, TestGump};
-use crate::npc::{init_npcs, spawn_npcs};
+use crate::npc::{init_npcs, move_npcs, spawn_npcs};
 use crate::time::send_time;
 
 pub mod accounts;
@@ -53,6 +53,7 @@ impl Plugin for DefaultGamePlugin {
             ).in_base_set(CoreSet::Update))
             .add_systems((
                 spawn_npcs,
+                move_npcs,
             ).in_base_set(CoreSet::Update))
             .add_systems((
                 handle_move,
