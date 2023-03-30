@@ -156,26 +156,26 @@ impl<T> SpatialEntityTree<T> {
         }
     }
 
-    pub fn iter(&self, map_id: u8) -> impl Iterator<Item=(Entity, IVec2, IVec2)> + '_ {
+    pub fn iter(&self, map_id: u8) -> impl Iterator<Item=(Entity, &T, IVec2, IVec2)> + '_ {
         self.trees.get(&map_id).unwrap()
             .iter()
-            .map(|e| (e.entity, e.aabb.lower().0, e.aabb.upper().0))
+            .map(|e| (e.entity, &e.metadata, e.aabb.lower().0, e.aabb.upper().0))
     }
 
-    pub fn iter_aabb(&self, map_id: u8, min: IVec2, max: IVec2) -> impl Iterator<Item=Entity> + '_ {
+    pub fn iter_aabb(&self, map_id: u8, min: IVec2, max: IVec2) -> impl Iterator<Item=(Entity, &T)> + '_ {
         MaybeIter(if let Some(tree) = self.trees.get(&map_id) {
             let envelope = AABB::from_corners(SpatialPoint(min), SpatialPoint(max));
             Some(tree.locate_in_envelope_intersecting(&envelope)
-                .map(|e| e.entity))
+                .map(|e| (e.entity, &e.metadata)))
         } else {
             None
         })
     }
 
-    pub fn iter_at_point(&self, map: u8, position: IVec2) -> impl Iterator<Item=Entity> + '_ {
+    pub fn iter_at_point(&self, map: u8, position: IVec2) -> impl Iterator<Item=(Entity, &T)> + '_ {
         MaybeIter(if let Some(tree) = self.trees.get(&map) {
             Some(tree.locate_all_at_point(&SpatialPoint(position))
-                .map(|e| e.entity))
+                .map(|e| (e.entity, &e.metadata)))
         } else {
             None
         })
@@ -184,7 +184,7 @@ impl<T> SpatialEntityTree<T> {
 
 #[derive(Debug, Clone, Default, Resource)]
 pub struct EntitySurfaces {
-    pub tree: SpatialEntityTree<u8>,
+    pub tree: SpatialEntityTree<(i32, i32)>,
 }
 
 pub fn update_entity_surfaces(
@@ -197,11 +197,12 @@ pub fn update_entity_surfaces(
     for (entity, position) in chunks.iter() {
         let min = position.position.truncate();
         let max = min + IVec2::new(CHUNK_SIZE as i32 - 1, CHUNK_SIZE as i32 - 1);
-        storage.tree.insert_aabb(entity, 0, position.map_id, min, max);
+        storage.tree.insert_aabb(entity, (0, 0), position.map_id, min, max);
     }
 
     for (entity, position, surface) in surfaces.iter() {
-        storage.tree.insert_point(entity, surface.offset, position.map_id, position.position.truncate());
+        let meta = (position.position.z, position.position.z + surface.offset as i32);
+        storage.tree.insert_point(entity, meta, position.map_id, position.position.truncate());
     }
 
     for entity in removed_chunks.iter() {

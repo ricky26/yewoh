@@ -36,7 +36,7 @@ pub fn handle_move(
         };
 
         let primary_entity = owned.entity;
-        let mut map_position = match character_and_surfaces.p0().get_mut(primary_entity) {
+        let mut map_position = match character_and_surfaces.p0().get(primary_entity) {
             Ok((position, ..)) => position.clone(),
             _ => continue,
         };
@@ -48,7 +48,7 @@ pub fn handle_move(
             let mut test_position = map_position.position + request.direction.as_vec2().extend(10);
             let mut new_z = 0;
 
-            for entity in surfaces.tree.iter_at_point(map_position.map_id, test_position.truncate()) {
+            for (entity, _) in surfaces.tree.iter_at_point(map_position.map_id, test_position.truncate()) {
                 match character_and_surfaces.p1().get(entity) {
                     Ok((position, (Some(chunk), _))) => {
                         let chunk_pos = test_position - position.position;

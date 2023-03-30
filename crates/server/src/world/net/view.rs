@@ -654,7 +654,7 @@ pub fn sync_nearby(
             _ => continue,
         };
         let (min, max) = view_aabb(position.position.truncate(), view.range);
-        for entity in entity_positions.tree.iter_aabb(position.map_id, min, max) {
+        for (entity, _) in entity_positions.tree.iter_aabb(position.map_id, min, max) {
             if let Ok((flags, graphic, position, quantity, tooltip, visibility)) = world_items.get(entity) {
                 if is_visible_to(possessing.entity, &visibility) {
                     view_state.upsert_ghost(entity, GhostState::Item(ItemState {
@@ -756,7 +756,7 @@ pub fn update_nearby_moving(
             _ => continue,
         };
         let (min, max) = view_aabb(position.position.truncate(), view.range);
-        for entity in entity_positions.tree.iter_aabb(position.map_id, min, max) {
+        for (entity, _) in entity_positions.tree.iter_aabb(position.map_id, min, max) {
             if let Ok((flags, graphic, position, quantity, tooltip, visibility)) = world_items.get(entity) {
                 if is_visible_to(possessing.entity, &visibility) {
                     view_state.upsert_ghost(entity, GhostState::Item(ItemState {
@@ -828,7 +828,7 @@ pub fn update_nearby(
     mut removed_entities: RemovedComponents<NetEntity>,
 ) {
     for (entity, flags, graphic, position, quantity, visibility) in world_items.iter() {
-        for client_entity in client_positions.tree.iter_at_point(position.map_id, position.position.truncate()) {
+        for (client_entity, _) in client_positions.tree.iter_at_point(position.map_id, position.position.truncate()) {
             let (mut view_state, possessing) = match clients.get_mut(client_entity) {
                 Ok(x) => x,
                 _ => continue,
@@ -853,7 +853,7 @@ pub fn update_nearby(
     }
 
     for (entity, flags, character, position, notorious, visibility) in characters.iter() {
-        for client_entity in client_positions.tree.iter_at_point(position.map_id, position.position.truncate()) {
+        for (client_entity, _) in client_positions.tree.iter_at_point(position.map_id, position.position.truncate()) {
             let (mut view_state, possessing) = match clients.get_mut(client_entity) {
                 Ok(x) => x,
                 _ => continue,
@@ -950,7 +950,7 @@ pub fn update_equipped_items(
             _ => continue,
         };
 
-        for client_entity in client_positions.tree.iter_at_point(position.map_id, position.position.truncate()) {
+        for (client_entity, _) in client_positions.tree.iter_at_point(position.map_id, position.position.truncate()) {
             let (mut view_state, possessing) = match clients.get_mut(client_entity) {
                 Ok(x) => x,
                 _ => continue,
