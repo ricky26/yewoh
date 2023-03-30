@@ -28,6 +28,7 @@ pub use view::{
     update_tooltips,
     sync_nearby,
     update_nearby,
+    update_nearby_moving,
     update_equipped_items,
     update_items_in_containers,
 };

@@ -209,6 +209,7 @@ impl ViewState {
             // Item Update
             (Some(GhostState::Item(old)), GhostState::Item(new)) => {
                 // Preserve tooltip for now, as this is set by another method.
+                new.tooltip = old.tooltip;
                 new.tooltip_version = old.tooltip_version;
                 new.dirty_flags = old.dirty_flags;
 
@@ -283,9 +284,7 @@ impl ViewState {
                             if let Some(GhostState::Character(character)) = self.ghosts.get(&by.parent) {
                                 position_in_range(character.position)
                             } else {
-                                log::debug!("noq {:?}", entity);
-                                //false
-                                true
+                                false
                             }
                         }
                         ItemPositionState::Contained(container) =>
@@ -298,7 +297,6 @@ impl ViewState {
                 continue;
             }
 
-            log::debug!("REMOVE {:?}", entity);
             to_remove.push((*entity, ghost.parent()));
         }
 
@@ -635,14 +633,14 @@ pub fn sync_nearby(
         (With<Synchronizing>, Without<Synchronized>),
     >,
     world_items: Query<(
-        Entity, &Flags, &Graphic, &MapPosition, Option<&Quantity>, Option<&Tooltip>,
+        &Flags, &Graphic, &MapPosition, Option<&Quantity>, Option<&Tooltip>,
         Option<&PartiallyVisible>
     )>,
     characters: Query<(
-        Entity, &Flags, &Character, &MapPosition, &Notorious, Option<&PartiallyVisible>,
+        &Flags, &Character, &MapPosition, &Notorious, &Stats, Option<&PartiallyVisible>,
     )>,
     equipped_items: Query<(
-        Entity, &Graphic, &EquippedBy, Option<&Tooltip>, Option<&PartiallyVisible>
+        &Graphic, &EquippedBy, Option<&Tooltip>, Option<&PartiallyVisible>
     )>,
     containers: Query<&Container>,
     child_items: Query<(
@@ -651,13 +649,13 @@ pub fn sync_nearby(
     )>,
 ) {
     for (view, mut view_state, possessing, visible_containers) in clients.iter_mut() {
-        let (_, _, _, position, _, _) = match characters.get(possessing.entity) {
+        let (_, _, position, _, _, _) = match characters.get(possessing.entity) {
             Ok(x) => x,
             _ => continue,
         };
         let (min, max) = view_aabb(position.position.truncate(), view.range);
         for entity in entity_positions.tree.iter_aabb(position.map_id, min, max) {
-            if let Ok((entity, flags, graphic, position, quantity, tooltip, visibility)) = world_items.get(entity) {
+            if let Ok((flags, graphic, position, quantity, tooltip, visibility)) = world_items.get(entity) {
                 if is_visible_to(possessing.entity, &visibility) {
                     view_state.upsert_ghost(entity, GhostState::Item(ItemState {
                         dirty_flags: ItemDirtyFlags::empty(),
@@ -675,7 +673,7 @@ pub fn sync_nearby(
                         update_tooltip(&mut view_state, entity, tooltip);
                     }
                 }
-            } else if let Ok((entity, flags, character, position, notorious, visibility)) = characters.get(entity) {
+            } else if let Ok((flags, character, position, notorious, stats, visibility)) = characters.get(entity) {
                 if is_visible_to(possessing.entity, &visibility) {
                     view_state.upsert_ghost(entity, GhostState::Character(CharacterState {
                         dirty_flags: CharacterDirtyFlags::empty(),
@@ -683,14 +681,14 @@ pub fn sync_nearby(
                         body_type: character.body_type,
                         hue: character.hue,
                         notoriety: notorious.0,
-                        stats: Default::default(),
+                        stats: stats.clone(),
                         flags: flags.flags,
                     }));
 
                     for child_entity in character.equipment.iter().copied() {
-                        if let Ok((entity, graphic, parent, tooltip, visibility)) = equipped_items.get(child_entity) {
+                        if let Ok((graphic, parent, tooltip, visibility)) = equipped_items.get(child_entity) {
                             if is_visible_to(possessing.entity, &visibility) {
-                                view_state.upsert_ghost(entity, GhostState::Item(ItemState {
+                                view_state.upsert_ghost(child_entity, GhostState::Item(ItemState {
                                     dirty_flags: ItemDirtyFlags::empty(),
                                     graphic: *graphic,
                                     position: ItemPositionState::Equipped(parent.clone()),
@@ -700,7 +698,7 @@ pub fn sync_nearby(
                                 }));
 
                                 if let Some(tooltip) = tooltip {
-                                    update_tooltip(&mut view_state, entity, tooltip);
+                                    update_tooltip(&mut view_state, child_entity, tooltip);
                                 }
                             }
                         }
@@ -718,7 +716,7 @@ pub fn sync_nearby(
             for child_entity in container.items.iter().copied() {
                 if let Ok((graphic, parent, quantity, tooltip, visibility)) = child_items.get(child_entity) {
                     if is_visible_to(possessing.entity, &visibility) {
-                        view_state.upsert_ghost(entity, GhostState::Item(ItemState {
+                        view_state.upsert_ghost(child_entity, GhostState::Item(ItemState {
                             dirty_flags: ItemDirtyFlags::empty(),
                             graphic: *graphic,
                             position: ItemPositionState::Contained(parent.clone()),
@@ -728,7 +726,83 @@ pub fn sync_nearby(
                         }));
 
                         if let Some(tooltip) = tooltip {
-                            update_tooltip(&mut view_state, entity, tooltip);
+                            update_tooltip(&mut view_state, child_entity, tooltip);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub fn update_nearby_moving(
+    entity_positions: Res<EntityPositions>,
+    mut clients: Query<(&View, &mut ViewState, &Possessing)>,
+    moved_characters: Query<(&NetOwner, &MapPosition), Changed<MapPosition>>,
+    world_items: Query<(
+        &Flags, &Graphic, &MapPosition, Option<&Quantity>, Option<&Tooltip>,
+        Option<&PartiallyVisible>
+    )>,
+    characters: Query<(
+        &Flags, &Character, &MapPosition, &Notorious, &Stats, Option<&PartiallyVisible>,
+    )>,
+    equipped_items: Query<(
+        &Graphic, &EquippedBy, Option<&Tooltip>, Option<&PartiallyVisible>
+    )>,
+) {
+    for (owner, position) in moved_characters.iter() {
+        let (view, mut view_state, possessing) = match clients.get_mut(owner.client_entity) {
+            Ok(x) => x,
+            _ => continue,
+        };
+        let (min, max) = view_aabb(position.position.truncate(), view.range);
+        for entity in entity_positions.tree.iter_aabb(position.map_id, min, max) {
+            if let Ok((flags, graphic, position, quantity, tooltip, visibility)) = world_items.get(entity) {
+                if is_visible_to(possessing.entity, &visibility) {
+                    view_state.upsert_ghost(entity, GhostState::Item(ItemState {
+                        dirty_flags: ItemDirtyFlags::empty(),
+                        graphic: *graphic,
+                        position: ItemPositionState::World(WorldItemState {
+                            position: *position,
+                            flags: flags.flags,
+                        }),
+                        quantity: quantity.map_or(1, |q| q.quantity),
+                        tooltip: Default::default(),
+                        tooltip_version: 0,
+                    }));
+
+                    if let Some(tooltip) = tooltip {
+                        update_tooltip(&mut view_state, entity, tooltip);
+                    }
+                }
+            } else if let Ok((flags, character, position, notorious, stats, visibility)) = characters.get(entity) {
+                if is_visible_to(possessing.entity, &visibility) {
+                    view_state.upsert_ghost(entity, GhostState::Character(CharacterState {
+                        dirty_flags: CharacterDirtyFlags::empty(),
+                        position: *position,
+                        body_type: character.body_type,
+                        hue: character.hue,
+                        notoriety: notorious.0,
+                        stats: stats.clone(),
+                        flags: flags.flags,
+                    }));
+
+                    for child_entity in character.equipment.iter().copied() {
+                        if let Ok((graphic, parent, tooltip, visibility)) = equipped_items.get(child_entity) {
+                            if is_visible_to(possessing.entity, &visibility) {
+                                view_state.upsert_ghost(child_entity, GhostState::Item(ItemState {
+                                    dirty_flags: ItemDirtyFlags::empty(),
+                                    graphic: *graphic,
+                                    position: ItemPositionState::Equipped(parent.clone()),
+                                    quantity: 1,
+                                    tooltip: Default::default(),
+                                    tooltip_version: 0,
+                                }));
+
+                                if let Some(tooltip) = tooltip {
+                                    update_tooltip(&mut view_state, child_entity, tooltip);
+                                }
+                            }
                         }
                     }
                 }
@@ -799,7 +873,7 @@ pub fn update_nearby(
                 for child_entity in character.equipment.iter().copied() {
                     if let Ok((graphic, parent, tooltip, visibility)) = equipped_items.get(child_entity) {
                         if is_visible_to(possessing.entity, &visibility) {
-                            view_state.upsert_ghost(entity, GhostState::Item(ItemState {
+                            view_state.upsert_ghost(child_entity, GhostState::Item(ItemState {
                                 dirty_flags: ItemDirtyFlags::empty(),
                                 graphic: *graphic,
                                 position: ItemPositionState::Equipped(parent.clone()),
@@ -809,8 +883,10 @@ pub fn update_nearby(
                             }));
 
                             if let Some(tooltip) = tooltip {
-                                update_tooltip(&mut view_state, entity, tooltip);
+                                update_tooltip(&mut view_state, child_entity, tooltip);
                             }
+                        } else if view_state.has_ghost(child_entity) {
+                            view_state.remove_ghost(child_entity);
                         }
                     }
                 }

@@ -3,7 +3,7 @@ use bevy_ecs::prelude::*;
 
 use crate::world::events::{CharacterListEvent, ChatRequestEvent, ContextMenuEvent, CreateCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::input::{handle_context_menu_packets, send_context_menu, update_targets};
-use crate::world::net::{accept_new_clients, add_new_entities_to_lookup, finish_synchronizing, handle_input_packets, handle_login_packets, handle_new_packets, MapInfos, NetEntityAllocator, NetEntityLookup, remove_old_entities_from_lookup, send_change_map, send_ghost_updates, send_tooltips, start_synchronizing, sync_nearby, update_equipped_items, update_items_in_containers, update_nearby, update_stats, update_tooltips};
+use crate::world::net::{accept_new_clients, add_new_entities_to_lookup, finish_synchronizing, handle_input_packets, handle_login_packets, handle_new_packets, MapInfos, NetEntityAllocator, NetEntityLookup, remove_old_entities_from_lookup, send_change_map, send_ghost_updates, send_tooltips, start_synchronizing, sync_nearby, update_equipped_items, update_items_in_containers, update_nearby, update_nearby_moving, update_stats, update_tooltips};
 use crate::world::spatial::{EntityPositions, EntitySurfaces, NetClientPositions, update_client_positions, update_entity_positions, update_entity_surfaces};
 
 pub mod net;
@@ -86,6 +86,7 @@ impl Plugin for ServerPlugin {
                 update_tooltips,
                 sync_nearby,
                 update_nearby,
+                update_nearby_moving,
                 update_equipped_items,
                 update_items_in_containers,
             ).in_set(ServerSet::SendGhosts))
