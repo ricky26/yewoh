@@ -9,8 +9,8 @@ use rstar::primitives::Rectangle;
 
 use yewoh::assets::map::{CHUNK_SIZE, MapChunk};
 
-use crate::world::entity::MapPosition;
-use crate::world::map::{Chunk, Surface};
+use crate::world::entity::{Graphic, MapPosition};
+use crate::world::map::{Chunk, Impassable, Surface, TileDataResource};
 use crate::world::net::{NetClient, NetOwner, Possessing, View};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -194,7 +194,7 @@ impl<T> SpatialEntityTree<T> {
 #[derive(Debug, Clone)]
 pub enum SurfaceKind {
     Chunk { position: IVec2, chunk: MapChunk },
-    Surface { position: IVec2, min_z: i32, max_z: i32 },
+    Item { position: IVec2, tile_id: u16, impassable: bool, min_z: i32, max_z: i32 },
 }
 
 #[derive(Debug, Clone, Default, Resource)]
@@ -204,8 +204,12 @@ pub struct EntitySurfaces {
 
 pub fn update_entity_surfaces(
     mut storage: ResMut<EntitySurfaces>,
+    tile_data: Res<TileDataResource>,
     chunks: Query<(Entity, &MapPosition, &Chunk), Or<(Changed<MapPosition>, Changed<Chunk>)>>,
-    surfaces: Query<(Entity, &MapPosition, &Surface), Or<(Changed<MapPosition>, Changed<Surface>)>>,
+    surfaces: Query<
+        (Entity, &MapPosition, &Graphic, Option<&Impassable>),
+        (Or<(With<Impassable>, With<Surface>)>, Or<(Changed<MapPosition>, Changed<Surface>, Changed<Impassable>)>),
+    >,
     mut removed_chunks: RemovedComponents<Chunk>,
     mut removed_surfaces: RemovedComponents<Surface>,
 ) {
@@ -219,11 +223,18 @@ pub fn update_entity_surfaces(
         storage.tree.insert_aabb(entity, kind, position.map_id, min, max);
     }
 
-    for (entity, position, surface) in surfaces.iter() {
-        let kind = SurfaceKind::Surface {
+    for (entity, position, graphic, impassable) in surfaces.iter() {
+        let tile_data = match tile_data.items.get(graphic.id as usize) {
+            Some(x) => x,
+            None => continue,
+        };
+
+        let kind = SurfaceKind::Item {
             position: position.position.truncate(),
+            tile_id: graphic.id,
+            impassable: impassable.is_some(),
             min_z: position.position.z,
-            max_z: position.position.z + surface.offset as i32,
+            max_z: position.position.z + tile_data.height as i32,
         };
         storage.tree.insert_point(entity, kind, position.map_id, position.position.truncate());
     }

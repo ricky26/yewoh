@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use std::path::Path;
 
 use bevy_ecs::prelude::*;
@@ -9,6 +10,7 @@ use tokio::spawn;
 use tokio::sync::mpsc;
 
 use yewoh::assets::map::{CHUNK_SIZE, load_map, load_statics, MapChunk};
+use yewoh::assets::multi::MultiData;
 use yewoh::assets::tiles::{TileData, TileFlags};
 use yewoh::Direction;
 
@@ -24,8 +26,35 @@ pub struct Chunk {
 pub struct Static;
 
 #[derive(Debug, Clone, Default, Component, Reflect)]
-pub struct Surface {
-    pub offset: u8,
+pub struct Surface;
+
+#[derive(Debug, Clone, Default, Component, Reflect)]
+pub struct Impassable;
+
+#[derive(Debug, Clone, Default, Resource)]
+pub struct TileDataResource {
+    pub tile_data: TileData,
+}
+
+impl Deref for TileDataResource {
+    type Target = TileData;
+
+    fn deref(&self) -> &Self::Target {
+        &self.tile_data
+    }
+}
+
+#[derive(Debug, Clone, Default, Resource)]
+pub struct MultiDataResource {
+    pub multi_data: MultiData,
+}
+
+impl Deref for MultiDataResource {
+    type Target = MultiData;
+
+    fn deref(&self) -> &Self::Target {
+        &self.multi_data
+    }
 }
 
 pub fn spawn_chunk(commands: &mut Commands, map_id: u8, chunk_x: usize, chunk_y: usize, map_chunk: MapChunk) {
@@ -108,7 +137,11 @@ pub async fn create_statics(
 
         if let Some(info) = tile_data.items.get(s.graphic_id as usize) {
             if info.flags.contains(TileFlags::SURFACE) {
-                entity.insert(Surface { offset: info.height });
+                entity.insert(Surface);
+            }
+
+            if info.flags.contains(TileFlags::IMPASSABLE) {
+                entity.insert(Impassable);
             }
         }
     }

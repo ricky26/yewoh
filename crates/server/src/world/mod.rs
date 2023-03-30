@@ -14,6 +14,8 @@ pub mod events;
 
 pub mod spatial;
 
+pub mod navigation;
+
 pub mod map;
 
 pub mod input;

@@ -95,6 +95,10 @@ pub struct UopBuffer<T> {
 }
 
 impl<T: Deref<Target=[u8]>> UopBuffer<T> {
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
     pub fn as_bytes(&self) -> &[u8] { self.backing.deref() }
 
     pub fn iter_hashes(&self) -> impl Iterator<Item = u64> + '_ { self.entries.keys().copied() }
@@ -130,7 +134,7 @@ impl<T: Deref<Target=[u8]>> UopBuffer<T> {
 
         let mut read = &bytes[FILE_MAGIC.len()..];
         let version = read.read_u32::<Endian>()?;
-        if version != 5 {
+        if version > 5 {
             return Err(anyhow!("Unsupported UOP version {version}"));
         }
         let format_timestamp = read.read_u32::<Endian>()?;

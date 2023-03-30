@@ -12,6 +12,7 @@ use futures::future::join;
 use log::info;
 use tokio::net::{lookup_host, TcpListener};
 use tokio::sync::mpsc;
+use yewoh::assets::multi::load_multi_data;
 
 use yewoh::assets::tiles::load_tile_data;
 use yewoh_default_game::data::static_data;
@@ -19,7 +20,7 @@ use yewoh_default_game::DefaultGamePlugin;
 use yewoh_server::async_runtime::AsyncRuntime;
 use yewoh_server::game_server::listen_for_game;
 use yewoh_server::lobby::{listen_for_lobby, LocalLobby};
-use yewoh_server::world::map::{Chunk, create_map_entities, create_statics, Static};
+use yewoh_server::world::map::{Chunk, create_map_entities, create_statics, MultiDataResource, Static, TileDataResource};
 use yewoh_server::world::net::NetServer;
 use yewoh_server::world::ServerPlugin;
 
@@ -77,6 +78,7 @@ fn main() -> anyhow::Result<()> {
     let static_data = rt.block_on(static_data::load_from_directory(&args.data_path))?;
     let map_infos = static_data.maps.map_infos();
     let tile_data = rt.block_on(load_tile_data(&args.uo_data_path))?;
+    let multi_data = rt.block_on(load_multi_data(&args.uo_data_path))?;
 
     info!("Loading map data...");
     rt.block_on(create_map_entities(&mut app.world, &map_infos, &args.uo_data_path))?;
@@ -122,7 +124,9 @@ fn main() -> anyhow::Result<()> {
         .insert_resource(AsyncRuntime::from(rt.handle().clone()))
         .insert_resource(NetServer::new(args.encryption, new_session_requests, new_session_rx))
         .insert_resource(map_infos)
-        .insert_resource(static_data);
+        .insert_resource(static_data)
+        .insert_resource(TileDataResource { tile_data })
+        .insert_resource(MultiDataResource { multi_data });
 
     info!("Listening for http connections on {}", &args.http_bind);
     info!("Listening for lobby connections on {}", &args.lobby_bind);
