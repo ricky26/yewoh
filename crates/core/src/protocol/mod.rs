@@ -193,6 +193,7 @@ fn packet_registry() -> &'static PacketRegistry {
             PacketRegistration::for_type::<SetTime>(),
             PacketRegistration::for_type::<ChangeSeason>(),
             PacketRegistration::for_type::<ViewRange>(),
+            PacketRegistration::for_type::<GlobalLightLevel>(),
 
             // Entity
             PacketRegistration::for_type::<EntityRequest>(),
@@ -211,6 +212,7 @@ fn packet_registry() -> &'static PacketRegistry {
             PacketRegistration::for_type::<UpsertEntityStats>(),
             PacketRegistration::for_type::<RequestName>(),
             PacketRegistration::for_type::<RenameEntity>(),
+            PacketRegistration::for_type::<EntityLightLevel>(),
 
             // Character
             PacketRegistration::for_type::<CharacterProfile>(),

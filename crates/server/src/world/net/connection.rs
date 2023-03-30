@@ -379,7 +379,7 @@ pub fn handle_input_packets(
             if let Some(target) = lookup.net_to_ecs(request.target_id) {
                 drop_events.send(DropEvent {
                     client_entity,
-                    target: target,
+                    target,
                     position: request.position,
                     grid_index: request.grid_index,
                     dropped_on: request.container_id.and_then(|id| lookup.net_to_ecs(id)),

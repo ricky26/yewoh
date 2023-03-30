@@ -1117,3 +1117,27 @@ impl Packet for RenameEntity {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct EntityLightLevel {
+    pub id: EntityId,
+    pub light_level: u8,
+}
+
+impl Packet for EntityLightLevel {
+    fn packet_kind() -> u8 { 0x4e }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(6) }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let id = payload.read_entity_id()?;
+        let light_level = payload.read_u8()?;
+        Ok(Self { id, light_level })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_entity_id(self.id)?;
+        writer.write_u8(self.light_level)?;
+        Ok(())
+    }
+}
+

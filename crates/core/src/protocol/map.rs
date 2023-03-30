@@ -70,3 +70,19 @@ impl Packet for ViewRange {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct GlobalLightLevel(pub u8);
+
+impl Packet for GlobalLightLevel {
+    fn packet_kind() -> u8 { 0x4f }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        Ok(Self(payload.read_u8()?))
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_u8(self.0)?;
+        Ok(())
+    }
+}
