@@ -79,21 +79,50 @@ impl<T> PointDistance for Entry<T> {
     }
 }
 
-struct SelectEntityFunction<T>
-{
+struct SelectEntityFunction<T> {
     entity: Entity,
     aabb: AABB<SpatialPoint>,
     _metadata: PhantomData<T>,
 }
 
-impl<T> SelectionFunction<Entry<T>> for SelectEntityFunction<T>
-{
+impl<T> SelectionFunction<Entry<T>> for SelectEntityFunction<T> {
     fn should_unpack_parent(&self, parent_envelope: &AABB<SpatialPoint>) -> bool {
         parent_envelope.contains_envelope(&self.aabb)
     }
 
     fn should_unpack_leaf(&self, leaf: &Entry<T>) -> bool {
         leaf.entity == self.entity
+    }
+}
+
+fn clamp_point(pt: IVec2, aabb: &AABB<SpatialPoint>) -> IVec2 {
+    let min = aabb.lower();
+    let max = aabb.upper();
+    IVec2::new(
+        pt.x.max(min.0.x).min(max.0.x),
+        pt.y.max(min.0.y).min(max.0.y),
+    )
+}
+
+fn line_crosses_aabb(start: IVec2, end: IVec2, aabb: &AABB<SpatialPoint>) -> bool {
+    let clamped_start = clamp_point(start, aabb);
+    let clamped_end = clamp_point(end, aabb);
+    clamped_start != clamped_end || clamped_start != start
+}
+
+struct LineSelectionFunction<T> {
+    start: IVec2,
+    end: IVec2,
+    _metadata: PhantomData<T>,
+}
+
+impl<T> SelectionFunction<Entry<T>> for LineSelectionFunction<T> {
+    fn should_unpack_parent(&self, parent_envelope: &AABB<SpatialPoint>) -> bool {
+        line_crosses_aabb(self.start, self.end, parent_envelope)
+    }
+
+    fn should_unpack_leaf(&self, leaf: &Entry<T>) -> bool {
+        line_crosses_aabb(self.start, self.end, &leaf.aabb.envelope())
     }
 }
 
@@ -175,6 +204,20 @@ impl<T> SpatialEntityTree<T> {
         MaybeIter(if let Some(tree) = self.trees.get(&map_id) {
             let envelope = AABB::from_corners(SpatialPoint(min), SpatialPoint(max));
             Some(tree.locate_in_envelope_intersecting(&envelope)
+                .map(|e| (e.entity, &e.metadata)))
+        } else {
+            None
+        })
+    }
+
+    pub fn iter_line(&self, map_id: u8, start: IVec2, end: IVec2) -> impl Iterator<Item=(Entity, &T)> + '_ {
+        MaybeIter(if let Some(tree) = self.trees.get(&map_id) {
+            let function = LineSelectionFunction {
+                start,
+                end,
+                _metadata: PhantomData,
+            };
+            Some(tree.locate_with_selection_function(function)
                 .map(|e| (e.entity, &e.metadata)))
         } else {
             None
@@ -276,23 +319,11 @@ pub fn update_entity_positions(
     }
 }
 
-pub fn view_aabb(position: IVec2, range: u32) -> (IVec2, IVec2) {
-    let size = IVec2::splat(range as i32);
+pub fn view_aabb(position: IVec2, range: i32) -> (IVec2, IVec2) {
+    let size = IVec2::splat(range);
     let min = position - size;
     let max = position + size;
     (min, max)
-}
-
-pub fn manhattan_magnitude2(a: IVec2) -> i32 {
-    a.x.abs() + a.y.abs()
-}
-
-pub fn in_range2(a: IVec2, b: IVec2, range: u32) -> bool {
-    manhattan_magnitude2(a - b) as u32 <= range
-}
-
-pub fn in_range(a: MapPosition, b: MapPosition, range: u32) -> bool {
-    a.map_id == b.map_id && in_range2(a.position.truncate(), b.position.truncate(), range)
 }
 
 #[derive(Debug, Clone, Default, Resource)]

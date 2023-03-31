@@ -1,3 +1,4 @@
+use std::time::Duration;
 use bevy_app::{App, CoreSet, Plugin};
 use bevy_ecs::prelude::*;
 use glam::{IVec2, IVec3};
@@ -6,11 +7,13 @@ use tokio::sync::mpsc;
 use yewoh::{Direction, Notoriety};
 use yewoh::protocol::{CharacterList, CharacterListFlags, EntityFlags, EntityTooltipLine, EquipmentSlot, UnicodeTextMessage};
 use yewoh_server::async_runtime::AsyncRuntime;
-use yewoh_server::world::entity::{Character, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer, Tooltip};
+use yewoh_server::world::entity::{Character, CharacterEquipped, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer, Tooltip};
 use yewoh_server::world::events::{CharacterListEvent, CreateCharacterEvent, SelectCharacterEvent};
 use yewoh_server::world::net::{NetClient, NetEntity, NetEntityAllocator, NetOwner, Possessing, User};
 
 use crate::accounts::repository::{AccountRepository, CharacterInfo};
+use crate::activities::CurrentActivity;
+use crate::characters::{Alive, MeleeWeapon, Unarmed};
 use crate::data::static_data::StaticData;
 
 pub mod repository;
@@ -202,15 +205,22 @@ pub fn handle_spawn_character(
             }))
             .id();
 
-        let knife_entity = commands.spawn((
-            NetEntity { id: entity_allocator.allocate_item() },
-            Flags { flags: EntityFlags::default() },
-            Graphic { id: 0xec3, hue: 16 },
-            Tooltip {
-                entries: vec![
-                    EntityTooltipLine { text_id: 1042971, params: "Stabby stabby".into() },
-                ],
-            }))
+        let knife_entity = commands
+            .spawn((
+                NetEntity { id: entity_allocator.allocate_item() },
+                Flags { flags: EntityFlags::default() },
+                Graphic { id: 0xec3, hue: 16 },
+                Tooltip {
+                    entries: vec![
+                        EntityTooltipLine { text_id: 1042971, params: "Stabby stabby".into() },
+                    ],
+                },
+                MeleeWeapon {
+                    damage: 10,
+                    delay: Duration::from_secs(3),
+                    range: 4,
+                },
+            ))
             .id();
 
         let backpack_entity = commands.spawn((
@@ -269,22 +279,37 @@ pub fn handle_spawn_character(
             });
 
         let primary_entity_id = entity_allocator.allocate_character();
-        let primary_entity = commands.spawn((
-            NetEntity { id: primary_entity_id },
-            NetOwner { client_entity },
-            Flags { flags: EntityFlags::default() },
-            MapPosition {
-                map_id: 1,
-                position: IVec3::new(1325, 1624, 55),
-                direction: Direction::North,
-            },
-            Character {
-                body_type,
-                hue: info.hue,
-                equipment: equipment.iter().map(|(_, e)| e).copied().collect(),
-            },
-            Notorious(Notoriety::Innocent),
-            info.stats))
+        let primary_entity = commands
+            .spawn((
+                NetEntity { id: primary_entity_id },
+                NetOwner { client_entity },
+                Flags { flags: EntityFlags::default() },
+                MapPosition {
+                    map_id: 1,
+                    position: IVec3::new(1325, 1624, 55),
+                    direction: Direction::North,
+                },
+                Character {
+                    body_type,
+                    hue: info.hue,
+                    equipment: equipment.iter()
+                        .copied()
+                        .map(|(slot, equipment)|
+                            CharacterEquipped { equipment, slot })
+                        .collect(),
+                },
+                Notorious(Notoriety::Innocent),
+                info.stats,
+                Unarmed {
+                    weapon: MeleeWeapon {
+                        damage: 1,
+                        delay: Duration::from_secs(2),
+                        range: 3,
+                    },
+                },
+                Alive,
+                CurrentActivity::Idle,
+            ))
             .id();
 
         for (slot, equipment_entity) in equipment {

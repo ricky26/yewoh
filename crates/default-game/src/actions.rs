@@ -2,7 +2,7 @@ use bevy_ecs::prelude::*;
 use bevy_reflect::prelude::*;
 
 use yewoh::protocol::{CharacterAnimation, CharacterProfile, ContextMenuEntry, DamageDealt, EntityFlags, MoveConfirm, MoveEntityReject, MoveReject, OpenContainer, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, Swing, WarMode};
-use yewoh_server::world::entity::{Character, Container, EquippedBy, Flags, MapPosition, Notorious, ParentContainer};
+use yewoh_server::world::entity::{AttackTarget, Character, CharacterEquipped, Container, EquippedBy, Flags, MapPosition, Notorious, ParentContainer};
 use yewoh_server::world::events::{ContextMenuEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SingleClickEvent};
 use yewoh_server::world::input::ContextMenuRequest;
 use yewoh_server::world::map::TileDataResource;
@@ -168,7 +168,7 @@ pub fn handle_pick_up(
                 .remove::<ParentContainer>();
         } else if let Some(equipped) = equipped {
             let mut equipped_character = character_equipment.get_mut(equipped.parent).unwrap();
-            equipped_character.equipment.retain(|e| e != &entity);
+            equipped_character.equipment.retain(|e| e.equipment != entity);
             commands.entity(entity)
                 .insert(Holder { held_by: character })
                 .remove::<EquippedBy>();
@@ -269,7 +269,10 @@ pub fn handle_equip(
 
         let target = event.target;
         if let Ok(mut target_character) = loadouts.get_mut(event.character) {
-            target_character.equipment.push(target);
+            target_character.equipment.push(CharacterEquipped {
+                equipment: target,
+                slot: event.slot,
+            });
             commands.entity(target)
                 .remove::<Holder>()
                 .insert(EquippedBy {
@@ -403,6 +406,7 @@ pub fn handle_skills_requests(
 }
 
 pub fn handle_war_mode(
+    mut commands: Commands,
     clients: Query<(&NetClient, &Possessing)>,
     mut characters: Query<&mut Flags>,
     mut new_packets: EventReader<ReceivedPacketEvent>,
@@ -427,6 +431,7 @@ pub fn handle_war_mode(
             flags.flags |= EntityFlags::WAR_MODE;
         } else {
             flags.flags &= !EntityFlags::WAR_MODE;
+            commands.entity(owned.entity).remove::<AttackTarget>();
         }
 
         client.send_packet(packet.clone().into());

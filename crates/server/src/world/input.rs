@@ -4,9 +4,9 @@ use bevy_ecs::prelude::*;
 use bevy_reflect::prelude::*;
 use glam::IVec3;
 
-use yewoh::protocol::{ContextMenu, ContextMenuEntry, ExtendedCommand, PickTarget, TargetType};
+use yewoh::protocol::{AttackRequest, ContextMenu, ContextMenuEntry, ExtendedCommand, PickTarget, SetAttackTarget, TargetType};
 
-use crate::world::events::{ContextMenuEvent, ReceivedPacketEvent};
+use crate::world::events::{AttackRequestedEvent, ContextMenuEvent, ReceivedPacketEvent};
 use crate::world::net::{NetClient, NetEntityLookup};
 
 #[derive(Debug, Clone, Component)]
@@ -233,5 +233,38 @@ pub fn send_context_menu(
             target_id,
             entries: request.entries.clone(),
         }).into());
+    }
+}
+
+pub fn handle_attack_packets(
+    lookup: Res<NetEntityLookup>,
+    clients: Query<&NetClient>,
+    mut events: EventReader<ReceivedPacketEvent>,
+    mut invoked_events: EventWriter<AttackRequestedEvent>,
+) {
+    for ReceivedPacketEvent { client_entity: client, packet } in events.iter() {
+        let client_entity = *client;
+        let packet = match packet.downcast::<AttackRequest>() {
+            Some(x) => x,
+            _ => continue,
+        };
+
+        let target = match lookup.net_to_ecs(packet.target_id) {
+            Some(x) => x,
+            None => {
+                if let Ok(client) = clients.get(client_entity) {
+                    client.send_packet(SetAttackTarget {
+                        target_id: None,
+                    }.into());
+                }
+
+                continue;
+            },
+        };
+
+        invoked_events.send(AttackRequestedEvent {
+            client_entity,
+            target,
+        });
     }
 }

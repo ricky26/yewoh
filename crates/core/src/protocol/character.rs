@@ -230,11 +230,11 @@ impl Packet for AttackRequest {
 }
 
 #[derive(Debug, Clone)]
-pub struct SetCombatant {
+pub struct SetAttackTarget {
     pub target_id: Option<EntityId>,
 }
 
-impl Packet for SetCombatant {
+impl Packet for SetAttackTarget {
     fn packet_kind() -> u8 { 0xaa }
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(5) }

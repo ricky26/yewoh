@@ -12,6 +12,7 @@ use yewoh_server::world::map::TileDataResource;
 use yewoh_server::world::navigation::try_move_in_direction;
 use yewoh_server::world::net::{NetEntity, NetEntityAllocator};
 use yewoh_server::world::spatial::EntitySurfaces;
+use crate::characters::Alive;
 
 #[derive(Debug, Clone, Component, Reflect)]
 pub struct Spawner {
@@ -81,6 +82,7 @@ pub fn spawn_npcs(
             },
             Npc,
             Spawned,
+            Alive,
             MoveTimer {
                 next_move: Timer::new(Duration::from_secs(1), TimerMode::Repeating),
             },

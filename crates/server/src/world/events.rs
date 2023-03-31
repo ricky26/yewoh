@@ -100,3 +100,9 @@ pub struct RequestSkillsEvent {
     pub client_entity: Entity,
     pub target: Entity,
 }
+
+#[derive(Debug, Clone)]
+pub struct AttackRequestedEvent {
+    pub client_entity: Entity,
+    pub target: Entity,
+}

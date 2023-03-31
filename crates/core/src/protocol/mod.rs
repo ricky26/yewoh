@@ -218,7 +218,7 @@ fn packet_registry() -> &'static PacketRegistry {
             PacketRegistration::for_type::<CharacterProfile>(),
             PacketRegistration::for_type::<Skills>(),
             PacketRegistration::for_type::<AttackRequest>(),
-            PacketRegistration::for_type::<SetCombatant>(),
+            PacketRegistration::for_type::<SetAttackTarget>(),
             PacketRegistration::for_type::<Swing>(),
             PacketRegistration::for_type::<DamageDealt>(),
             PacketRegistration::for_type::<CharacterAnimation>(),

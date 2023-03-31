@@ -19,7 +19,7 @@ use crate::world::net::entity::NetEntityLookup;
 use crate::world::net::view::View;
 use crate::world::net::{ViewState, VisibleContainers};
 
-pub const DEFAULT_VIEW_RANGE: u32 = 18;
+pub const DEFAULT_VIEW_RANGE: i32 = 18;
 
 pub enum WriterAction {
     Send(ClientVersion, AnyPacket),

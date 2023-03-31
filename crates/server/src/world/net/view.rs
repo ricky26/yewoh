@@ -8,9 +8,9 @@ use bevy_ecs::removal_detection::RemovedComponents;
 use bevy_ecs::system::{Commands, Local, Query, Res, Resource};
 use bevy_ecs::world::{Mut, Ref};
 use bevy_reflect::Reflect;
+use bitflags::bitflags;
 use glam::UVec2;
 
-use bitflags::bitflags;
 use yewoh::{EntityKind, Notoriety};
 use yewoh::protocol::{CharacterEquipment, DeleteEntity, EntityFlags, EntityTooltipVersion, UpdateCharacter, UpsertContainerContents, UpsertEntityCharacter, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityWorld, UpsertLocalPlayer};
 use yewoh::protocol::{BeginEnterWorld, ChangeSeason, EndEnterWorld, ExtendedCommand};
@@ -18,7 +18,7 @@ use yewoh::protocol::{BeginEnterWorld, ChangeSeason, EndEnterWorld, ExtendedComm
 use crate::world::entity::{Character, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer, Quantity, Stats, Tooltip};
 use crate::world::net::{NetClient, NetEntity, NetEntityLookup, NetOwner};
 use crate::world::net::connection::Possessing;
-use crate::world::spatial::{EntityPositions, in_range, NetClientPositions, view_aabb};
+use crate::world::spatial::{EntityPositions, NetClientPositions, view_aabb};
 
 #[derive(Debug, Clone)]
 pub struct MapInfo {
@@ -34,7 +34,7 @@ pub struct MapInfos {
 
 #[derive(Debug, Clone, Component)]
 pub struct View {
-    pub range: u32,
+    pub range: i32,
 }
 
 #[derive(Default, Debug, Clone, Component)]
@@ -268,8 +268,8 @@ impl ViewState {
         }
     }
 
-    fn remove_out_of_range(&mut self, position: MapPosition, range: u32, containers: &HashSet<Entity>) {
-        let position_in_range = |p: MapPosition| in_range(p, position, range);
+    fn remove_out_of_range(&mut self, position: MapPosition, range: i32, containers: &HashSet<Entity>) {
+        let position_in_range = |p: MapPosition| position.in_range(&p, range);
         let mut to_remove = Vec::new();
 
         for (entity, ghost) in &self.ghosts {
@@ -685,10 +685,10 @@ pub fn sync_nearby(
                         flags: flags.flags,
                     }));
 
-                    for child_entity in character.equipment.iter().copied() {
-                        if let Ok((graphic, parent, tooltip, visibility)) = equipped_items.get(child_entity) {
+                    for equipped in &character.equipment {
+                        if let Ok((graphic, parent, tooltip, visibility)) = equipped_items.get(equipped.equipment) {
                             if is_visible_to(possessing.entity, &visibility) {
-                                view_state.upsert_ghost(child_entity, GhostState::Item(ItemState {
+                                view_state.upsert_ghost(equipped.equipment, GhostState::Item(ItemState {
                                     dirty_flags: ItemDirtyFlags::empty(),
                                     graphic: *graphic,
                                     position: ItemPositionState::Equipped(parent.clone()),
@@ -698,7 +698,7 @@ pub fn sync_nearby(
                                 }));
 
                                 if let Some(tooltip) = tooltip {
-                                    update_tooltip(&mut view_state, child_entity, tooltip);
+                                    update_tooltip(&mut view_state, equipped.equipment, tooltip);
                                 }
                             }
                         }
@@ -787,10 +787,10 @@ pub fn update_nearby_moving(
                         flags: flags.flags,
                     }));
 
-                    for child_entity in character.equipment.iter().copied() {
-                        if let Ok((graphic, parent, tooltip, visibility)) = equipped_items.get(child_entity) {
+                    for equipped in &character.equipment {
+                        if let Ok((graphic, parent, tooltip, visibility)) = equipped_items.get(equipped.equipment) {
                             if is_visible_to(possessing.entity, &visibility) {
-                                view_state.upsert_ghost(child_entity, GhostState::Item(ItemState {
+                                view_state.upsert_ghost(equipped.equipment, GhostState::Item(ItemState {
                                     dirty_flags: ItemDirtyFlags::empty(),
                                     graphic: *graphic,
                                     position: ItemPositionState::Equipped(parent.clone()),
@@ -800,7 +800,7 @@ pub fn update_nearby_moving(
                                 }));
 
                                 if let Some(tooltip) = tooltip {
-                                    update_tooltip(&mut view_state, child_entity, tooltip);
+                                    update_tooltip(&mut view_state, equipped.equipment, tooltip);
                                 }
                             }
                         }
@@ -870,10 +870,10 @@ pub fn update_nearby(
                     flags: flags.flags,
                 }));
 
-                for child_entity in character.equipment.iter().copied() {
-                    if let Ok((graphic, parent, tooltip, visibility)) = equipped_items.get(child_entity) {
+                for equipped in &character.equipment {
+                    if let Ok((graphic, parent, tooltip, visibility)) = equipped_items.get(equipped.equipment) {
                         if is_visible_to(possessing.entity, &visibility) {
-                            view_state.upsert_ghost(child_entity, GhostState::Item(ItemState {
+                            view_state.upsert_ghost(equipped.equipment, GhostState::Item(ItemState {
                                 dirty_flags: ItemDirtyFlags::empty(),
                                 graphic: *graphic,
                                 position: ItemPositionState::Equipped(parent.clone()),
@@ -883,10 +883,10 @@ pub fn update_nearby(
                             }));
 
                             if let Some(tooltip) = tooltip {
-                                update_tooltip(&mut view_state, child_entity, tooltip);
+                                update_tooltip(&mut view_state, equipped.equipment, tooltip);
                             }
-                        } else if view_state.has_ghost(child_entity) {
-                            view_state.remove_ghost(child_entity);
+                        } else if view_state.has_ghost(equipped.equipment) {
+                            view_state.remove_ghost(equipped.equipment);
                         }
                     }
                 }

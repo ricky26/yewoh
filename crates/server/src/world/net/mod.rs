@@ -40,9 +40,14 @@ pub use entity::{
     add_new_entities_to_lookup,
     remove_old_entities_from_lookup,
 };
+pub use combat::{
+    send_updated_attack_target,
+};
 
 mod connection;
 
 mod entity;
 
 mod view;
+
+mod combat;

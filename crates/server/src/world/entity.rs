@@ -6,6 +6,7 @@ use glam::{IVec2, IVec3};
 
 use yewoh::{Direction, EntityId, Notoriety};
 use yewoh::protocol::{EntityFlags, EntityTooltipLine, EquipmentSlot, UpsertEntityStats};
+use crate::math::IVecExt;
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Component)]
 pub struct Flags {
@@ -25,11 +26,17 @@ impl DerefMut for Notorious {
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Component, Reflect)]
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct CharacterEquipped {
+    pub equipment: Entity,
+    pub slot: EquipmentSlot,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Component)]
 pub struct Character {
     pub body_type: u16,
     pub hue: u16,
-    pub equipment: Vec<Entity>,
+    pub equipment: Vec<CharacterEquipped>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Component)]
@@ -59,6 +66,20 @@ pub struct MapPosition {
     pub position: IVec3,
     pub map_id: u8,
     pub direction: Direction,
+}
+
+impl MapPosition {
+    pub fn manhattan_distance(&self, other: &MapPosition) -> Option<i32> {
+        if self.map_id == other.map_id {
+            Some(self.position.truncate().manhattan_distance(&other.position.truncate()))
+        } else {
+            None
+        }
+    }
+
+    pub fn in_range(&self, other: &MapPosition, range: i32) -> bool {
+        self.manhattan_distance(other).map_or(false, |distance| distance <= range)
+    }
 }
 
 #[derive(Debug, Clone, Default, Component, Reflect)]
@@ -190,4 +211,9 @@ impl Stats {
 #[derive(Debug, Clone, Default, Component, Eq, PartialEq)]
 pub struct Tooltip {
     pub entries: Vec<EntityTooltipLine>,
+}
+
+#[derive(Debug, Clone, Component, Eq, PartialEq)]
+pub struct AttackTarget {
+    pub target: Entity,
 }
