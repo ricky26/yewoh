@@ -27,9 +27,6 @@ pub struct CharacterDied {
 #[derive(Debug, Default, Clone, Component)]
 pub struct Corpse;
 
-#[derive(Debug, Default, Clone, Component)]
-pub struct CreateCorpse;
-
 #[derive(Debug, Clone)]
 pub struct CorpseSpawned {
     pub character: Entity,
