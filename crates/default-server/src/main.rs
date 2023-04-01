@@ -3,10 +3,9 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context};
-use bevy::app::ScheduleRunnerSettings;
 use bevy::ecs::system::CommandQueue;
 use bevy::log::LogPlugin;
 use bevy::prelude::*;
@@ -17,6 +16,7 @@ use serde::Deserialize;
 use tokio::fs;
 use tokio::net::{lookup_host, TcpListener};
 use tokio::sync::mpsc;
+use tokio::time::sleep;
 
 use yewoh::assets::multi::load_multi_data;
 use yewoh::assets::tiles::load_tile_data;
@@ -75,7 +75,6 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let mut app = App::new();
     app
-        .insert_resource(ScheduleRunnerSettings::run_loop(Duration::from_millis(20)))
         .add_plugins(MinimalPlugins)
         .add_plugin(LogPlugin::default())
         .add_plugin(ServerPlugin)
@@ -147,7 +146,9 @@ fn main() -> anyhow::Result<()> {
     info!("Listening for lobby connections on {}", &args.lobby_bind);
     info!("Listening for game connections on {}", &args.game_bind);
 
+    let frame_wait = Duration::from_millis(20);
     loop {
+        let start_time = Instant::now();
         app.update();
 
         if game_handle.is_finished() {
@@ -163,6 +164,12 @@ fn main() -> anyhow::Result<()> {
         if http_server_handle.is_finished() {
             rt.block_on(http_server_handle)??;
             return Err(anyhow!("failed to serve http API"));
+        }
+
+        let end_time = Instant::now();
+        let frame_duration = end_time - start_time;
+        if frame_duration < frame_wait {
+            rt.block_on(sleep(frame_wait - frame_duration));
         }
     }
 }
