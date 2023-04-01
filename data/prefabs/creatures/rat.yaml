@@ -1,3 +1,5 @@
 character:
   name: Rat
   body_type: 0xee
+wander:
+  interval: 2s

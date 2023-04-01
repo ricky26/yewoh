@@ -2,6 +2,7 @@ use std::time::Duration;
 use bevy_app::{App, Plugin};
 use bevy_ecs::component::Component;
 use bevy_ecs::entity::Entity;
+use yewoh_server::world::entity::Location;
 use crate::characters::prefabs::CharacterPrefab;
 use crate::data::prefab::PrefabAppExt;
 
@@ -15,6 +16,7 @@ pub struct DamageDealt {
     pub target: Entity,
     pub source: Entity,
     pub damage: u16,
+    pub location: Location,
 }
 
 #[derive(Debug, Clone)]
