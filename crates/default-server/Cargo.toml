@@ -13,6 +13,8 @@ yewoh-server = { path = "../server" }
 yewoh-default-game = { path = "../default-game" }
 tokio = { version = "1.26.0", default_features = false, features = ["net", "rt-multi-thread"] }
 clap = { version = "4.1.13", features = ["derive", "env"] }
+serde = { version = "1.0.159", features = ["derive"] }
+serde_yaml = "0.9.19"
 bevy = { version = "0.10.0", default_features = false }
 async-trait = "0.1.68"
 futures = "0.3.27"

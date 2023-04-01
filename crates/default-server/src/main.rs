@@ -1,15 +1,19 @@
+use std::collections::VecDeque;
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::anyhow;
 use bevy::app::ScheduleRunnerSettings;
+use bevy::ecs::system::CommandQueue;
 use bevy::log::LogPlugin;
 use bevy::prelude::*;
 use clap::Parser;
 use futures::future::join;
 use log::info;
+use serde::Deserialize;
+use tokio::fs;
 use tokio::net::{lookup_host, TcpListener};
 use tokio::sync::mpsc;
 
@@ -21,8 +25,9 @@ use yewoh_default_game::data::static_data;
 use yewoh_server::async_runtime::AsyncRuntime;
 use yewoh_server::game_server::listen_for_game;
 use yewoh_server::lobby::{listen_for_lobby, LocalLobby};
+use yewoh_server::world::entity::MapPosition;
 use yewoh_server::world::map::{Chunk, create_map_entities, create_statics, MultiDataResource, Static, TileDataResource};
-use yewoh_server::world::net::NetServer;
+use yewoh_server::world::net::{NetCommandsExt, NetServer};
 use yewoh_server::world::ServerPlugin;
 
 #[derive(Parser, Debug)]
@@ -98,6 +103,7 @@ fn main() -> anyhow::Result<()> {
     info!("Spawned {} map chunks", query.iter(&app.world).count());
     let mut query = app.world.query_filtered::<(), With<Static>>();
     info!("Spawned {} statics", query.iter(&app.world).count());
+    rt.block_on(load_static_entities(&mut app.world, &args.data_path.join("entities")))?;
 
     let external_ip = rt.block_on(lookup_host(format!("{}:0", &args.advertise_address)))?
         .filter_map(|entry| match entry {
@@ -159,4 +165,51 @@ fn main() -> anyhow::Result<()> {
             return Err(anyhow!("failed to serve http API"));
         }
     }
+}
+
+#[derive(Deserialize)]
+struct EntityTemplate {
+    pub prefab: String,
+    pub map_position: MapPosition,
+}
+
+async fn load_static_entities(world: &mut World, path: &Path) -> anyhow::Result<()> {
+    let mut to_visit = VecDeque::new();
+    to_visit.push_back(path.to_path_buf());
+
+    let collection = world.resource::<PrefabCollection>();
+    let mut queue = CommandQueue::default();
+    let mut commands = Commands::new_from_entities(&mut queue, world.entities());
+    let mut count = 0;
+
+    while let Some(next) = to_visit.pop_front() {
+        let mut entries = fs::read_dir(&next).await?;
+        while let Some(entry) = entries.next_entry().await? {
+            let metadata = entry.metadata().await?;
+            if metadata.is_dir() {
+                to_visit.push_back(next.join(entry.file_name()));
+            } else if let Some(name) = entry.file_name().to_str() {
+                if name.ends_with(".yaml") {
+                    let full_path = next.join(entry.file_name());
+                    let contents = fs::read_to_string(&full_path).await?;
+                    let items = serde_yaml::from_str::<Vec<EntityTemplate>>(&contents)?;
+                    for item in items {
+                        let prefab = collection.get(&item.prefab)
+                            .ok_or_else(|| anyhow!("no such prefab {} in {:?}", &item.prefab, &full_path))?;
+
+                        let mut entity = commands.spawn_empty();
+                        prefab.insert(&mut entity);
+                        entity
+                            .assign_network_id()
+                            .insert(item.map_position);
+                        count += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    queue.apply(world);
+    log::info!("Spawned {count} entities");
+    Ok(())
 }

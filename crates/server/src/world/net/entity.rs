@@ -1,10 +1,15 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::*;
+use bevy_ecs::system::{Command, EntityCommands};
+use bevy_ecs::world::{EntityMut, World};
 use bevy_reflect::Reflect;
 
 use yewoh::EntityId;
+
+use crate::world::entity::{Character, Container};
 
 #[derive(Debug, Clone, Copy, Component)]
 pub struct NetEntity {
@@ -91,5 +96,58 @@ pub fn remove_old_entities_from_lookup(
 ) {
     for entity in removals.iter() {
         lookup.remove(entity);
+    }
+}
+
+pub struct AssignNetId {
+    pub entity: Entity,
+}
+
+impl Command for AssignNetId {
+    fn write(self, world: &mut World) {
+        assign_network_id(world, self.entity);
+    }
+}
+
+pub fn assign_network_id(world: &mut World, entity: Entity) {
+    if let Some(mut container) = world.get_mut::<Container>(entity) {
+        for child_entity in std::mem::take(&mut container.items) {
+            assign_network_id(world, child_entity);
+        }
+    }
+
+    if let Some(mut character) = world.get_mut::<Character>(entity) {
+        for equipped in std::mem::take(&mut character.equipment) {
+            assign_network_id(world, equipped.equipment);
+        }
+    }
+
+    let allocator = world.resource::<NetEntityAllocator>();
+    let entity_info = world.entity(entity);
+    let id = if entity_info.contains::<Character>() {
+        allocator.allocate_character()
+    } else {
+        allocator.allocate_item()
+    };
+    world.entity_mut(entity).insert(NetEntity { id });
+}
+
+pub trait NetCommandsExt {
+    fn assign_network_id(&mut self) -> &mut Self;
+}
+
+impl<'w, 's, 'a> NetCommandsExt for EntityCommands<'w, 's, 'a> {
+    fn assign_network_id(&mut self) -> &mut Self {
+        let entity = self.id();
+        self.commands().add(AssignNetId { entity });
+        self
+    }
+}
+
+impl<'w> NetCommandsExt for EntityMut<'w> {
+    fn assign_network_id(&mut self) -> &mut Self {
+        let entity = self.id();
+        self.world_scope(|world| assign_network_id(world, entity));
+        self
     }
 }

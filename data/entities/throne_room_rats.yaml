@@ -1,0 +1,4 @@
+- prefab: rat
+  map_position:
+    map_id: 1
+    position: [1325, 1624, 55]

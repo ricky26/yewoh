@@ -168,6 +168,14 @@ impl PrefabCollection {
         self.prefabs.len()
     }
 
+    pub fn prefabs(&self) -> &HashMap<String, Prefab> {
+        &self.prefabs
+    }
+
+    pub fn get(&self, id: &str) -> Option<&Prefab> {
+        self.prefabs.get(id)
+    }
+
     pub async fn load_from_directory(&mut self, factory: &PrefabFactory, path: &Path) -> anyhow::Result<()> {
         let mut to_visit = VecDeque::new();
         to_visit.push_back(path.to_path_buf());

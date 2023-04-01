@@ -37,8 +37,11 @@ pub use entity::{
     NetEntityLookup,
     NetEntityAllocator,
     NetOwner,
+    NetCommandsExt,
+    AssignNetId,
     add_new_entities_to_lookup,
     remove_old_entities_from_lookup,
+    assign_network_id,
 };
 pub use combat::{
     send_updated_attack_target,

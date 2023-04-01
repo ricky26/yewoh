@@ -3,6 +3,7 @@ use std::ops::{Deref, DerefMut};
 use bevy_ecs::prelude::*;
 use bevy_reflect::prelude::*;
 use glam::{IVec2, IVec3};
+use serde::{Deserialize, Serialize};
 
 use yewoh::{Direction, EntityId, Notoriety};
 use yewoh::protocol::{EntityFlags, EntityTooltipLine, EquipmentSlot, UpsertEntityStats};
@@ -50,7 +51,7 @@ pub struct Quantity {
     pub quantity: u16,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Component, Reflect)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Component, Reflect, Serialize, Deserialize)]
 pub struct Graphic {
     pub id: u16,
     pub hue: u16,
@@ -61,10 +62,11 @@ pub struct Multi {
     pub id: u16,
 }
 
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Component)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Component, Serialize, Deserialize)]
 pub struct MapPosition {
     pub position: IVec3,
     pub map_id: u8,
+    #[serde(default)]
     pub direction: Direction,
 }
 

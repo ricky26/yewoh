@@ -10,6 +10,7 @@ edition = "2021"
 [dependencies]
 yewoh = { path = "../core" }
 tokio = { version = "1.26.0", default_features = false, features = ["net"] }
+serde = { version = "1.0.159", features = ["derive"] }
 futures = "0.3.27"
 anyhow = "1.0.70"
 async-trait = "0.1.68"
