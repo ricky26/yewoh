@@ -7,13 +7,21 @@ use std::sync::Arc;
 use anyhow::Context;
 use bevy_app::{App, Plugin};
 use bevy_ecs::entity::Entity;
-use bevy_ecs::system::{Commands, EntityCommands, Resource};
+use bevy_ecs::system::{Command, EntityCommands, Resource};
+use bevy_ecs::world::World;
 use serde::{Deserialize, Deserializer};
 use serde::de::{DeserializeSeed, Error, MapAccess, Visitor};
 use tokio::fs;
 
+use crate::data::prefab::common::LocationPrefab;
+use crate::data::prefab::inheritance::InheritancePrefab;
+
+pub mod inheritance;
+
+pub mod common;
+
 pub trait PrefabBundle: Send + Sync {
-    fn spawn(&self, prefab: &Prefab, commands: &mut EntityCommands<'_, '_, '_>);
+    fn write(&self, prefab: &Prefab, world: &mut World, entity: Entity);
 }
 
 pub trait FromPrefabTemplate: PrefabBundle + 'static {
@@ -38,32 +46,41 @@ pub struct Prefab {
 }
 
 impl Prefab {
-    pub fn insert_child(&self, id: &str, commands: &mut EntityCommands) {
+    pub fn from_single_entity(entity: EntityPrefab) -> Prefab {
+        let mut entities = HashMap::new();
+        entities.insert("".into(), entity);
+        Self { entities }
+    }
+
+    pub fn from_entities(entities: HashMap<String, EntityPrefab>) -> Prefab {
+        Self { entities }
+    }
+
+    fn write_entity_internal(&self, world: &mut World, entity: Entity, prefab: &EntityPrefab) {
+        for bundle in &prefab.bundles {
+            bundle.write(self, world, entity);
+        }
+    }
+
+    pub fn write_entity(&self, world: &mut World, entity: Entity, id: &str) {
         if let Some(prefab) = self.entities.get(id) {
-            for bundle in &prefab.bundles {
-                bundle.spawn(self, commands);
-            }
+            self.write_entity_internal(world, entity, prefab);
         }
     }
 
-    pub fn spawn_child(&self, id: &str, commands: &mut Commands) -> Option<Entity> {
-        if self.entities.contains_key(id) {
-            let mut entity = commands.spawn_empty();
-            self.insert_child(id, &mut entity);
-            Some(entity.id())
-        } else {
-            None
-        }
+    pub fn write(&self, world: &mut World, entity: Entity) {
+        self.write_entity(world, entity, "")
     }
+}
 
-    pub fn insert(&self, commands: &mut EntityCommands<'_, '_, '_>) {
-        self.insert_child(&"", commands);
-    }
+pub struct InsertPrefab {
+    pub entity: Entity,
+    pub prefab: Arc<Prefab>,
+}
 
-    pub fn spawn<'w, 's, 'a>(&self, commands: &'a mut Commands<'w, 's>) -> EntityCommands<'w, 's, 'a> {
-        let mut entity = commands.spawn_empty();
-        self.insert(&mut entity);
-        entity
+impl Command for InsertPrefab {
+    fn write(self, world: &mut World) {
+        self.prefab.write(world, self.entity);
     }
 }
 
@@ -88,10 +105,10 @@ impl<'de, 'a> Visitor<'de> for PrefabVisitor<'a> {
             entity.bundles.reserve(size);
         }
 
-        while let Some(key) = map.next_key::<&str>()? {
-            if key == "id" {
+        while let Some(key) = map.next_key::<String>()? {
+            if &key == "id" {
                 id = map.next_value::<String>()?;
-            } else if let Some(implementation) = self.factory.bundles.get(key) {
+            } else if let Some(implementation) = self.factory.bundles.get(&key) {
                 entity.bundles.push(map.next_value_seed(implementation.clone())?);
             } else {
                 return Err(A::Error::custom(format!("no such bundle: {key}")));
@@ -130,7 +147,7 @@ impl<'de> DeserializeSeed<'de> for Implementation {
     }
 }
 
-struct Document {
+pub struct Document {
     pub id: String,
     pub entity: EntityPrefab,
 }
@@ -145,8 +162,22 @@ impl PrefabFactory {
         Default::default()
     }
 
-    fn deserialize<'de, D>(&'de self, deserializer: D) -> Result<Document, <D as Deserializer>::Error> where D: Deserializer<'de> {
-        deserializer.deserialize_map(PrefabVisitor { factory: self })
+    pub fn deserialize_entity<'de, D>(&'de self, deserializer: D) -> Result<Document, <D as Deserializer>::Error> where D: Deserializer<'de> {
+        deserializer.deserialize_any(PrefabVisitor { factory: self })
+    }
+
+    pub fn deserialize_prefab_yaml(&self, d: serde_yaml::Deserializer) -> anyhow::Result<Prefab> {
+        let mut entities = HashMap::new();
+
+        for d in d {
+            let prefab = self.deserialize_entity(d)?;
+            if entities.contains_key(&prefab.id) {
+                return Err(anyhow::anyhow!("duplicate entity ID {}", &prefab.id));
+            }
+            entities.insert(prefab.id, prefab.entity);
+        }
+
+        Ok(Prefab { entities })
     }
 
     pub fn register(&mut self, name: &str, f: impl Fn(&mut dyn erased_serde::Deserializer<'_>) -> anyhow::Result<Arc<dyn PrefabBundle>> + Sync + Send + 'static) {
@@ -198,20 +229,10 @@ impl PrefabCollection {
                         let full_path = next.join(entry.file_name());
                         let prefab_name = &name[..name.len() - 5];
                         let contents = fs::read_to_string(&full_path).await?;
-
-                        let mut entities = HashMap::new();
-                        for d in serde_yaml::Deserializer::from_str(&contents) {
-                            let prefab = factory.deserialize(d)
-                                .with_context(|| format!("deserializing {:?}", &full_path))?;
-                            if entities.contains_key(&prefab.id) {
-                                return Err(anyhow::anyhow!("duplicate entity ID {} in {:?}", &prefab.id, &full_path));
-                            }
-                            entities.insert(prefab.id, prefab.entity);
-                        }
-
-                        self.prefabs.insert(prefab_name.into(), Arc::new(Prefab {
-                            entities,
-                        }));
+                        let d = serde_yaml::Deserializer::from_str(&contents);
+                        let prefab = factory.deserialize_prefab_yaml(d)
+                            .with_context(|| format!("deserializing {:?}", &full_path))?;
+                        self.prefabs.insert(prefab_name.into(), Arc::new(prefab));
                     }
                 }
             }
@@ -233,6 +254,18 @@ impl PrefabAppExt for App {
     }
 }
 
+pub trait PrefabCommandsExt {
+    fn insert_prefab(&mut self, prefab: Arc<Prefab>) -> &mut Self;
+}
+
+impl<'w, 's, 'a> PrefabCommandsExt for EntityCommands<'w, 's, 'a> {
+    fn insert_prefab(&mut self, prefab: Arc<Prefab>) -> &mut Self {
+        let entity = self.id();
+        self.commands().add(InsertPrefab { prefab, entity });
+        self
+    }
+}
+
 #[derive(Default)]
 pub struct PrefabPlugin;
 
@@ -240,6 +273,8 @@ impl Plugin for PrefabPlugin {
     fn build(&self, app: &mut App) {
         app
             .init_resource::<PrefabFactory>()
-            .init_resource::<PrefabCollection>();
+            .init_resource::<PrefabCollection>()
+            .init_prefab_bundle::<InheritancePrefab>("inherit")
+            .init_prefab_bundle::<LocationPrefab>("location");
     }
 }

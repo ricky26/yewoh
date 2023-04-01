@@ -15,7 +15,7 @@ use yewoh::{EntityKind, Notoriety};
 use yewoh::protocol::{CharacterEquipment, DeleteEntity, EntityFlags, EntityTooltipVersion, UpdateCharacter, UpsertContainerContents, UpsertEntityCharacter, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityWorld, UpsertLocalPlayer};
 use yewoh::protocol::{BeginEnterWorld, ChangeSeason, EndEnterWorld, ExtendedCommand};
 
-use crate::world::entity::{Character, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer, Quantity, Stats, Tooltip};
+use crate::world::entity::{Character, Container, EquippedBy, Flags, Graphic, Location, Notorious, ParentContainer, Quantity, Stats, Tooltip};
 use crate::world::net::{NetClient, NetEntity, NetEntityLookup, NetOwner};
 use crate::world::net::connection::Possessing;
 use crate::world::spatial::{EntityPositions, NetClientPositions, view_aabb};
@@ -83,7 +83,7 @@ bitflags! {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct CharacterState {
     pub dirty_flags: CharacterDirtyFlags,
-    pub position: MapPosition,
+    pub position: Location,
     pub body_type: u16,
     pub hue: u16,
     pub notoriety: Notoriety,
@@ -93,7 +93,7 @@ pub struct CharacterState {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct WorldItemState {
-    pub position: MapPosition,
+    pub position: Location,
     pub flags: EntityFlags,
 }
 
@@ -268,8 +268,8 @@ impl ViewState {
         }
     }
 
-    fn remove_out_of_range(&mut self, position: MapPosition, range: i32, containers: &HashSet<Entity>) {
-        let position_in_range = |p: MapPosition| position.in_range(&p, range);
+    fn remove_out_of_range(&mut self, position: Location, range: i32, containers: &HashSet<Entity>) {
+        let position_in_range = |p: Location| position.in_range(&p, range);
         let mut to_remove = Vec::new();
 
         for (entity, ghost) in &self.ghosts {
@@ -388,7 +388,7 @@ pub fn send_ghost_updates(
         (&NetClient, &View, &mut ViewState, &Possessing, &VisibleContainers),
         Changed<ViewState>,
     >,
-    positioned: Query<&MapPosition, With<NetOwner>>,
+    positioned: Query<&Location, With<NetOwner>>,
     mut to_visit: Local<VecDeque<Entity>>,
     mut to_remove: Local<Vec<(Entity, Option<Entity>)>>,
 ) {
@@ -633,11 +633,11 @@ pub fn sync_nearby(
         (With<Synchronizing>, Without<Synchronized>),
     >,
     world_items: Query<(
-        &Flags, &Graphic, &MapPosition, Option<&Quantity>, Option<&Tooltip>,
+        &Flags, &Graphic, &Location, Option<&Quantity>, Option<&Tooltip>,
         Option<&PartiallyVisible>
     )>,
     characters: Query<(
-        &Flags, &Character, &MapPosition, &Notorious, &Stats, Option<&PartiallyVisible>,
+        &Flags, &Character, &Location, &Notorious, &Stats, Option<&PartiallyVisible>,
     )>,
     equipped_items: Query<(
         &Graphic, &EquippedBy, Option<&Tooltip>, Option<&PartiallyVisible>
@@ -738,13 +738,13 @@ pub fn sync_nearby(
 pub fn update_nearby_moving(
     entity_positions: Res<EntityPositions>,
     mut clients: Query<(&View, &mut ViewState, &Possessing)>,
-    moved_characters: Query<(&NetOwner, &MapPosition), Changed<MapPosition>>,
+    moved_characters: Query<(&NetOwner, &Location), Changed<Location>>,
     world_items: Query<(
-        &Flags, &Graphic, &MapPosition, Option<&Quantity>, Option<&Tooltip>,
+        &Flags, &Graphic, &Location, Option<&Quantity>, Option<&Tooltip>,
         Option<&PartiallyVisible>
     )>,
     characters: Query<(
-        &Flags, &Character, &MapPosition, &Notorious, &Stats, Option<&PartiallyVisible>,
+        &Flags, &Character, &Location, &Notorious, &Stats, Option<&PartiallyVisible>,
     )>,
     equipped_items: Query<(
         &Graphic, &EquippedBy, Option<&Tooltip>, Option<&PartiallyVisible>
@@ -815,12 +815,12 @@ pub fn update_nearby(
     client_positions: Res<NetClientPositions>,
     mut clients: Query<(&mut ViewState, &Possessing), (With<Synchronized>, Without<Synchronizing>)>,
     world_items: Query<
-        (Entity, &Flags, &Graphic, &MapPosition, Option<&Quantity>, Option<&PartiallyVisible>),
-        Or<(Changed<Flags>, Changed<Graphic>, Changed<MapPosition>, Changed<Quantity>, Changed<PartiallyVisible>)>,
+        (Entity, &Flags, &Graphic, &Location, Option<&Quantity>, Option<&PartiallyVisible>),
+        Or<(Changed<Flags>, Changed<Graphic>, Changed<Location>, Changed<Quantity>, Changed<PartiallyVisible>)>,
     >,
     characters: Query<
-        (Entity, &Flags, &Character, &MapPosition, &Notorious, Option<&PartiallyVisible>),
-        Or<(Changed<Flags>, Changed<Character>, Changed<MapPosition>, Changed<Notorious>, Changed<PartiallyVisible>)>,
+        (Entity, &Flags, &Character, &Location, &Notorious, Option<&PartiallyVisible>),
+        Or<(Changed<Flags>, Changed<Character>, Changed<Location>, Changed<Notorious>, Changed<PartiallyVisible>)>,
     >,
     equipped_items: Query<(
         &Graphic, &EquippedBy, Option<&Tooltip>, Option<&PartiallyVisible>
@@ -942,7 +942,7 @@ pub fn update_equipped_items(
         (Entity, &Graphic, &EquippedBy, Option<&PartiallyVisible>),
         Or<(Changed<Graphic>, Changed<EquippedBy>, Changed<PartiallyVisible>)>,
     >,
-    characters: Query<&MapPosition, With<Character>>,
+    characters: Query<&Location, With<Character>>,
 ) {
     for (entity, graphic, parent,visibility) in items.iter() {
         let position = match characters.get(parent.parent) {
@@ -974,7 +974,7 @@ pub fn update_equipped_items(
 
 pub fn start_synchronizing(
     clients: Query<(Entity, &ViewState, Ref<Possessing>), Without<Synchronizing>>,
-    characters: Query<&MapPosition, With<NetOwner>>,
+    characters: Query<&Location, With<NetOwner>>,
     mut commands: Commands,
 ) {
     for (entity, view_state, possessing) in clients.iter() {
@@ -993,7 +993,7 @@ pub fn start_synchronizing(
 
 pub fn send_change_map(
     mut clients: Query<(&NetClient, &mut ViewState, Ref<Possessing>), With<Synchronizing>>,
-    characters: Query<(&NetEntity, &MapPosition, Ref<Character>)>,
+    characters: Query<(&NetEntity, &Location, Ref<Character>)>,
     maps: Res<MapInfos>,
 ) {
     for (client, mut view_state, possessing) in clients.iter_mut() {

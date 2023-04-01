@@ -63,15 +63,15 @@ pub struct Multi {
 }
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Component, Serialize, Deserialize)]
-pub struct MapPosition {
+pub struct Location {
     pub position: IVec3,
     pub map_id: u8,
     #[serde(default)]
     pub direction: Direction,
 }
 
-impl MapPosition {
-    pub fn manhattan_distance(&self, other: &MapPosition) -> Option<i32> {
+impl Location {
+    pub fn manhattan_distance(&self, other: &Location) -> Option<i32> {
         if self.map_id == other.map_id {
             Some(self.position.truncate().manhattan_distance(&other.position.truncate()))
         } else {
@@ -79,7 +79,7 @@ impl MapPosition {
         }
     }
 
-    pub fn in_range(&self, other: &MapPosition, range: i32) -> bool {
+    pub fn in_range(&self, other: &Location, range: i32) -> bool {
         self.manhattan_distance(other).map_or(false, |distance| distance <= range)
     }
 }

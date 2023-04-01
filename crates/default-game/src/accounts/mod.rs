@@ -7,7 +7,7 @@ use tokio::sync::mpsc;
 use yewoh::{Direction, Notoriety};
 use yewoh::protocol::{CharacterList, CharacterListFlags, EntityFlags, EntityTooltipLine, EquipmentSlot, UnicodeTextMessage};
 use yewoh_server::async_runtime::AsyncRuntime;
-use yewoh_server::world::entity::{Character, CharacterEquipped, Container, EquippedBy, Flags, Graphic, MapPosition, Notorious, ParentContainer, Tooltip};
+use yewoh_server::world::entity::{Character, CharacterEquipped, Container, EquippedBy, Flags, Graphic, Location, Notorious, ParentContainer, Tooltip};
 use yewoh_server::world::events::{CharacterListEvent, CreateCharacterEvent, SelectCharacterEvent};
 use yewoh_server::world::net::{NetClient, NetEntity, NetEntityAllocator, NetOwner, Possessing, User};
 
@@ -284,7 +284,7 @@ pub fn handle_spawn_character(
                 NetEntity { id: primary_entity_id },
                 NetOwner { client_entity },
                 Flags { flags: EntityFlags::default() },
-                MapPosition {
+                Location {
                     map_id: 1,
                     position: IVec3::new(1325, 1624, 55),
                     direction: Direction::North,

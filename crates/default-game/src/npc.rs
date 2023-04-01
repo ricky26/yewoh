@@ -7,13 +7,13 @@ use bevy_time::{Time, Timer, TimerMode};
 use rand::{Rng, thread_rng};
 
 use yewoh::Direction;
-use yewoh_server::world::entity::MapPosition;
+use yewoh_server::world::entity::Location;
 use yewoh_server::world::map::TileDataResource;
 use yewoh_server::world::navigation::try_move_in_direction;
 use yewoh_server::world::net::NetCommandsExt;
 use yewoh_server::world::spatial::EntitySurfaces;
 
-use crate::data::prefab::Prefab;
+use crate::data::prefab::{Prefab, PrefabCommandsExt};
 
 #[derive(Debug, Clone, Component)]
 pub struct Spawner {
@@ -40,7 +40,7 @@ pub struct MoveTimer {
 
 pub fn spawn_npcs(
     time: Res<Time>,
-    mut spawners: Query<(&mut Spawner, &mut SpawnedEntities, &MapPosition)>,
+    mut spawners: Query<(&mut Spawner, &mut SpawnedEntities, &Location)>,
     spawned_entities: Query<With<Spawned>>,
     mut commands: Commands,
 ) {
@@ -50,7 +50,8 @@ pub fn spawn_npcs(
             continue;
         }
 
-        let spawned_entity = spawner.prefab.spawn(&mut commands)
+        let spawned_entity = commands.spawn_empty()
+            .insert_prefab(spawner.prefab.clone())
             .insert(Spawned)
             .insert(Npc)
             .insert(*position)
@@ -65,7 +66,7 @@ pub fn spawn_npcs(
 
 pub fn move_npcs(
     time: Res<Time>, tile_data: Res<TileDataResource>, surfaces: Res<EntitySurfaces>,
-    mut npcs: Query<(Entity, &mut MapPosition, &mut MoveTimer), With<Npc>>,
+    mut npcs: Query<(Entity, &mut Location, &mut MoveTimer), With<Npc>>,
 ) {
     let mut rng = thread_rng();
 

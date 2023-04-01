@@ -7,7 +7,7 @@ use bevy_ecs::system::{Commands, Query, Res};
 use bevy_time::{Timer, TimerMode};
 
 use yewoh::protocol::EquipmentSlot;
-use yewoh_server::world::entity::{AttackTarget, Character, Container, Flags, Graphic, MapPosition, Quantity, Stats};
+use yewoh_server::world::entity::{AttackTarget, Character, Container, Flags, Graphic, Location, Quantity, Stats};
 use yewoh_server::world::events::AttackRequestedEvent;
 use yewoh_server::world::hierarchy::DespawnRecursiveExt;
 use yewoh_server::world::net::{NetEntity, NetEntityAllocator, Possessing};
@@ -59,8 +59,8 @@ pub fn update_weapon_stats(
 
 pub fn attack_current_target(
     mut damage_events: EventWriter<DamageDealt>,
-    mut actors: Query<(Entity, &mut CurrentActivity, &mut AttackTarget, &MapPosition, &MeleeWeapon), With<Alive>>,
-    mut targets: Query<&MapPosition, With<Alive>>,
+    mut actors: Query<(Entity, &mut CurrentActivity, &mut AttackTarget, &Location, &MeleeWeapon), With<Alive>>,
+    mut targets: Query<&Location, With<Alive>>,
 ) {
     for (entity, mut current_activity, current_target, map_position, weapon) in &mut actors {
         if !current_activity.is_idle() {
@@ -120,7 +120,7 @@ pub fn spawn_corpses(
     mut died_events: EventReader<CharacterDied>,
     mut corpse_events: EventWriter<CorpseSpawned>,
     entity_allocator: Res<NetEntityAllocator>,
-    characters: Query<(&Character, &MapPosition)>,
+    characters: Query<(&Character, &Location)>,
 ) {
     for event in &mut died_events {
         let (character, map_position) = match characters.get(event.character) {

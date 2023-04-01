@@ -1,4 +1,4 @@
-- prefab: rat_spawner
-  map_position:
+- inherit: rat_spawner
+  location:
     map_id: 1
     position: [1325, 1624, 55]

@@ -1,9 +1,10 @@
-use bevy_ecs::system::EntityCommands;
+use bevy_ecs::entity::Entity;
+use bevy_ecs::prelude::World;
 use serde::Deserialize;
 
 use yewoh::Notoriety;
 use yewoh::protocol::EquipmentSlot;
-use yewoh_server::world::entity::{Character, CharacterEquipped, EquippedBy, Flags, MapPosition, Notorious, Stats};
+use yewoh_server::world::entity::{Character, CharacterEquipped, EquippedBy, Flags, Location, Notorious, Stats};
 
 use crate::characters::Alive;
 use crate::data::prefab::{FromPrefabTemplate, Prefab, PrefabBundle, PrefabEntityReference};
@@ -33,31 +34,29 @@ impl FromPrefabTemplate for CharacterPrefab {
 }
 
 impl PrefabBundle for CharacterPrefab {
-    fn spawn(&self, prefab: &Prefab, commands: &mut EntityCommands<'_, '_, '_>) {
-        let parent = commands.id();
+    fn write(&self, prefab: &Prefab, world: &mut World, entity: Entity) {
         let mut equipment = Vec::with_capacity(self.equipment.len());
 
         for child in &self.equipment {
-            let commands = commands.commands();
-            let mut child_commands = commands.spawn_empty();
-            child_commands
+            let child_entity = world.spawn_empty()
                 .insert((
                     EquippedBy {
-                        parent,
+                        parent: entity,
                         slot: child.slot,
                     },
-                ));
-            prefab.insert_child(&child.entity, &mut child_commands);
+                ))
+                .id();
+            prefab.write(world, child_entity);
             equipment.push(CharacterEquipped {
-                equipment: child_commands.id(),
+                equipment: child_entity,
                 slot: child.slot,
             });
         }
 
-        commands
+        world.entity_mut(entity)
             .insert((
                 Flags::default(),
-                MapPosition::default(),
+                Location::default(),
                 Notorious(self.notoriety),
                 Character {
                     body_type: self.body_type,

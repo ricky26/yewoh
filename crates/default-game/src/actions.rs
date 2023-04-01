@@ -2,7 +2,7 @@ use bevy_ecs::prelude::*;
 use bevy_reflect::prelude::*;
 
 use yewoh::protocol::{CharacterAnimation, CharacterProfile, ContextMenuEntry, DamageDealt, EntityFlags, MoveConfirm, MoveEntityReject, MoveReject, OpenContainer, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, Swing, WarMode};
-use yewoh_server::world::entity::{AttackTarget, Character, CharacterEquipped, Container, EquippedBy, Flags, MapPosition, Notorious, ParentContainer};
+use yewoh_server::world::entity::{AttackTarget, Character, CharacterEquipped, Container, EquippedBy, Flags, Location, Notorious, ParentContainer};
 use yewoh_server::world::events::{ContextMenuEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SingleClickEvent};
 use yewoh_server::world::input::ContextMenuRequest;
 use yewoh_server::world::map::TileDataResource;
@@ -25,7 +25,7 @@ pub fn handle_move(
     surfaces: Res<EntitySurfaces>,
     tile_data: Res<TileDataResource>,
     connection_query: Query<(&NetClient, &Possessing)>,
-    mut characters: Query<(&mut MapPosition, &Notorious)>,
+    mut characters: Query<(&mut Location, &Notorious)>,
 ) {
     for MoveEvent { client_entity: connection, request } in events.iter() {
         let connection = *connection;
@@ -126,7 +126,7 @@ pub fn handle_pick_up(
     mut events: EventReader<PickUpEvent>,
     clients: Query<(&NetClient, &Possessing)>,
     characters: Query<Option<&Held>>,
-    targets: Query<(Entity, Option<&MapPosition>, Option<&ParentContainer>, Option<&EquippedBy>)>,
+    targets: Query<(Entity, Option<&Location>, Option<&ParentContainer>, Option<&EquippedBy>)>,
     mut containers: Query<&mut Container>,
     mut character_equipment: Query<&mut Character>,
     mut commands: Commands,
@@ -159,7 +159,7 @@ pub fn handle_pick_up(
         if let Some(_) = position {
             commands.entity(entity)
                 .insert(Holder { held_by: character })
-                .remove::<MapPosition>();
+                .remove::<Location>();
         } else if let Some(container) = container {
             let mut container = containers.get_mut(container.parent).unwrap();
             container.items.retain(|v| v != &entity);
@@ -186,7 +186,7 @@ pub fn handle_pick_up(
 pub fn handle_drop(
     mut events: EventReader<DropEvent>,
     clients: Query<(&NetClient, &Possessing)>,
-    characters: Query<(&MapPosition, &Held)>,
+    characters: Query<(&Location, &Held)>,
     mut containers: Query<&mut Container>,
     mut commands: Commands,
 ) {
@@ -222,7 +222,7 @@ pub fn handle_drop(
             } else {
                 commands.entity(target)
                     .remove::<Holder>()
-                    .insert(MapPosition {
+                    .insert(Location {
                         position: character_position.position,
                         map_id: character_position.map_id,
                         ..Default::default()
@@ -231,7 +231,7 @@ pub fn handle_drop(
         } else {
             commands.entity(target)
                 .remove::<Holder>()
-                .insert(MapPosition {
+                .insert(Location {
                     position: event.position,
                     map_id: character_position.map_id,
                     ..Default::default()
@@ -246,7 +246,7 @@ pub fn handle_drop(
 pub fn handle_equip(
     mut events: EventReader<EquipEvent>,
     clients: Query<(&NetClient, &Possessing)>,
-    characters: Query<(&MapPosition, &Held)>,
+    characters: Query<(&Location, &Held)>,
     mut loadouts: Query<&mut Character>,
     mut commands: Commands,
 ) {
@@ -282,7 +282,7 @@ pub fn handle_equip(
         } else {
             commands.entity(target)
                 .remove::<Holder>()
-                .insert(MapPosition {
+                .insert(Location {
                     position: character_position.position,
                     map_id: character_position.map_id,
                     ..Default::default()

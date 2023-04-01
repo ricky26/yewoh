@@ -1,9 +1,10 @@
 use std::time::Duration;
-use bevy_app::{App, Plugin};
 
+use bevy_app::{App, Plugin};
 use bevy_ecs::component::Component;
 use bevy_ecs::entity::Entity;
-use bevy_ecs::system::{Commands, EntityCommands, Query, Res};
+use bevy_ecs::prelude::World;
+use bevy_ecs::system::{Commands, Query, Res};
 use bevy_time::{Timer, TimerMode};
 use serde_derive::Deserialize;
 
@@ -26,8 +27,8 @@ pub struct SpawnerPrefab {
 }
 
 impl PrefabBundle for SpawnerPrefab {
-    fn spawn(&self, _prefab: &Prefab, commands: &mut EntityCommands<'_, '_, '_>) {
-        commands
+    fn write(&self, _prefab: &Prefab, world: &mut World, entity: Entity) {
+        world.entity_mut(entity)
             .insert(HookupSpawner {
                 prefab: self.prefab.clone(),
                 next_spawn: Timer::new(self.interval, TimerMode::Repeating),

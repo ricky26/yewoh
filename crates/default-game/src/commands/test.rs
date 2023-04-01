@@ -4,7 +4,7 @@ use glam::IVec2;
 
 use yewoh::Direction;
 use yewoh::protocol::{EntityFlags, GumpLayout, OpenGump};
-use yewoh_server::world::entity::{Flags, Graphic, MapPosition};
+use yewoh_server::world::entity::{Flags, Graphic, Location};
 use yewoh_server::world::net::{NetClient, NetEntity, NetEntityAllocator, Possessing};
 
 use crate::commands::{TextCommand, TextCommandQueue};
@@ -39,7 +39,7 @@ pub fn frypan(
     mut exec: TextCommandQueue<FryPan>,
     allocator: Res<NetEntityAllocator>,
     owners: Query<&Possessing>,
-    characters: Query<&MapPosition>,
+    characters: Query<&Location>,
     mut commands: Commands,
 ) {
     for (from, _) in exec.iter() {
@@ -50,7 +50,7 @@ pub fn frypan(
             commands.spawn((
                 NetEntity { id },
                 Flags { flags: EntityFlags::default() },
-                MapPosition {
+                Location {
                     map_id: 1,
                     position: position.position,
                     direction: Direction::North,
