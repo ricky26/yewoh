@@ -12,6 +12,7 @@ use crate::characters::CharactersPlugin;
 use crate::chat::handle_incoming_chat;
 use crate::commands::CommandsPlugin;
 use crate::data::prefab::PrefabPlugin;
+use crate::items::ItemsPlugin;
 use crate::spawners::SpawnersPlugin;
 use crate::time::send_time;
 
@@ -33,6 +34,8 @@ pub mod activities;
 
 pub mod characters;
 
+pub mod items;
+
 pub mod ai;
 
 #[derive(Default)]
@@ -47,6 +50,7 @@ impl PluginGroup for DefaultGamePlugins {
             .add(DefaultGamePlugin)
             .add(ActivitiesPlugin)
             .add(CharactersPlugin)
+            .add(ItemsPlugin)
             .add(SpawnersPlugin)
             .add(AiPlugin)
     }
