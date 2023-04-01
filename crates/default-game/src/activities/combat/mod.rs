@@ -2,15 +2,18 @@ use bevy_app::{App, Plugin};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::event::{EventReader, EventWriter};
 use bevy_ecs::query::{Changed, With};
-use bevy_ecs::schedule::IntoSystemConfig;
+use bevy_ecs::schedule::{IntoSystemConfig, IntoSystemConfigs};
 use bevy_ecs::system::{Commands, Query, Res};
 use bevy_time::{Timer, TimerMode};
+use yewoh::protocol;
 
 use yewoh::protocol::EquipmentSlot;
 use yewoh_server::world::entity::{AttackTarget, Character, Container, Flags, Graphic, Location, Quantity, Stats};
 use yewoh_server::world::events::AttackRequestedEvent;
 use yewoh_server::world::hierarchy::DespawnRecursiveExt;
-use yewoh_server::world::net::{NetEntity, NetEntityAllocator, Possessing};
+use yewoh_server::world::net::{NetClient, NetEntity, NetEntityAllocator, NetEntityLookup, Possessing};
+use yewoh_server::world::ServerSet;
+use yewoh_server::world::spatial::NetClientPositions;
 
 use crate::activities::{CurrentActivity, progress_current_activity};
 use crate::characters::{Alive, CharacterDied, Corpse, CorpseSpawned, DamageDealt, MeleeWeapon, Unarmed};
@@ -80,6 +83,7 @@ pub fn attack_current_target(
             target: current_target.target,
             source: entity,
             damage: weapon.damage,
+            location: *target_position,
         });
         *current_activity = CurrentActivity::Melee(Timer::new(weapon.delay, TimerMode::Once));
     }
@@ -152,6 +156,42 @@ pub fn spawn_corpses(
     }
 }
 
+pub fn send_damage_notices(
+    entity_lookup: Res<NetEntityLookup>,
+    client_positions: Res<NetClientPositions>,
+    mut damage_events: EventReader<DamageDealt>,
+    clients: Query<&NetClient>,
+) {
+    for event in &mut damage_events {
+        let target_id = match entity_lookup.ecs_to_net(event.target) {
+            Some(x) => x,
+            None => continue,
+        };
+
+        let attacker_id = entity_lookup.ecs_to_net(event.source);
+
+        for (entity, ..) in client_positions.tree.iter_at_point(event.location.map_id, event.location.position.truncate()) {
+            let client = match clients.get(entity) {
+                Ok(x) => x,
+                _ => continue,
+            };
+
+
+            client.send_packet(protocol::DamageDealt {
+                target_id,
+                damage: event.damage,
+            }.into());
+
+            if let Some(attacker_id) = attacker_id {
+                client.send_packet(protocol::Swing {
+                    attacker_id,
+                    target_id,
+                }.into());
+            }
+        }
+    }
+}
+
 pub struct CombatPlugin;
 
 impl Plugin for CombatPlugin {
@@ -169,6 +209,9 @@ impl Plugin for CombatPlugin {
                 apply_damage,
                 remove_dead_characters.after(apply_damage),
                 spawn_corpses.after(apply_damage).before(remove_dead_characters),
-            ));
+            ))
+            .add_systems((
+                send_damage_notices,
+            ).in_set(ServerSet::Send));
     }
 }
