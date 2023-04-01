@@ -11,7 +11,8 @@ use crate::data::prefab::{FromPrefabTemplate, Prefab, PrefabBundle};
 pub struct ContainedItemPrefab {
     pub position: IVec2,
     pub grid_index: u8,
-    pub entity: String,
+    #[serde(flatten)]
+    pub prefab: Prefab,
 }
 
 #[derive(Deserialize)]
@@ -29,7 +30,7 @@ impl FromPrefabTemplate for ContainerPrefab {
 }
 
 impl PrefabBundle for ContainerPrefab {
-    fn write(&self, prefab: &Prefab, world: &mut World, entity: Entity) {
+    fn write(&self, world: &mut World, entity: Entity) {
         let mut items = Vec::with_capacity(self.contents.len());
 
         for item_template in &self.contents {
@@ -40,7 +41,7 @@ impl PrefabBundle for ContainerPrefab {
                     grid_index: item_template.grid_index,
                 })
                 .id();
-            prefab.write_entity(world, child_entity, &item_template.entity);
+            item_template.prefab.write(world, child_entity);
             items.push(child_entity);
         }
 

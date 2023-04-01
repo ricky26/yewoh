@@ -13,6 +13,7 @@ use bevy::prelude::*;
 use clap::Parser;
 use futures::future::join;
 use log::info;
+use serde::Deserialize;
 use tokio::fs;
 use tokio::net::{lookup_host, TcpListener};
 use tokio::sync::mpsc;
@@ -187,11 +188,10 @@ async fn load_static_entities(world: &mut World, path: &Path) -> anyhow::Result<
                     let contents = fs::read_to_string(&full_path).await?;
                     let items = serde_yaml::from_str::<Vec<serde_yaml::Value>>(&contents)?;
                     for item in items {
-                        let document = factory.deserialize_entity(item)
+                        let prefab = factory.with(|| Prefab::deserialize(item))
                             .with_context(|| format!("spawning {:?}", full_path))?;
-                        let prefab = Arc::new(Prefab::from_single_entity(document.entity));
                         commands.spawn_empty()
-                            .insert_prefab(prefab)
+                            .insert_prefab(Arc::new(prefab))
                             .assign_network_id();
                         count += 1;
                     }

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use bevy_ecs::entity::Entity;
@@ -110,26 +110,27 @@ impl Command for AssignNetId {
 }
 
 pub fn assign_network_id(world: &mut World, entity: Entity) {
-    if let Some(mut container) = world.get_mut::<Container>(entity) {
-        for child_entity in std::mem::take(&mut container.items) {
-            assign_network_id(world, child_entity);
-        }
-    }
+    let mut queue = VecDeque::new();
+    queue.push_back(entity);
 
-    if let Some(mut character) = world.get_mut::<Character>(entity) {
-        for equipped in std::mem::take(&mut character.equipment) {
-            assign_network_id(world, equipped.equipment);
+    while let Some(next) = queue.pop_front() {
+        if let Some(container) = world.get::<Container>(next) {
+            queue.extend(container.items.iter().copied());
         }
-    }
 
-    let allocator = world.resource::<NetEntityAllocator>();
-    let entity_info = world.entity(entity);
-    let id = if entity_info.contains::<Character>() {
-        allocator.allocate_character()
-    } else {
-        allocator.allocate_item()
-    };
-    world.entity_mut(entity).insert(NetEntity { id });
+        if let Some(character) = world.get::<Character>(next) {
+            queue.extend(character.equipment.iter().map(|e| e.equipment));
+        }
+
+        let allocator = world.resource::<NetEntityAllocator>();
+        let entity_info = world.entity(next);
+        let id = if entity_info.contains::<Character>() {
+            allocator.allocate_character()
+        } else {
+            allocator.allocate_item()
+        };
+        world.entity_mut(next).insert(NetEntity { id });
+    }
 }
 
 pub trait NetCommandsExt {

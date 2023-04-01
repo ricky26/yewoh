@@ -34,7 +34,7 @@ pub struct SpawnerPrefab {
 }
 
 impl PrefabBundle for SpawnerPrefab {
-    fn write(&self, _prefab: &Prefab, world: &mut World, entity: Entity) {
+    fn write(&self, world: &mut World, entity: Entity) {
         world.entity_mut(entity)
             .insert(HookupSpawner {
                 prefab: self.prefab.clone(),

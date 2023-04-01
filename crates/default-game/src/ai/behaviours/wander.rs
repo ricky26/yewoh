@@ -16,7 +16,7 @@ use yewoh_server::world::map::TileDataResource;
 use yewoh_server::world::navigation::try_move_in_direction;
 use yewoh_server::world::spatial::EntitySurfaces;
 
-use crate::data::prefab::{FromPrefabTemplate, Prefab, PrefabBundle};
+use crate::data::prefab::{FromPrefabTemplate, PrefabBundle};
 
 #[derive(Debug, Clone, Component, Reflect)]
 pub struct Wander;
@@ -59,7 +59,7 @@ impl FromPrefabTemplate for WanderPrefab {
 }
 
 impl PrefabBundle for WanderPrefab {
-    fn write(&self, _prefab: &Prefab, world: &mut World, entity: Entity) {
+    fn write(&self, world: &mut World, entity: Entity) {
         world.entity_mut(entity)
             .insert(Wander)
             .insert(MoveTimer {

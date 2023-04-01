@@ -3,7 +3,7 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
 use serde::{Deserialize, Deserializer};
 use serde::de::{Error, SeqAccess, Visitor};
-use crate::data::prefab::{FromPrefabTemplate, Prefab, PrefabBundle, PrefabCollection};
+use crate::data::prefab::{FromPrefabTemplate, PrefabBundle, PrefabCollection};
 
 pub struct InheritancePrefab {
     pub prefabs: Vec<String>,
@@ -62,7 +62,7 @@ impl FromPrefabTemplate for InheritancePrefab {
 }
 
 impl PrefabBundle for InheritancePrefab {
-    fn write(&self, _prefab: &Prefab, world: &mut World, entity: Entity) {
+    fn write(&self, world: &mut World, entity: Entity) {
         let prefabs = world.resource::<PrefabCollection>();
         let prefabs = self.prefabs.iter()
             .filter_map(|name| prefabs.get(name).cloned())

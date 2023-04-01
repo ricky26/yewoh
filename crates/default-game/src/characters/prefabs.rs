@@ -7,12 +7,13 @@ use yewoh::protocol::EquipmentSlot;
 use yewoh_server::world::entity::{Character, CharacterEquipped, EquippedBy, Flags, Location, Notorious, Stats};
 
 use crate::characters::Alive;
-use crate::data::prefab::{FromPrefabTemplate, Prefab, PrefabBundle, PrefabEntityReference};
+use crate::data::prefab::{FromPrefabTemplate, Prefab, PrefabBundle};
 
 #[derive(Clone, Deserialize)]
 pub struct EquipmentPrefab {
     pub slot: EquipmentSlot,
-    pub entity: PrefabEntityReference,
+    #[serde(flatten)]
+    pub prefab: Prefab,
 }
 
 #[derive(Default, Clone, Deserialize)]
@@ -34,7 +35,7 @@ impl FromPrefabTemplate for CharacterPrefab {
 }
 
 impl PrefabBundle for CharacterPrefab {
-    fn write(&self, prefab: &Prefab, world: &mut World, entity: Entity) {
+    fn write(&self, world: &mut World, entity: Entity) {
         let mut equipment = Vec::with_capacity(self.equipment.len());
 
         for child in &self.equipment {
@@ -46,7 +47,7 @@ impl PrefabBundle for CharacterPrefab {
                     },
                 ))
                 .id();
-            prefab.write(world, child_entity);
+            child.prefab.write(world, child_entity);
             equipment.push(CharacterEquipped {
                 equipment: child_entity,
                 slot: child.slot,

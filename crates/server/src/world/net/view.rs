@@ -737,7 +737,7 @@ pub fn sync_nearby(
 
 pub fn update_nearby_moving(
     entity_positions: Res<EntityPositions>,
-    mut clients: Query<(&View, &mut ViewState, &Possessing)>,
+    mut clients: Query<(&View, &mut ViewState, &Possessing), With<Synchronized>>,
     moved_characters: Query<(&NetOwner, &Location), Changed<Location>>,
     world_items: Query<(
         &Flags, &Graphic, &Location, Option<&Quantity>, Option<&Tooltip>,
