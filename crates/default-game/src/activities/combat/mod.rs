@@ -7,15 +7,16 @@ use bevy_ecs::system::{Commands, Query, Res};
 use bevy_time::{Timer, TimerMode};
 
 use yewoh::protocol::EquipmentSlot;
-use yewoh_server::world::entity::{AttackTarget, Character, Flags, Graphic, MapPosition, Quantity, Stats};
+use yewoh_server::world::entity::{AttackTarget, Character, Container, Flags, Graphic, MapPosition, Quantity, Stats};
 use yewoh_server::world::events::AttackRequestedEvent;
 use yewoh_server::world::hierarchy::DespawnRecursiveExt;
 use yewoh_server::world::net::{NetEntity, NetEntityAllocator, Possessing};
 
 use crate::activities::{CurrentActivity, progress_current_activity};
-use crate::characters::{Alive, CharacterDied, CorpseSpawned, DamageDealt, MeleeWeapon, Unarmed};
+use crate::characters::{Alive, CharacterDied, Corpse, CorpseSpawned, DamageDealt, MeleeWeapon, Unarmed};
 
 pub const CORPSE_GRAPHIC_ID: u16 = 0x2006;
+pub const CORPSE_BOX_GUMP_ID: u16 = 9;
 
 pub fn handle_attack_requests(
     mut commands: Commands,
@@ -137,6 +138,11 @@ pub fn spawn_corpses(
                     hue: character.hue,
                 },
                 Quantity { quantity: character.body_type },
+                Container {
+                    gump_id: CORPSE_BOX_GUMP_ID,
+                    items: vec![],
+                },
+                Corpse,
             ))
             .id();
         corpse_events.send(CorpseSpawned {

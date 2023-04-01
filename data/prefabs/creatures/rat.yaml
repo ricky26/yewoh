@@ -1,3 +1,8 @@
-- name: Rat
-  character:
-    body_type: 0x2ef
+character:
+  name: Rat
+  body_type: 0x2ef
+  equipment:
+    - slot: MainHand
+      entity: sword
+---
+id: sword

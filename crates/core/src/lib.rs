@@ -1,4 +1,5 @@
 use glam::IVec2;
+use serde::{Deserialize, Serialize};
 use strum_macros::FromRepr;
 
 pub mod assets;
@@ -20,7 +21,7 @@ impl EntityId {
 }
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, FromRepr)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, FromRepr, Serialize, Deserialize)]
 pub enum Direction {
     #[default]
     North = 0,
@@ -58,7 +59,7 @@ pub enum EntityKind {
 }
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, FromRepr)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, FromRepr, Serialize, Deserialize)]
 pub enum Notoriety {
     #[default]
     Innocent = 1,

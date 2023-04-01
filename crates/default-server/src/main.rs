@@ -15,6 +15,7 @@ use tokio::sync::mpsc;
 
 use yewoh::assets::multi::load_multi_data;
 use yewoh::assets::tiles::load_tile_data;
+use yewoh_default_game::data::prefab::PrefabCollection;
 use yewoh_default_game::DefaultGamePlugins;
 use yewoh_default_game::data::static_data;
 use yewoh_server::async_runtime::AsyncRuntime;
@@ -80,11 +81,19 @@ fn main() -> anyhow::Result<()> {
     let tile_data = rt.block_on(load_tile_data(&args.uo_data_path))?;
     let multi_data = rt.block_on(load_multi_data(&args.uo_data_path))?;
 
+    // Load UO data
     info!("Loading map data...");
     rt.block_on(create_map_entities(&mut app.world, &map_infos, &args.uo_data_path))?;
     info!("Loading statics...");
     rt.block_on(create_statics(&mut app.world, &map_infos, &tile_data, &args.uo_data_path))?;
 
+    // Load server data
+    let mut prefabs = PrefabCollection::default();
+    rt.block_on(prefabs.load_from_directory(&app.world.resource(), &args.data_path.join("prefabs")))?;
+    info!("Loaded {} prefabs", prefabs.len());
+    app.insert_resource(prefabs);
+
+    // Spawn map data
     let mut query = app.world.query_filtered::<(), With<Chunk>>();
     info!("Spawned {} map chunks", query.iter(&app.world).count());
     let mut query = app.world.query_filtered::<(), With<Static>>();

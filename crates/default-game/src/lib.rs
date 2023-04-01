@@ -7,8 +7,10 @@ use yewoh_server::world::ServerSet;
 use crate::accounts::AccountsPlugin;
 use crate::actions::{handle_context_menu, handle_double_click, handle_drop, handle_equip, handle_move, handle_pick_up, handle_profile_requests, handle_single_click, handle_skills_requests, handle_war_mode};
 use crate::activities::ActivitiesPlugin;
+use crate::characters::CharactersPlugin;
 use crate::chat::handle_incoming_chat;
 use crate::commands::CommandsPlugin;
+use crate::data::prefab::PrefabPlugin;
 use crate::npc::{init_npcs, move_npcs, spawn_npcs};
 use crate::time::send_time;
 
@@ -36,10 +38,12 @@ pub struct DefaultGamePlugins;
 impl PluginGroup for DefaultGamePlugins {
     fn build(self) -> PluginGroupBuilder {
         PluginGroupBuilder::start::<Self>()
+            .add(PrefabPlugin)
             .add(CommandsPlugin)
             .add(AccountsPlugin)
             .add(DefaultGamePlugin)
             .add(ActivitiesPlugin)
+            .add(CharactersPlugin)
     }
 }
 

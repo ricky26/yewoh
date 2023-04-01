@@ -7,6 +7,8 @@ use crate::activities::combat::CombatPlugin;
 
 pub mod combat;
 
+pub mod loot;
+
 #[derive(Debug, Clone, Component)]
 pub enum CurrentActivity {
     Idle,

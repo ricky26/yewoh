@@ -5,6 +5,7 @@ use anyhow::anyhow;
 use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use glam::{IVec2, IVec3};
+use serde::{Deserialize, Serialize};
 use strum_macros::FromRepr;
 
 use crate::{Direction, EntityId, EntityKind, Notoriety};
@@ -317,7 +318,7 @@ impl Packet for UpsertLocalPlayer {
 }
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, Default, Ord, PartialOrd, Eq, PartialEq, FromRepr)]
+#[derive(Debug, Clone, Copy, Default, Ord, PartialOrd, Eq, PartialEq, FromRepr, Serialize, Deserialize)]
 pub enum EquipmentSlot {
     #[default]
     Invalid = 0,

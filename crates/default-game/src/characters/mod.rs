@@ -1,6 +1,11 @@
 use std::time::Duration;
+use bevy_app::{App, Plugin};
 use bevy_ecs::component::Component;
 use bevy_ecs::entity::Entity;
+use crate::characters::prefabs::CharacterPrefab;
+use crate::data::prefab::PrefabAppExt;
+
+pub mod prefabs;
 
 #[derive(Debug, Default, Clone, Component)]
 pub struct Alive;
@@ -39,4 +44,13 @@ pub struct MeleeWeapon {
     pub damage: u16,
     pub delay: Duration,
     pub range: i32,
+}
+
+pub struct CharactersPlugin;
+
+impl Plugin for CharactersPlugin {
+    fn build(&self, app: &mut App) {
+        app
+            .init_prefab_bundle::<CharacterPrefab>("character");
+    }
 }
