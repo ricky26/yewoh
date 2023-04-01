@@ -1,0 +1,4 @@
+spawner:
+  prefab: rat
+  interval: 5s
+  limit: 5

@@ -11,7 +11,8 @@ use crate::characters::CharactersPlugin;
 use crate::chat::handle_incoming_chat;
 use crate::commands::CommandsPlugin;
 use crate::data::prefab::PrefabPlugin;
-use crate::npc::{init_npcs, move_npcs, spawn_npcs};
+use crate::npc::{move_npcs, spawn_npcs};
+use crate::spawners::SpawnersPlugin;
 use crate::time::send_time;
 
 pub mod accounts;
@@ -25,6 +26,8 @@ pub mod chat;
 pub mod commands;
 
 pub mod npc;
+
+pub mod spawners;
 
 pub mod time;
 
@@ -44,6 +47,7 @@ impl PluginGroup for DefaultGamePlugins {
             .add(DefaultGamePlugin)
             .add(ActivitiesPlugin)
             .add(CharactersPlugin)
+            .add(SpawnersPlugin)
     }
 }
 
@@ -53,7 +57,7 @@ pub struct DefaultGamePlugin;
 impl Plugin for DefaultGamePlugin {
     fn build(&self, app: &mut App) {
         app
-            .add_startup_system(init_npcs)
+            //.add_startup_system(init_npcs)
             .add_systems((
                 spawn_npcs,
                 move_npcs,

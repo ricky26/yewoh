@@ -1,5 +1,5 @@
 use std::collections::{HashMap, VecDeque};
-use std::fmt::Formatter;
+use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
@@ -26,7 +26,13 @@ pub struct EntityPrefab {
     bundles: Vec<Arc<dyn PrefabBundle>>,
 }
 
-#[derive(Clone)]
+impl Debug for EntityPrefab {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "EntityPrefab {{ {} bundles }}", self.bundles.len())
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Prefab {
     entities: HashMap<String, EntityPrefab>,
 }
@@ -54,10 +60,10 @@ impl Prefab {
         self.insert_child(&"", commands);
     }
 
-    pub fn spawn(&self, commands: &mut Commands) -> Entity {
+    pub fn spawn<'w, 's, 'a>(&self, commands: &'a mut Commands<'w, 's>) -> EntityCommands<'w, 's, 'a> {
         let mut entity = commands.spawn_empty();
         self.insert(&mut entity);
-        entity.id()
+        entity
     }
 }
 
@@ -112,7 +118,7 @@ impl Deref for PrefabEntityReference {
 
 #[derive(Clone)]
 struct Implementation {
-    deserialize: fn(&mut dyn erased_serde::Deserializer<'_>) -> anyhow::Result<Arc<dyn PrefabBundle>>,
+    deserialize: Arc<dyn (Fn(&mut dyn erased_serde::Deserializer<'_>) -> anyhow::Result<Arc<dyn PrefabBundle>>) + Send + Sync + 'static>,
 }
 
 impl<'de> DeserializeSeed<'de> for Implementation {
@@ -139,24 +145,25 @@ impl PrefabFactory {
         Default::default()
     }
 
-    fn deserialize_impl<P: FromPrefabTemplate>(deserializer: &mut dyn erased_serde::Deserializer<'_>) -> anyhow::Result<Arc<dyn PrefabBundle>> {
-        Ok(Arc::new(P::from_template(P::Template::deserialize(deserializer)?)))
-    }
-
     fn deserialize<'de, D>(&'de self, deserializer: D) -> Result<Document, <D as Deserializer>::Error> where D: Deserializer<'de> {
         deserializer.deserialize_map(PrefabVisitor { factory: self })
     }
 
-    pub fn register<P: FromPrefabTemplate>(&mut self, name: &str) {
+    pub fn register(&mut self, name: &str, f: impl Fn(&mut dyn erased_serde::Deserializer<'_>) -> anyhow::Result<Arc<dyn PrefabBundle>> + Sync + Send + 'static) {
         self.bundles.insert(name.into(), Implementation {
-            deserialize: Self::deserialize_impl::<P>,
+            deserialize: Arc::new(f),
         });
+    }
+
+    pub fn register_template<P: FromPrefabTemplate>(&mut self, name: &str) {
+        self.register(name, |d|
+            Ok(Arc::new(P::from_template(P::Template::deserialize(d)?))))
     }
 }
 
 #[derive(Default, Clone, Resource)]
 pub struct PrefabCollection {
-    prefabs: HashMap<String, Prefab>,
+    prefabs: HashMap<String, Arc<Prefab>>,
 }
 
 impl PrefabCollection {
@@ -168,11 +175,11 @@ impl PrefabCollection {
         self.prefabs.len()
     }
 
-    pub fn prefabs(&self) -> &HashMap<String, Prefab> {
+    pub fn prefabs(&self) -> &HashMap<String, Arc<Prefab>> {
         &self.prefabs
     }
 
-    pub fn get(&self, id: &str) -> Option<&Prefab> {
+    pub fn get(&self, id: &str) -> Option<&Arc<Prefab>> {
         self.prefabs.get(id)
     }
 
@@ -202,9 +209,9 @@ impl PrefabCollection {
                             entities.insert(prefab.id, prefab.entity);
                         }
 
-                        self.prefabs.insert(prefab_name.into(), Prefab {
+                        self.prefabs.insert(prefab_name.into(), Arc::new(Prefab {
                             entities,
-                        });
+                        }));
                     }
                 }
             }
@@ -221,7 +228,7 @@ pub trait PrefabAppExt {
 impl PrefabAppExt for App {
     fn init_prefab_bundle<P: FromPrefabTemplate>(&mut self, name: &str) -> &mut Self {
         self.world.resource_mut::<PrefabFactory>()
-            .register::<P>(name);
+            .register_template::<P>(name);
         self
     }
 }
