@@ -1,5 +1,9 @@
 character:
   name: Rat
   body_type: 0xee
+  hit_animation: !Predefined
+    kind: 4
+    action: 0
+    variant: 0
 wander:
   interval: 2s

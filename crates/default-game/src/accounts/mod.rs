@@ -13,7 +13,7 @@ use yewoh_server::world::net::{NetClient, NetEntity, NetEntityAllocator, NetOwne
 
 use crate::accounts::repository::{AccountRepository, CharacterInfo};
 use crate::activities::CurrentActivity;
-use crate::characters::{Alive, MeleeWeapon, Unarmed};
+use crate::characters::{Alive, Animation, MeleeWeapon, PredefinedAnimation, Unarmed};
 use crate::data::static_data::StaticData;
 
 pub mod repository;
@@ -219,6 +219,11 @@ pub fn handle_spawn_character(
                     damage: 10,
                     delay: Duration::from_secs(3),
                     range: 4,
+                    swing_animation: Animation::Predefined(PredefinedAnimation {
+                        kind: 0,
+                        action: 4,
+                        variant: 0,
+                    }),
                 },
             ))
             .id();
@@ -305,6 +310,11 @@ pub fn handle_spawn_character(
                         damage: 1,
                         delay: Duration::from_secs(2),
                         range: 3,
+                        swing_animation: Animation::Predefined(PredefinedAnimation {
+                            kind: 0,
+                            action: 0,
+                            variant: 0,
+                        }),
                     },
                 },
                 Alive,

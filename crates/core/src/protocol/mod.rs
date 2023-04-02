@@ -222,6 +222,7 @@ fn packet_registry() -> &'static PacketRegistry {
             PacketRegistration::for_type::<Swing>(),
             PacketRegistration::for_type::<DamageDealt>(),
             PacketRegistration::for_type::<CharacterAnimation>(),
+            PacketRegistration::for_type::<CharacterPredefinedAnimation>(),
         ].into_iter() {
             max_size = registration.size.max(max_size);
             let index = registration.packet_kind as usize;

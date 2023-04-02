@@ -5,8 +5,8 @@ use bevy_ecs::query::{Changed, With};
 use bevy_ecs::schedule::{IntoSystemConfig, IntoSystemConfigs};
 use bevy_ecs::system::{Commands, Query, Res};
 use bevy_time::{Timer, TimerMode};
-use yewoh::protocol;
 
+use yewoh::protocol;
 use yewoh::protocol::EquipmentSlot;
 use yewoh_server::world::entity::{AttackTarget, Character, Container, Flags, Graphic, Location, Quantity, Stats};
 use yewoh_server::world::events::AttackRequestedEvent;
@@ -16,7 +16,8 @@ use yewoh_server::world::ServerSet;
 use yewoh_server::world::spatial::NetClientPositions;
 
 use crate::activities::{CurrentActivity, progress_current_activity};
-use crate::characters::{Alive, CharacterDied, Corpse, CorpseSpawned, DamageDealt, MeleeWeapon, Unarmed};
+use crate::characters::{Alive, CharacterDied, Corpse, CorpseSpawned, DamageDealt, HitAnimation, MeleeWeapon, Unarmed};
+use crate::characters::animation::AnimationStartedEvent;
 
 pub const CORPSE_GRAPHIC_ID: u16 = 0x2006;
 pub const CORPSE_BOX_GUMP_ID: u16 = 9;
@@ -62,29 +63,45 @@ pub fn update_weapon_stats(
 
 pub fn attack_current_target(
     mut damage_events: EventWriter<DamageDealt>,
+    mut animation_events: EventWriter<AnimationStartedEvent>,
     mut actors: Query<(Entity, &mut CurrentActivity, &mut AttackTarget, &Location, &MeleeWeapon), With<Alive>>,
-    mut targets: Query<&Location, With<Alive>>,
+    mut targets: Query<(&Location, Option<&HitAnimation>), With<Alive>>,
 ) {
-    for (entity, mut current_activity, current_target, map_position, weapon) in &mut actors {
+    for (entity, mut current_activity, current_target, location, weapon) in &mut actors {
         if !current_activity.is_idle() {
             continue;
         }
 
-        let target_position = match targets.get_mut(current_target.target) {
+        let (target_location, hit_animation) = match targets.get_mut(current_target.target) {
             Ok(x) => x,
             _ => continue,
         };
 
-        if !target_position.in_range(map_position, weapon.range) {
+        if !target_location.in_range(location, weapon.range) {
             continue;
+        }
+
+        animation_events.send(AnimationStartedEvent {
+            animation: weapon.swing_animation.clone(),
+            entity,
+            location: *location,
+        });
+
+        if let Some(animation) = hit_animation.cloned() {
+            animation_events.send(AnimationStartedEvent {
+                animation: animation.hit_animation,
+                entity: current_target.target,
+                location: *target_location,
+            });
         }
 
         damage_events.send(DamageDealt {
             target: current_target.target,
             source: entity,
             damage: weapon.damage,
-            location: *target_position,
+            location: *target_location,
         });
+
         *current_activity = CurrentActivity::Melee(Timer::new(weapon.delay, TimerMode::Once));
     }
 }

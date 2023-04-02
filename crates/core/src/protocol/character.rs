@@ -335,3 +335,38 @@ impl Packet for CharacterAnimation {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct CharacterPredefinedAnimation {
+    pub target_id: EntityId,
+    pub kind: u16,
+    pub action: u16,
+    pub variant: u8,
+}
+
+impl Packet for CharacterPredefinedAnimation {
+    fn packet_kind() -> u8 { 0xe2 }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(10) }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let target_id = payload.read_entity_id()?;
+        let kind = payload.read_u16::<Endian>()?;
+        let action = payload.read_u16::<Endian>()?;
+        let variant = payload.read_u8()?;
+        Ok(Self {
+            target_id,
+            kind,
+            action,
+            variant,
+        })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_entity_id(self.target_id)?;
+        writer.write_u16::<Endian>(self.kind)?;
+        writer.write_u16::<Endian>(self.action)?;
+        writer.write_u8(self.variant)?;
+        Ok(())
+    }
+}

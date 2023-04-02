@@ -6,7 +6,7 @@ use yewoh::Notoriety;
 use yewoh::protocol::EquipmentSlot;
 use yewoh_server::world::entity::{Character, CharacterEquipped, EquippedBy, Flags, Location, Notorious, Stats};
 
-use crate::characters::Alive;
+use crate::characters::{Alive, Animation, HitAnimation};
 use crate::data::prefab::{FromPrefabTemplate, Prefab, PrefabBundle};
 
 #[derive(Clone, Deserialize)]
@@ -24,6 +24,7 @@ pub struct CharacterPrefab {
     pub hue: u16,
     pub notoriety: Notoriety,
     pub equipment: Vec<EquipmentPrefab>,
+    pub hit_animation: Option<Animation>,
 }
 
 impl FromPrefabTemplate for CharacterPrefab {
@@ -54,7 +55,8 @@ impl PrefabBundle for CharacterPrefab {
             });
         }
 
-        world.entity_mut(entity)
+        let mut commands = world.entity_mut(entity);
+        commands
             .insert((
                 Flags::default(),
                 Location::default(),
@@ -72,5 +74,9 @@ impl PrefabBundle for CharacterPrefab {
                 },
                 Alive,
             ));
+
+        if let Some(hit_animation) = self.hit_animation.clone() {
+            commands.insert(HitAnimation { hit_animation });
+        }
     }
 }
