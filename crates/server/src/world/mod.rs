@@ -1,5 +1,6 @@
 use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
+use crate::world::entity::{AttackTarget, Character, Container, EquippedBy, Flags, Graphic, Location, Multi, Notorious, ParentContainer, Quantity, Stats, Tooltip};
 
 use crate::world::events::{AttackRequestedEvent, CharacterListEvent, ChatRequestEvent, ContextMenuEvent, CreateCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::input::{handle_attack_packets, handle_context_menu_packets, send_context_menu, update_targets};
@@ -45,6 +46,19 @@ impl Plugin for ServerPlugin {
             .init_resource::<EntitySurfaces>()
             .init_resource::<EntityPositions>()
             .init_resource::<NetClientPositions>()
+            .register_type::<Flags>()
+            .register_type::<Notorious>()
+            .register_type::<Character>()
+            .register_type::<Quantity>()
+            .register_type::<Graphic>()
+            .register_type::<Multi>()
+            .register_type::<Location>()
+            .register_type::<Container>()
+            .register_type::<ParentContainer>()
+            .register_type::<EquippedBy>()
+            .register_type::<Stats>()
+            .register_type::<Tooltip>()
+            .register_type::<AttackTarget>()
             .add_event::<ReceivedPacketEvent>()
             .add_event::<SentPacketEvent>()
             .add_event::<CharacterListEvent>()

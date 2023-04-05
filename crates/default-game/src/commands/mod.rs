@@ -24,11 +24,14 @@ impl Plugin for CommandsPlugin {
             .insert_resource(TextCommands::new('['))
             .add_text_command::<go::Go>()
             .add_text_command::<info::Info>()
+            .add_text_command::<info::TileInfo>()
             .add_text_command::<test::Echo>()
             .add_text_command::<test::FryPan>()
             .add_text_command::<test::TestGump>()
             .add_systems((
                 info::info,
+                info::start_tile_info,
+                info::tile_info,
                 go::go,
                 test::echo,
                 test::frypan,

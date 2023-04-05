@@ -174,6 +174,10 @@ impl ViewState {
         self.dirty
     }
 
+    pub fn map_id(&self) -> u8 {
+        self.map_id
+    }
+
     pub fn flush(&mut self) {
         self.ghosts.clear();
         self.children.clear();

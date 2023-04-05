@@ -9,12 +9,14 @@ use yewoh::{Direction, EntityId, Notoriety};
 use yewoh::protocol::{EntityFlags, EntityTooltipLine, EquipmentSlot, UpsertEntityStats};
 use crate::math::IVecExt;
 
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Component)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Reflect, Component)]
+#[reflect_value]
 pub struct Flags {
     pub flags: EntityFlags,
 }
 
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Component)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Reflect, Component)]
+#[reflect_value]
 pub struct Notorious(pub Notoriety);
 
 impl Deref for Notorious {
@@ -27,46 +29,60 @@ impl DerefMut for Notorious {
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Reflect, FromReflect)]
 pub struct CharacterEquipped {
     pub equipment: Entity,
+    #[reflect(ignore)]
     pub slot: EquipmentSlot,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Component)]
+#[derive(Default, Debug, Clone, Eq, PartialEq, Component, Reflect)]
+#[reflect(Component)]
 pub struct Character {
     pub body_type: u16,
     pub hue: u16,
     pub equipment: Vec<CharacterEquipped>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Component)]
+#[derive(Debug, Clone, Eq, PartialEq, Component, Reflect)]
 pub struct EquippedBy {
     pub parent: Entity,
+    #[reflect(ignore)]
     pub slot: EquipmentSlot,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Component, Reflect)]
+#[reflect(Component)]
 pub struct Quantity {
     pub quantity: u16,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Component, Reflect, Serialize, Deserialize)]
+impl Default for Quantity {
+    fn default() -> Self {
+        Quantity { quantity: 1 }
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Component, Reflect, Serialize, Deserialize)]
+#[reflect(Component)]
 pub struct Graphic {
     pub id: u16,
     pub hue: u16,
 }
 
-#[derive(Debug, Clone, Copy, Component, Reflect)]
+#[derive(Debug, Default, Clone, Copy, Component, Reflect)]
+#[reflect(Component)]
 pub struct Multi {
     pub id: u16,
 }
 
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Component, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Component, Reflect, Serialize, Deserialize)]
+#[reflect(Component)]
 pub struct Location {
     pub position: IVec3,
     pub map_id: u8,
     #[serde(default)]
+    #[reflect(ignore)]
     pub direction: Direction,
 }
 
@@ -85,6 +101,7 @@ impl Location {
 }
 
 #[derive(Debug, Clone, Default, Component, Reflect)]
+#[reflect(Component)]
 pub struct Container {
     pub gump_id: u16,
     pub items: Vec<Entity>,
@@ -98,6 +115,7 @@ pub struct ParentContainer {
 }
 
 #[derive(Debug, Clone, Default, Component, Reflect, Eq, PartialEq)]
+#[reflect(Component)]
 pub struct Stats {
     pub name: String,
     pub race_and_gender: u8,
@@ -210,12 +228,14 @@ impl Stats {
     }
 }
 
-#[derive(Debug, Clone, Default, Component, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Component, Eq, PartialEq, Reflect)]
+#[reflect(Component)]
 pub struct Tooltip {
+    #[reflect(ignore)]
     pub entries: Vec<EntityTooltipLine>,
 }
 
-#[derive(Debug, Clone, Component, Eq, PartialEq)]
+#[derive(Debug, Clone, Component, Eq, PartialEq, Reflect)]
 pub struct AttackTarget {
     pub target: Entity,
 }
