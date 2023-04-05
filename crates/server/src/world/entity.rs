@@ -1,23 +1,28 @@
 use std::ops::{Deref, DerefMut};
 
+use bevy_ecs::entity::{EntityMap, MapEntities, MapEntitiesError};
 use bevy_ecs::prelude::*;
+use bevy_ecs::reflect::ReflectMapEntities;
 use bevy_reflect::prelude::*;
 use glam::{IVec2, IVec3};
 use serde::{Deserialize, Serialize};
 
 use yewoh::{Direction, EntityId, Notoriety};
 use yewoh::protocol::{EntityFlags, EntityTooltipLine, EquipmentSlot, UpsertEntityStats};
+
 use crate::math::IVecExt;
 
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Reflect, Component)]
-#[reflect_value]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Reflect, Component, Serialize, Deserialize)]
+#[reflect(Component, Serialize, Deserialize)]
 pub struct Flags {
+    #[reflect(ignore)]
+    #[serde(flatten)]
     pub flags: EntityFlags,
 }
 
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Reflect, Component)]
-#[reflect_value]
-pub struct Notorious(pub Notoriety);
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Reflect, Component, Serialize, Deserialize)]
+#[reflect(Component, Serialize, Deserialize)]
+pub struct Notorious(#[reflect(ignore)] pub Notoriety);
 
 impl Deref for Notorious {
     type Target = Notoriety;
@@ -37,18 +42,41 @@ pub struct CharacterEquipped {
 }
 
 #[derive(Default, Debug, Clone, Eq, PartialEq, Component, Reflect)]
-#[reflect(Component)]
+#[reflect(Component, MapEntities)]
 pub struct Character {
     pub body_type: u16,
     pub hue: u16,
     pub equipment: Vec<CharacterEquipped>,
 }
 
+impl MapEntities for Character {
+    fn map_entities(&mut self, entity_map: &EntityMap) -> Result<(), MapEntitiesError> {
+        for equipment in &mut self.equipment {
+            equipment.equipment = entity_map.get(equipment.equipment)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Component, Reflect)]
+#[reflect(Component, MapEntities)]
 pub struct EquippedBy {
     pub parent: Entity,
     #[reflect(ignore)]
     pub slot: EquipmentSlot,
+}
+
+impl FromWorld for EquippedBy {
+    fn from_world(_world: &mut World) -> Self {
+       EquippedBy { parent: Entity::PLACEHOLDER, slot: EquipmentSlot::default() }
+    }
+}
+
+impl MapEntities for EquippedBy {
+    fn map_entities(&mut self, entity_map: &EntityMap) -> Result<(), MapEntitiesError> {
+        self.parent = entity_map.get(self.parent)?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Component, Reflect)]
@@ -101,17 +129,44 @@ impl Location {
 }
 
 #[derive(Debug, Clone, Default, Component, Reflect)]
-#[reflect(Component)]
+#[reflect(Component, MapEntities)]
 pub struct Container {
     pub gump_id: u16,
     pub items: Vec<Entity>,
 }
 
+impl MapEntities for Container {
+    fn map_entities(&mut self, entity_map: &EntityMap) -> Result<(), MapEntitiesError> {
+        for item in &mut self.items {
+            *item = entity_map.get(*item)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Component, Reflect)]
+#[reflect(Component, MapEntities)]
 pub struct ParentContainer {
     pub parent: Entity,
     pub position: IVec2,
     pub grid_index: u8,
+}
+
+impl FromWorld for ParentContainer {
+    fn from_world(_world: &mut World) -> Self {
+        ParentContainer {
+            parent: Entity::PLACEHOLDER,
+            position: IVec2::ZERO,
+            grid_index: 0,
+        }
+    }
+}
+
+impl MapEntities for ParentContainer {
+    fn map_entities(&mut self, entity_map: &EntityMap) -> Result<(), MapEntitiesError> {
+        self.parent = entity_map.get(self.parent)?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Default, Component, Reflect, Eq, PartialEq)]
@@ -236,6 +291,22 @@ pub struct Tooltip {
 }
 
 #[derive(Debug, Clone, Component, Eq, PartialEq, Reflect)]
+#[reflect(Component, MapEntities)]
 pub struct AttackTarget {
     pub target: Entity,
+}
+
+impl FromWorld for AttackTarget {
+    fn from_world(_world: &mut World) -> Self {
+        AttackTarget {
+            target: Entity::PLACEHOLDER,
+        }
+    }
+}
+
+impl MapEntities for AttackTarget {
+    fn map_entities(&mut self, entity_map: &EntityMap) -> Result<(), MapEntitiesError> {
+        self.target = entity_map.get(self.target)?;
+        Ok(())
+    }
 }

@@ -17,22 +17,29 @@ use yewoh::Direction;
 use crate::world::entity::{Graphic, Location};
 use crate::world::net::MapInfos;
 
-#[derive(Debug, Clone, Default, Component)]
+#[derive(Debug, Clone, Default, Component, Reflect)]
+#[reflect(Component)]
 pub struct Chunk {
+    #[reflect(ignore)]
     pub map_chunk: MapChunk,
 }
 
 #[derive(Debug, Clone, Default, Component, Reflect)]
+#[reflect(Component)]
 pub struct Static;
 
 #[derive(Debug, Clone, Default, Component, Reflect)]
+#[reflect(Component)]
 pub struct Surface;
 
 #[derive(Debug, Clone, Default, Component, Reflect)]
+#[reflect(Component)]
 pub struct Impassable;
 
-#[derive(Debug, Clone, Default, Resource)]
+#[derive(Debug, Clone, Default, Resource, Reflect)]
+#[reflect(Resource)]
 pub struct TileDataResource {
+    #[reflect(ignore)]
     pub tile_data: TileData,
 }
 
@@ -44,8 +51,10 @@ impl Deref for TileDataResource {
     }
 }
 
-#[derive(Debug, Clone, Default, Resource)]
+#[derive(Debug, Clone, Default, Resource, Reflect)]
+#[reflect(Resource)]
 pub struct MultiDataResource {
+    #[reflect(ignore)]
     pub multi_data: MultiData,
 }
 

@@ -30,8 +30,7 @@ impl Plugin for CommandsPlugin {
             .add_text_command::<test::TestGump>()
             .add_systems((
                 info::info,
-                info::start_tile_info,
-                info::tile_info,
+                info::start_info,
                 go::go,
                 test::echo,
                 test::frypan,

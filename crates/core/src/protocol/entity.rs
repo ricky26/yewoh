@@ -52,7 +52,7 @@ impl Packet for EntityRequest {
 }
 
 bitflags! {
-    #[derive(Default, Debug, Clone, Copy, Eq, PartialEq)]
+    #[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
     pub struct EntityFlags : u8 {
         const FEMALE = 0x2;
         const POISONED = 0x4;
