@@ -14,9 +14,11 @@ use serde::ser::SerializeStruct;
 
 use de::{BundleValuesVisitor, WorldVisitor};
 use ser::{BufferBundlesSerializer, BufferSerializer, ErasedOk};
+use crate::persistence::prefab::PrefabSerializer;
 
 mod ser;
 mod de;
+mod prefab;
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EntityReference(u32);
@@ -54,6 +56,10 @@ pub struct DeserializeContext<'a> {
 }
 
 impl<'a> DeserializeContext<'a> {
+    pub fn world_mut(&mut self) -> &mut World {
+        self.world
+    }
+
     pub fn map_entity(&mut self, reference: EntityReference) -> Entity {
         *self.entity_map.entry(reference)
             .or_insert_with(|| self.world.spawn_empty().id())
@@ -66,12 +72,12 @@ pub struct SerializeSchedule;
 pub trait BundleSerializer: FromWorld + Send + 'static {
     type Query: ReadOnlyWorldQuery;
     type Filter: ReadOnlyWorldQuery;
-    type Bundle: Bundle + Serialize + for<'de> Deserialize<'de>;
+    type Bundle: Bundle;
 
     fn id() -> &'static str;
-    fn extract(item: &<Self::Query as WorldQuery>::Item<'_>) -> Self::Bundle;
+    fn extract(item: <Self::Query as WorldQuery>::Item<'_>) -> Self::Bundle;
     fn serialize<S: Serializer>(ctx: &SerializeContext, s: S, bundle: &Self::Bundle) -> Result<S::Ok, S::Error>;
-    fn deserialize<'de, D: Deserializer<'de>>(ctx: &mut DeserializeContext, d: D) -> Result<(), D::Error>;
+    fn deserialize<'de, D: Deserializer<'de>>(ctx: &mut DeserializeContext, d: D, entity: Entity) -> Result<(), D::Error>;
 }
 
 type BundleDeserializer = fn(ctx: &mut DeserializeContext, d: &mut dyn erased_serde::Deserializer) -> Result<(), erased_serde::Error>;
@@ -141,7 +147,7 @@ fn extract_bundles<T: BundleSerializer>(
     query: Query<T::Query, T::Filter>,
     mut bundles: SerializedBundles<T>,
 ) {
-    bundles.extend(query.iter().map(|item| T::extract(&item)));
+    bundles.extend(query.iter().map(|item| T::extract(item)));
 }
 
 fn deserialize_bundles<T: BundleSerializer>(ctx: &mut DeserializeContext, d: &mut dyn erased_serde::Deserializer) -> Result<(), erased_serde::Error> {
@@ -219,6 +225,7 @@ impl Plugin for PersistencePlugin {
     fn build(&self, app: &mut App) {
         app
             .init_schedule(SerializeSchedule)
-            .init_resource::<BundleSerializers>();
+            .init_resource::<BundleSerializers>()
+            .register_serializer::<PrefabSerializer>();
     }
 }

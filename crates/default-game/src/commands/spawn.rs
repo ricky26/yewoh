@@ -13,6 +13,7 @@ use yewoh_server::world::net::{NetClient, NetCommandsExt, ViewState};
 
 use crate::commands::{TextCommand, TextCommandQueue};
 use crate::data::prefab::{Prefab, PrefabCollection, PrefabCommandsExt};
+use crate::entities::{Persistent, PrefabInstance};
 use crate::hues;
 use crate::networking::NetClientExt;
 
@@ -32,6 +33,7 @@ impl TextCommand for Spawn {
 
 #[derive(Debug, Clone, Component)]
 pub struct SpawnRequest {
+    prefab_name: Arc<str>,
     prefab: Arc<Prefab>,
 }
 
@@ -47,15 +49,15 @@ pub fn start_spawn(
             _ => continue,
         };
 
-        let prefab = match prefabs.get(&request.prefab) {
-            Some(x) => x.clone(),
+        let (prefab_name, prefab) = match prefabs.get_key_value(&request.prefab) {
+            Some((prefab_name, prefab)) => (prefab_name.clone(), prefab.clone()),
             None => {
                 client.send_system_message_hue(format!("No such entity type '{}'", &request.prefab), hues::RED);
                 continue;
             }
         };
 
-        let spawn_request = SpawnRequest { prefab };
+        let spawn_request = SpawnRequest { prefab_name, prefab };
 
         if request.in_container {
             commands
@@ -101,15 +103,20 @@ pub fn spawn(
             _ => continue,
         };
         let map_id = view_state.map_id();
+        let prefab_instance = PrefabInstance { prefab_name: spawn.prefab_name.clone() };
 
         commands
             .spawn_empty()
             .insert_prefab(spawn.prefab.clone())
-            .insert(Location {
-                map_id,
-                position,
-                direction: Default::default(),
-            })
+            .insert((
+                prefab_instance,
+                Persistent,
+                Location {
+                    map_id,
+                    position,
+                    direction: Default::default(),
+                },
+            ))
             .assign_network_id();
     }
 
@@ -134,14 +141,19 @@ pub fn spawn(
             }
         };
 
+        let prefab_instance = PrefabInstance { prefab_name: spawn.prefab_name.clone() };
         let new_entity = commands
             .spawn_empty()
             .insert_prefab(spawn.prefab.clone())
-            .insert(ParentContainer {
-                parent: target,
-                position: IVec2::ZERO,
-                grid_index: 0,
-            })
+            .insert((
+                prefab_instance,
+                Persistent,
+                ParentContainer {
+                    parent: target,
+                    position: IVec2::ZERO,
+                    grid_index: 0,
+                },
+            ))
             .assign_network_id()
             .id();
         container.items.push(new_entity);

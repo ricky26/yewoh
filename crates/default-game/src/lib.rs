@@ -45,6 +45,8 @@ pub mod networking;
 
 pub mod hues;
 
+pub mod entities;
+
 #[derive(Default)]
 pub struct DefaultGamePlugins;
 
@@ -52,6 +54,7 @@ impl PluginGroup for DefaultGamePlugins {
     fn build(self) -> PluginGroupBuilder {
         PluginGroupBuilder::start::<Self>()
             .add(PrefabPlugin)
+            .add(PersistencePlugin)
             .add(CommandsPlugin)
             .add(AccountsPlugin)
             .add(DefaultGamePlugin)
@@ -60,7 +63,6 @@ impl PluginGroup for DefaultGamePlugins {
             .add(ItemsPlugin)
             .add(SpawnersPlugin)
             .add(AiPlugin)
-            .add(PersistencePlugin)
     }
 }
 

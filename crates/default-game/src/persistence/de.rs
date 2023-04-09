@@ -1,8 +1,11 @@
 use std::fmt::Formatter;
 use std::marker::PhantomData;
 
-use serde::Deserializer;
+use bevy_ecs::entity::Entity;
 use serde::de::{DeserializeSeed, Error as DError, MapAccess, SeqAccess, Visitor};
+use serde::Deserializer;
+
+use crate::persistence::EntityReference;
 
 use super::{BundleSerializer, BundleSerializers, DeserializeContext};
 
@@ -117,6 +120,7 @@ impl<'a, 'w, 'de> DeserializeSeed<'de> for WorldVisitor<'a, 'w> {
 
 struct BundleValueVisitor<'a, 'w, T: BundleSerializer> {
     ctx: &'a mut DeserializeContext<'w>,
+    entity: Entity,
     _phantom: PhantomData<T>,
 }
 
@@ -124,7 +128,39 @@ impl<'a, 'w, 'de, T: BundleSerializer> DeserializeSeed<'de> for BundleValueVisit
     type Value = ();
 
     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error> where D: Deserializer<'de> {
-        T::deserialize(self.ctx, deserializer)
+        T::deserialize(self.ctx, deserializer, self.entity)
+    }
+}
+
+struct BundleValuePairVisitor<'a, 'w, T: BundleSerializer> {
+    ctx: &'a mut DeserializeContext<'w>,
+    _phantom: PhantomData<T>,
+}
+
+impl<'a, 'w, 'de, T: BundleSerializer> Visitor<'de> for BundleValuePairVisitor<'a, 'w, T> {
+    type Value = ();
+
+    fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+        write!(formatter, "a bundle tuple")
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'de> {
+        let entity = self.ctx.map_entity(seq.next_element::<EntityReference>()?
+            .ok_or_else(|| A::Error::custom("missing entity ID"))?);
+        seq.next_element_seed(BundleValueVisitor {
+            ctx: self.ctx,
+            entity,
+            _phantom: self._phantom,
+        })?;
+        Ok(())
+    }
+}
+
+impl<'a, 'w, 'de, T: BundleSerializer> DeserializeSeed<'de> for BundleValuePairVisitor<'a, 'w, T> {
+    type Value = ();
+
+    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error> where D: Deserializer<'de> {
+        deserializer.deserialize_tuple(2, self)
     }
 }
 
@@ -150,7 +186,7 @@ impl<'a, 'w, 'de, T: BundleSerializer> Visitor<'de> for BundleValuesVisitor<'a, 
     }
 
     fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'de> {
-        while let Some(_) = seq.next_element_seed(BundleValueVisitor {
+        while let Some(_) = seq.next_element_seed(BundleValuePairVisitor {
             ctx: self.ctx,
             _phantom: self._phantom,
         })? {}
