@@ -12,6 +12,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use yewoh::protocol::{AccountLogin, ClientVersion, GameServer, GameServerLogin, new_io, Seed, SelectGameServer, ServerList, SwitchServer};
 use yewoh::protocol::encryption::Encryption;
+use yewoh::types::FixedString;
 
 #[async_trait]
 pub trait Lobby {
@@ -41,7 +42,7 @@ pub async fn serve_lobby(mut lobby: impl Lobby, encrypted: bool, stream: TcpStre
         .ok()
         .ok_or_else(|| anyhow!("expected account login attempt"))?;
 
-    let user = lobby.login(login.username, login.password).await?;
+    let user = lobby.login(login.username.to_string(), login.password.to_string()).await?;
     let servers = lobby.list_servers(&user).await?;
     writer.send(seed.client_version, &servers).await?;
 
@@ -143,7 +144,7 @@ impl Lobby for LocalLobby {
             game_servers: vec![
                 GameServer {
                     server_index: 0,
-                    server_name: self.shared.server_name.to_string(),
+                    server_name: FixedString::from_str(&self.shared.server_name),
                     load_percent: self.shared.load.load(Ordering::Relaxed),
                     timezone: self.shared.timezone,
                     ip: self.shared.external_ip.into(),
@@ -226,13 +227,13 @@ impl SessionAllocator {
             None => return Err(anyhow!("no such session token")),
         };
 
-        if test_session.username != login.username {
+        if login.username.as_str() != &test_session.username {
             return Err(anyhow!("wrong user for session"));
         }
 
         self.pending_sessions.remove(&token);
         Ok(NewSession {
-            username: login.username,
+            username: login.username.to_string(),
         })
     }
 }

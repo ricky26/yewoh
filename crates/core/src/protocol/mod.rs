@@ -121,7 +121,7 @@ struct PacketRegistry {
     registrations: Vec<Option<PacketRegistration>>,
 }
 
-const MAX_PACKET_STRUCT_SIZE: usize = 128;
+const MAX_PACKET_STRUCT_SIZE: usize = 136;
 static PACKET_REGISTRY: OnceCell<PacketRegistry> = OnceCell::new();
 
 fn packet_registry() -> &'static PacketRegistry {

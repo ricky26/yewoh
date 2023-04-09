@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use yewoh::{Direction, EntityId, Notoriety};
 use yewoh::protocol::{EntityFlags, EntityTooltipLine, EquipmentSlot, UpsertEntityStats};
+use yewoh::types::FixedString;
 
 use crate::math::IVecExt;
 
@@ -229,7 +230,7 @@ impl Stats {
         UpsertEntityStats {
             id,
             max_info_level,
-            name: self.name.clone(),
+            name: FixedString::from_str(&self.name),
             allow_name_change: owned,
             race_and_gender: self.race_and_gender,
             hp: self.hp,

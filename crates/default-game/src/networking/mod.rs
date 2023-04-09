@@ -1,4 +1,5 @@
 use yewoh::protocol::{MessageKind, UnicodeTextMessage};
+use yewoh::types::FixedString;
 use yewoh_server::world::net::NetClient;
 use crate::hues;
 
@@ -25,8 +26,8 @@ impl NetClientExt for NetClient {
             text: message,
             hue,
             font,
-            language: "ENU".into(),
-            name: "System".into(),
+            language: FixedString::from_str("ENU"),
+            name: FixedString::from_str("System"),
             ..Default::default()
         }.into());
     }

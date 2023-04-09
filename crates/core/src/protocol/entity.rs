@@ -11,6 +11,7 @@ use strum_macros::FromRepr;
 use crate::{Direction, EntityId, EntityKind, Notoriety};
 use crate::protocol::client_version::{VERSION_GRID_INVENTORY, VERSION_HIGH_SEAS};
 use crate::protocol::PacketWriteExt;
+use crate::types::FixedString;
 
 use super::{ClientVersion, Endian, Packet, PacketReadExt};
 
@@ -798,7 +799,7 @@ impl Packet for UpsertContainerEquipment {
 pub struct UpsertEntityStats {
     pub id: EntityId,
     pub max_info_level: u8,
-    pub name: String,
+    pub name: FixedString<30>,
     pub allow_name_change: bool,
     pub race_and_gender: u8,
     pub hp: u16,
@@ -857,7 +858,7 @@ impl Packet for UpsertEntityStats {
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
-        let name = payload.read_str_block(30)?;
+        let name = payload.read_str_fixed()?;
         let hp = payload.read_u16::<Endian>()?;
         let max_hp = payload.read_u16::<Endian>()?;
         let allow_name_change = payload.read_u8()? != 0;
@@ -982,7 +983,7 @@ impl Packet for UpsertEntityStats {
         let level = self.max_info_level;
 
         writer.write_entity_id(self.id)?;
-        writer.write_str_block(&self.name, 30)?;
+        writer.write_str_fixed(&self.name)?;
         writer.write_u16::<Endian>(self.hp)?;
         writer.write_u16::<Endian>(self.max_hp)?;
         writer.write_u8(if self.allow_name_change { 1 } else { 0 })?;
@@ -1098,7 +1099,7 @@ impl Packet for RequestName {
 #[derive(Debug, Clone)]
 pub struct RenameEntity {
     pub target_id: EntityId,
-    pub name: String,
+    pub name: FixedString<30>,
 }
 
 impl Packet for RenameEntity {
@@ -1108,13 +1109,13 @@ impl Packet for RenameEntity {
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let target_id = payload.read_entity_id()?;
-        let name = payload.read_str_block(30)?;
+        let name = payload.read_str_fixed()?;
         Ok(Self { target_id, name })
     }
 
     fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.target_id)?;
-        writer.write_str_block(&self.name, 30)?;
+        writer.write_str_fixed(&self.name)?;
         Ok(())
     }
 }

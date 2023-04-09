@@ -2,6 +2,7 @@ use bevy_ecs::prelude::*;
 use bevy_reflect::prelude::*;
 
 use yewoh::protocol::{CharacterAnimation, CharacterProfile, ContextMenuEntry, DamageDealt, EntityFlags, MoveConfirm, MoveEntityReject, MoveReject, OpenContainer, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, Swing, WarMode};
+use yewoh::types::FixedString;
 use yewoh_server::world::entity::{AttackTarget, Character, CharacterEquipped, Container, EquippedBy, Flags, Location, Notorious, ParentContainer};
 use yewoh_server::world::events::{ContextMenuEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SingleClickEvent};
 use yewoh_server::world::input::ContextMenuRequest;
@@ -107,7 +108,7 @@ pub fn handle_double_click(
         if character.is_some() {
             client.send_packet(OpenPaperDoll {
                 id: net.id,
-                text: "Me, Myself and I".into(),
+                text: FixedString::from_str("Me, Myself and I"),
                 flags: Default::default(),
             }.into());
         }

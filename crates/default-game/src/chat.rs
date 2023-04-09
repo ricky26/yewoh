@@ -1,6 +1,7 @@
 use bevy_ecs::prelude::*;
 
 use yewoh::protocol::{MessageKind, Packet, UnicodeTextMessage};
+use yewoh::types::FixedString;
 use yewoh_server::world::entity::Stats;
 use yewoh_server::world::events::ChatRequestEvent;
 use yewoh_server::world::net::{broadcast, NetClient, NetEntity, Possessing};
@@ -31,9 +32,9 @@ pub fn handle_incoming_chat(
         broadcast(clients.iter().map(|(c, _)| c), UnicodeTextMessage {
             entity_id: Some(net.id),
             kind: MessageKind::Regular,
-            language: "ENG".to_string(),
+            language: FixedString::from_str("ENG"),
             text: request.text.clone(),
-            name: stats.name.to_string(),
+            name: FixedString::from_str(&stats.name),
             hue: 1234,
             font: 1,
             graphic_id: 0

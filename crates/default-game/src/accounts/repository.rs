@@ -7,6 +7,7 @@ use bevy_ecs::system::Resource;
 use tokio::sync::Mutex;
 
 use yewoh::protocol::{CharacterFromList, CharacterList, CreateCharacter};
+use yewoh::types::FixedString;
 use yewoh_server::world::entity::Stats;
 
 #[derive(Debug, Clone)]
@@ -56,7 +57,7 @@ impl AccountRepository for MemoryAccountRepository {
         let padding = MAX_CHARACTERS - user.characters.len();
         let characters = user.characters.keys()
             .map(|name| CharacterFromList {
-                name: name.clone(),
+                name: FixedString::from_str(&name),
                 ..Default::default()
             })
             .map(Some)
@@ -81,7 +82,7 @@ impl AccountRepository for MemoryAccountRepository {
             shirt_hue: request.shirt_hue,
             pants_hue: request.pants_hue,
             stats: Stats {
-                name: request.character_name.clone(),
+                name: request.character_name.to_string(),
                 race_and_gender: (request.race << 1) | if request.is_female { 1 } else { 0 },
                 str: request.str as u16,
                 dex: request.dex as u16,
@@ -99,7 +100,7 @@ impl AccountRepository for MemoryAccountRepository {
         let mut locked = self.locked.lock().await;
         let user = locked.users.entry(username.to_string())
             .or_insert_with(|| Default::default());
-        user.characters.insert(request.character_name.clone(), info.clone());
+        user.characters.insert(request.character_name.to_string(), info.clone());
         Ok(info)
     }
 

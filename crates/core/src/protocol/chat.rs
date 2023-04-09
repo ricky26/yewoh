@@ -6,6 +6,7 @@ use strum_macros::FromRepr;
 
 use crate::EntityId;
 use crate::protocol::{PacketReadExt, PacketWriteExt};
+use crate::types::FixedString;
 
 use super::{ClientVersion, Endian, Packet};
 
@@ -32,7 +33,7 @@ pub struct AsciiTextMessage {
     pub entity_id: Option<EntityId>,
     pub kind: MessageKind,
     pub text: String,
-    pub name: String,
+    pub name: FixedString<30>,
     pub hue: u16,
     pub font: u16,
     pub graphic_id: u16,
@@ -54,7 +55,7 @@ impl Packet for AsciiTextMessage {
             .ok_or_else(|| anyhow!("invalid message kind"))?;
         let hue = payload.read_u16::<Endian>()?;
         let font = payload.read_u16::<Endian>()?;
-        let name = payload.read_str_block(30)?;
+        let name = payload.read_str_fixed()?;
         let text = payload.read_str_nul()?;
         Ok(Self {
             entity_id,
@@ -77,7 +78,7 @@ impl Packet for AsciiTextMessage {
         writer.write_u8(self.kind as u8)?;
         writer.write_u16::<Endian>(self.hue)?;
         writer.write_u16::<Endian>(self.font)?;
-        writer.write_str_block(&self.name, 30)?;
+        writer.write_str_fixed(&self.name)?;
         writer.write_str_nul(&self.text)?;
         Ok(())
     }
@@ -87,9 +88,9 @@ impl Packet for AsciiTextMessage {
 pub struct UnicodeTextMessage {
     pub entity_id: Option<EntityId>,
     pub kind: MessageKind,
-    pub language: String,
+    pub language: FixedString<4>,
     pub text: String,
-    pub name: String,
+    pub name: FixedString<30>,
     pub hue: u16,
     pub font: u16,
     pub graphic_id: u16,
@@ -111,8 +112,8 @@ impl Packet for UnicodeTextMessage {
             .ok_or_else(|| anyhow!("invalid message kind"))?;
         let hue = payload.read_u16::<Endian>()?;
         let font = payload.read_u16::<Endian>()?;
-        let language = payload.read_str_block(4)?;
-        let name = payload.read_str_block(30)?;
+        let language = payload.read_str_fixed()?;
+        let name = payload.read_str_fixed()?;
         let text = payload.read_utf16_nul()?;
         Ok(Self {
             entity_id,
@@ -136,8 +137,8 @@ impl Packet for UnicodeTextMessage {
         writer.write_u8(self.kind as u8)?;
         writer.write_u16::<Endian>(self.hue)?;
         writer.write_u16::<Endian>(self.font)?;
-        writer.write_str_block(&self.language, 4)?;
-        writer.write_str_block(&self.name, 30)?;
+        writer.write_str_fixed(&self.language)?;
+        writer.write_str_fixed(&self.name)?;
         writer.write_utf16_nul(&self.text)?;
         Ok(())
     }
@@ -150,7 +151,7 @@ pub struct LocalisedTextMessage {
     pub kind: MessageKind,
     pub hue: u16,
     pub font: u16,
-    pub name: String,
+    pub name: FixedString<30>,
     pub text_id: u32,
     pub params: String,
 }
@@ -172,7 +173,7 @@ impl Packet for LocalisedTextMessage {
         let hue = payload.read_u16::<Endian>()?;
         let font = payload.read_u16::<Endian>()?;
         let text_id = payload.read_u32::<Endian>()?;
-        let name = payload.read_str_block(30)?;
+        let name = payload.read_str_fixed()?;
         let params = payload.read_utf16le_nul()?;
         Ok(Self {
             entity_id,
@@ -197,7 +198,7 @@ impl Packet for LocalisedTextMessage {
         writer.write_u16::<Endian>(self.hue)?;
         writer.write_u16::<Endian>(self.font)?;
         writer.write_u32::<Endian>(self.text_id)?;
-        writer.write_str_block(&self.name, 30)?;
+        writer.write_str_fixed(&self.name)?;
         writer.write_utf16le_nul(&self.params)?;
         Ok(())
     }
@@ -238,7 +239,7 @@ pub struct UnicodeTextMessageRequest {
     pub kind: MessageKind,
     pub hue: u16,
     pub font: u16,
-    pub language: String,
+    pub language: FixedString<4>,
     pub text: String,
     pub keywords: Vec<u16>,
 }
@@ -257,7 +258,7 @@ impl Packet for UnicodeTextMessageRequest {
             .ok_or_else(|| anyhow!("unknown message type"))?;
         let hue = payload.read_u16::<Endian>()?;
         let font = payload.read_u16::<Endian>()?;
-        let language = payload.read_str_block(4)?;
+        let language = payload.read_str_fixed()?;
         let mut keywords = Vec::new();
 
         let text = if kind_raw & Self::HAS_KEYWORDS != 0 {
@@ -297,7 +298,7 @@ impl Packet for UnicodeTextMessageRequest {
         writer.write_u8(raw_kind)?;
         writer.write_u16::<Endian>(self.hue)?;
         writer.write_u16::<Endian>(self.font)?;
-        writer.write_str_block(&self.language, 4)?;
+        writer.write_str_fixed(&self.language)?;
 
         if has_keywords {
             let mut to_write = self.keywords.len() as u16;

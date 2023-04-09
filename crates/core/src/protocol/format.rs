@@ -2,9 +2,10 @@ use std::io::Write;
 
 use anyhow::anyhow;
 use byteorder::{ByteOrder, LE, ReadBytesExt, WriteBytesExt};
-use encode_unicode::{Utf16Char, IterExt};
+use encode_unicode::{IterExt, Utf16Char};
 
 use crate::{Direction, EntityId};
+use crate::types::FixedString;
 
 use super::Endian;
 
@@ -12,6 +13,7 @@ static ZEROS: [u8; 1024] = [0u8; 1024];
 
 pub trait PacketWriteExt {
     fn write_zeros(&mut self, count: usize) -> anyhow::Result<()>;
+    fn write_str_fixed<const I: usize>(&mut self, src: &FixedString<I>) -> anyhow::Result<()>;
     fn write_str_block(&mut self, src: &str, block_size: usize) -> anyhow::Result<()>;
     fn write_str_nul(&mut self, src: &str) -> anyhow::Result<()>;
     fn write_utf16_nul(&mut self, src: &str) -> anyhow::Result<()>;
@@ -31,6 +33,10 @@ impl<T: Write> PacketWriteExt for T {
         }
 
         Ok(())
+    }
+
+    fn write_str_fixed<const I: usize>(&mut self, src: &FixedString<I>) -> anyhow::Result<()> {
+        Ok(self.write_all(&src.as_byte_array()[..])?)
     }
 
     fn write_str_block(&mut self, src: &str, block_size: usize) -> anyhow::Result<()> {
@@ -93,6 +99,7 @@ impl<T: Write> PacketWriteExt for T {
 
 pub trait PacketReadExt {
     fn skip(&mut self, count: usize) -> anyhow::Result<()>;
+    fn read_str_fixed<const I: usize>(&mut self) -> anyhow::Result<FixedString<I>>;
     fn read_str_block(&mut self, block_size: usize) -> anyhow::Result<String>;
     fn read_str_nul(&mut self) -> anyhow::Result<String>;
     fn read_utf16_nul(&mut self) -> anyhow::Result<String>;
@@ -110,6 +117,21 @@ impl PacketReadExt for &[u8] {
         } else {
             *self = &self[count..];
             Ok(())
+        }
+    }
+
+    fn read_str_fixed<const I: usize>(&mut self) -> anyhow::Result<FixedString<I>> {
+        if self.len() < I {
+            Err(anyhow!("unexpected EOF"))
+        } else {
+            let mut str_ref = std::str::from_utf8(&self[..I])?;
+            if let Some(idx) = str_ref.find('\0') {
+                str_ref = &str_ref[..idx];
+            }
+
+            let result = TryFrom::try_from(str_ref)?;
+            *self = &self[I..];
+            Ok(result)
         }
     }
 
