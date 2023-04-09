@@ -5,7 +5,7 @@ use glam::{IVec2, IVec3};
 use tokio::sync::mpsc;
 
 use yewoh::{Direction, Notoriety};
-use yewoh::protocol::{CharacterList, CharacterListFlags, EntityFlags, EntityTooltipLine, EquipmentSlot, UnicodeTextMessage};
+use yewoh::protocol::{CharacterList, CharacterListFlags, EntityFlags, EntityTooltipLine, EquipmentSlot};
 use yewoh_server::async_runtime::AsyncRuntime;
 use yewoh_server::world::entity::{Character, CharacterEquipped, Container, EquippedBy, Flags, Graphic, Location, Notorious, ParentContainer, Tooltip};
 use yewoh_server::world::events::{CharacterListEvent, CreateCharacterEvent, SelectCharacterEvent};
@@ -159,17 +159,11 @@ pub fn handle_select_character<T: AccountRepository>(
 
 pub fn handle_spawn_character(
     entity_allocator: Res<NetEntityAllocator>,
-    clients: Query<&NetClient>,
     mut pending: ResMut<PendingCharacterInfo>,
     mut commands: Commands,
 ) {
     while let Ok((entity, result)) = pending.rx.try_recv() {
         let client_entity = entity;
-        let client = match clients.get(client_entity) {
-            Ok(x) => x,
-            _ => continue,
-        };
-
         let info = match result {
             Ok(x) => x,
             Err(err) => {
@@ -328,12 +322,6 @@ pub fn handle_spawn_character(
         }
 
         commands.entity(client_entity).insert(Possessing { entity: primary_entity });
-        client.send_packet(UnicodeTextMessage {
-            text: "Avast me hearties".to_string(),
-            hue: 120,
-            font: 3,
-            ..Default::default()
-        }.into());
         log::info!("Spawned character for {:?} = {:?}", client_entity, primary_entity);
     }
 }

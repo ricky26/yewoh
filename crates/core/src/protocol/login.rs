@@ -5,6 +5,7 @@ use anyhow::anyhow;
 use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use glam::{IVec3, UVec2};
+use strum_macros::FromRepr;
 
 use crate::{Direction, EntityId};
 use crate::protocol::{PacketReadExt, PacketWriteExt};
@@ -492,11 +493,24 @@ pub struct InitialCharacterVisual {
     pub hue: u16,
 }
 
+#[derive(Debug, Copy, Clone, FromRepr)]
+#[repr(u8)]
+pub enum NewCharacterProfession {
+    Custom = 0,
+    Warrior = 1,
+    Magician = 2,
+    Blacksmith = 3,
+    Necromancer = 4,
+    Paladin = 5,
+    Samurai = 6,
+    Ninja = 7,
+}
+
 #[derive(Debug, Clone)]
 pub struct CreateCharacter {
     pub client_flags: ClientFlags,
     pub character_name: String,
-    pub profession: u8,
+    pub profession: NewCharacterProfession,
     pub is_female: bool,
     pub race: u8,
     pub str: u8,
@@ -533,7 +547,8 @@ impl CreateCharacter {
 
         let client_flags = ClientFlags::from_bits_truncate(payload.read_u32::<Endian>()?);
         payload.skip(8)?;
-        let profession = payload.read_u8()?;
+        let profession = NewCharacterProfession::from_repr(payload.read_u8()?)
+            .ok_or_else(|| anyhow!("invalid profession"))?;
         payload.skip(15)?;
 
         let race_and_gender = payload.read_u8()?;
@@ -605,7 +620,7 @@ impl CreateCharacter {
         writer.write_u32::<Endian>(self.client_flags.bits())?;
         writer.write_u32::<Endian>(1)?;
         writer.write_u32::<Endian>(0)?;
-        writer.write_u8(self.profession)?;
+        writer.write_u8(self.profession as u8)?;
         writer.write_zeros(15)?;
 
         let mut race_and_gender = if self.is_female { 1 } else { 0 };
