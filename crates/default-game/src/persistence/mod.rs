@@ -7,7 +7,7 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::query::{ReadOnlyWorldQuery, WorldQuery};
 use bevy_ecs::schedule::ScheduleLabel;
 use bevy_ecs::system::{Deferred, Query, Resource, SystemBuffer, SystemMeta, SystemParam};
-use bevy_ecs::world::{FromWorld, World};
+use bevy_ecs::world::{FromWorld, Mut, World};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Error as DError;
 use serde::ser::SerializeStruct;
@@ -182,10 +182,16 @@ impl BundleSerializers {
 }
 
 pub trait SerializationWorldExt {
+    fn deserialize<'de, D: Deserializer<'de>>(&mut self, d: D) -> Result<(), D::Error>;
     fn serialize(&mut self) -> SerializedBuffers;
 }
 
 impl SerializationWorldExt for World {
+    fn deserialize<'de, D: Deserializer<'de>>(&mut self, d: D) -> Result<(), D::Error> {
+        self.resource_scope(|world, serializers: Mut<BundleSerializers>|
+            serializers.deserialize_into_world(world, d))
+    }
+
     fn serialize(&mut self) -> SerializedBuffers {
         self.insert_resource(SerializedBuffers::default());
         self.run_schedule(SerializeSchedule);
@@ -212,6 +218,7 @@ pub struct PersistencePlugin;
 impl Plugin for PersistencePlugin {
     fn build(&self, app: &mut App) {
         app
-            .init_schedule(SerializeSchedule);
+            .init_schedule(SerializeSchedule)
+            .init_resource::<BundleSerializers>();
     }
 }

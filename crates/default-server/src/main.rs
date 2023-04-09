@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::io::Cursor;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -32,6 +33,8 @@ use yewoh_server::lobby::{listen_for_lobby, LocalLobby};
 use yewoh_server::world::map::{Chunk, create_map_entities, create_statics, MultiDataResource, Static, TileDataResource};
 use yewoh_server::world::net::{NetCommandsExt, NetServer};
 use yewoh_server::world::ServerPlugin;
+
+const SAVE_PATH: &'static str = "test.json";
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
@@ -146,6 +149,13 @@ fn main() -> anyhow::Result<()> {
         .insert_resource(MultiDataResource { multi_data })
         .add_system(scheduled_save.in_base_set(CoreSet::Last));
 
+    // Load previous state
+    if Path::new(SAVE_PATH).is_file() {
+        let contents = std::fs::read(SAVE_PATH)?;
+        let mut d = serde_json::Deserializer::from_reader(Cursor::new(&contents));
+        app.world.deserialize(&mut d)?;
+    }
+
     static SHOULD_EXIT: AtomicBool = AtomicBool::new(false);
     ctrlc::set_handler(|| {
         info!("Shutting down...");
@@ -241,7 +251,7 @@ async fn write_save(buffers: SerializedBuffers) -> anyhow::Result<()> {
     let mut output = Vec::new();
     let mut s = serde_json::Serializer::new(&mut output);
     buffers.serialize(&mut s)?;
-    tokio::fs::write("test.json", &output).await?;
+    tokio::fs::write(SAVE_PATH, &output).await?;
     Ok(())
 }
 
