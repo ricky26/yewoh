@@ -16,6 +16,8 @@ pub mod info;
 
 pub mod go;
 
+pub mod spawn;
+
 pub struct CommandsPlugin;
 
 impl Plugin for CommandsPlugin {
@@ -28,6 +30,7 @@ impl Plugin for CommandsPlugin {
             .add_text_command::<test::Echo>()
             .add_text_command::<test::FryPan>()
             .add_text_command::<test::TestGump>()
+            .add_text_command::<spawn::Spawn>()
             .add_systems((
                 info::info,
                 info::start_info,
@@ -35,6 +38,8 @@ impl Plugin for CommandsPlugin {
                 test::echo,
                 test::frypan,
                 test::test_gump,
+                spawn::start_spawn,
+                spawn::spawn,
             ).in_base_set(CoreSet::Update));
     }
 }

@@ -41,6 +41,10 @@ pub mod ai;
 
 pub mod persistence;
 
+pub mod networking;
+
+pub mod hues;
+
 #[derive(Default)]
 pub struct DefaultGamePlugins;
 
