@@ -30,3 +30,4 @@ chrono = "0.4.24"
 rand = "0.8.5"
 humantime = "2.1.0"
 humantime-serde = "1.1.1"
+sqlx = { version = "0.7.0-alpha.2", features = ["postgres", "runtime-tokio", "tls-rustls", "macros", "migrate", "chrono", "uuid", "json"] }
