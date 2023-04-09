@@ -13,6 +13,7 @@ use crate::chat::handle_incoming_chat;
 use crate::commands::CommandsPlugin;
 use crate::data::prefab::PrefabPlugin;
 use crate::items::ItemsPlugin;
+use crate::persistence::PersistencePlugin;
 use crate::spawners::SpawnersPlugin;
 use crate::time::send_time;
 
@@ -38,6 +39,8 @@ pub mod items;
 
 pub mod ai;
 
+pub mod persistence;
+
 #[derive(Default)]
 pub struct DefaultGamePlugins;
 
@@ -53,6 +56,7 @@ impl PluginGroup for DefaultGamePlugins {
             .add(ItemsPlugin)
             .add(SpawnersPlugin)
             .add(AiPlugin)
+            .add(PersistencePlugin)
     }
 }
 

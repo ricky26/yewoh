@@ -3,12 +3,14 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context};
 use bevy::ecs::system::CommandQueue;
 use bevy::log::LogPlugin;
 use bevy::prelude::*;
+use bevy::time::Time;
 use clap::Parser;
 use futures::future::join;
 use log::info;
@@ -23,6 +25,7 @@ use yewoh::assets::tiles::load_tile_data;
 use yewoh_default_game::data::prefab::{Prefab, PrefabCollection, PrefabCommandsExt, PrefabFactory};
 use yewoh_default_game::data::static_data;
 use yewoh_default_game::DefaultGamePlugins;
+use yewoh_default_game::persistence::{SerializationWorldExt, SerializedBuffers};
 use yewoh_server::async_runtime::AsyncRuntime;
 use yewoh_server::game_server::listen_for_game;
 use yewoh_server::lobby::{listen_for_lobby, LocalLobby};
@@ -140,7 +143,14 @@ fn main() -> anyhow::Result<()> {
         .insert_resource(map_infos)
         .insert_resource(static_data)
         .insert_resource(TileDataResource { tile_data })
-        .insert_resource(MultiDataResource { multi_data });
+        .insert_resource(MultiDataResource { multi_data })
+        .add_system(scheduled_save.in_base_set(CoreSet::Last));
+
+    static SHOULD_EXIT: AtomicBool = AtomicBool::new(false);
+    ctrlc::set_handler(|| {
+        info!("Shutting down...");
+        SHOULD_EXIT.store(true, Ordering::Relaxed);
+    }).expect("failed to register shutdown handler");
 
     info!("Listening for http connections on {}", &args.http_bind);
     info!("Listening for lobby connections on {}", &args.lobby_bind);
@@ -148,6 +158,11 @@ fn main() -> anyhow::Result<()> {
 
     let frame_wait = Duration::from_millis(20);
     loop {
+        if SHOULD_EXIT.load(Ordering::Relaxed) {
+            rt.block_on(write_save(app.world.serialize()))?;
+            return Ok(());
+        }
+
         let start_time = Instant::now();
         app.update();
 
@@ -210,4 +225,35 @@ async fn load_static_entities(world: &mut World, path: &Path) -> anyhow::Result<
     queue.apply(world);
     log::info!("Spawned {count} entities");
     Ok(())
+}
+
+struct SaveTimer {
+    timer: Timer,
+}
+
+impl Default for SaveTimer {
+    fn default() -> Self {
+        Self { timer: Timer::new(Duration::from_secs(30), TimerMode::Repeating) }
+    }
+}
+
+async fn write_save(buffers: SerializedBuffers) -> anyhow::Result<()> {
+    let mut output = Vec::new();
+    let mut s = serde_json::Serializer::new(&mut output);
+    buffers.serialize(&mut s)?;
+    tokio::fs::write("test.json", &output).await?;
+    Ok(())
+}
+
+fn scheduled_save(world: &mut World, mut timer: Local<SaveTimer>) {
+    if !timer.timer.tick(world.resource::<Time>().delta()).just_finished() {
+        return;
+    }
+
+    let buffers = world.serialize();
+    world.resource::<AsyncRuntime>().spawn(async move {
+        if let Err(e) = write_save(buffers).await {
+            log::warn!("failed to save: {e}");
+        }
+    });
 }
