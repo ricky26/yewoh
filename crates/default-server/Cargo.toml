@@ -24,3 +24,4 @@ log = "0.4.17"
 axum = "0.6.12"
 glam = "0.23.0"
 ctrlc = { version = "3.2.5", features = ["termination"] }
+sqlx = { version = "0.7.0-alpha.2", features = ["postgres", "runtime-tokio", "tls-rustls", "macros", "migrate", "chrono", "uuid", "json"] }

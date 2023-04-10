@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use bevy_app::{App, IntoSystemAppConfig, Plugin};
-use bevy_ecs::bundle::Bundle;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::query::{ReadOnlyWorldQuery, WorldQuery};
 use bevy_ecs::schedule::ScheduleLabel;
@@ -11,6 +10,8 @@ use bevy_ecs::world::{FromWorld, Mut, World};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Error as DError;
 use serde::ser::SerializeStruct;
+use sqlx::{Database, Pool};
+use sqlx::migrate::Migrate;
 
 use de::{BundleValuesVisitor, WorldVisitor};
 use ser::{BufferBundlesSerializer, BufferSerializer, ErasedOk};
@@ -18,7 +19,17 @@ use crate::persistence::prefab::PrefabSerializer;
 
 mod ser;
 mod de;
-mod prefab;
+pub mod prefab;
+pub mod entity;
+pub mod db;
+
+pub async fn migrate<D: Database>(db: &Pool<D>) -> anyhow::Result<()>
+    where <D as Database>::Connection: Migrate {
+    sqlx::migrate!("./migrations")
+        .run(db)
+        .await?;
+    Ok(())
+}
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EntityReference(u32);
@@ -50,12 +61,12 @@ impl SerializeContext {
     }
 }
 
-pub struct DeserializeContext<'a> {
+pub struct DeserializeContext<'w> {
     entity_map: HashMap<EntityReference, Entity>,
-    world: &'a mut World,
+    world: &'w mut World,
 }
 
-impl<'a> DeserializeContext<'a> {
+impl<'w> DeserializeContext<'w> {
     pub fn world_mut(&mut self) -> &mut World {
         self.world
     }
@@ -72,7 +83,7 @@ pub struct SerializeSchedule;
 pub trait BundleSerializer: FromWorld + Send + 'static {
     type Query: ReadOnlyWorldQuery;
     type Filter: ReadOnlyWorldQuery;
-    type Bundle: Bundle;
+    type Bundle: Send + Sync + 'static;
 
     fn id() -> &'static str;
     fn extract(item: <Self::Query as WorldQuery>::Item<'_>) -> Self::Bundle;
@@ -116,6 +127,10 @@ impl<T: BundleSerializer> FromWorld for SerializedBundlesBuffer<T> {
 impl<T: BundleSerializer> SystemBuffer for SerializedBundlesBuffer<T> {
     fn apply(&mut self, _system_meta: &SystemMeta, world: &mut World) {
         let items = std::mem::take(&mut self.items);
+        if items.is_empty() {
+            return;
+        }
+
         let serialize = move |ctx: &SerializeContext, s: &mut dyn erased_serde::Serializer|
             erased_serde::serialize(&BufferSerializer::<T>::new(ctx, &items), s);
 
