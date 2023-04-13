@@ -30,12 +30,13 @@ use yewoh_default_game::DefaultGamePlugins;
 use yewoh_default_game::persistence::{migrate, SerializationWorldExt, SerializedBuffers};
 use yewoh_server::async_runtime::AsyncRuntime;
 use yewoh_server::game_server::listen_for_game;
-use yewoh_server::lobby::{listen_for_lobby, LocalLobby};
+use yewoh_server::lobby::{listen_for_lobby, LocalServerRepository};
 use yewoh_server::world::map::{Chunk, create_map_entities, create_statics, MultiDataResource, Static, TileDataResource};
 use yewoh_server::world::net::{NetCommandsExt, NetServer};
 use yewoh_server::world::ServerPlugin;
 
 use sqlx::postgres::PgPool;
+use yewoh_default_game::accounts::sql::{SqlAccountRepository, SqlAccountRepositoryConfig};
 use yewoh_default_game::persistence::db::WorldRepository;
 
 #[derive(Parser, Debug)]
@@ -80,6 +81,9 @@ struct Args {
     /// The shard ID of this server.
     #[clap(long, default_value = "default", env = "YEWOH_SHARD_ID")]
     shard_id: String,
+
+    #[clap(long, default_value = "false", env = "YEWOH_AUTO_CREATE_ACCOUNTS")]
+    auto_create_accounts: bool,
 }
 
 #[tokio::main]
@@ -88,7 +92,23 @@ async fn main() -> anyhow::Result<()> {
     let pool = Arc::new(PgPool::connect(&args.postgres).await?);
     migrate(&pool).await?;
 
+    let external_ip = lookup_host(format!("{}:0", &args.advertise_address)).await?
+        .filter_map(|entry| match entry {
+            SocketAddr::V4(v4) => Some(*v4.ip()),
+            _ => None,
+        })
+        .next()
+        .ok_or_else(|| anyhow!("couldn't resolve {}", &args.advertise_address))?;
+    let game_port = SocketAddr::from_str(&args.game_bind)?.port();
+    let (new_session_requests_tx, new_session_requests) = mpsc::unbounded_channel();
+
+    let server_repo = LocalServerRepository::new(
+        args.server_display_name, external_ip, game_port, 0, new_session_requests_tx);
+    let accounts_repo = SqlAccountRepository::new(SqlAccountRepositoryConfig {
+        auto_create_accounts: args.auto_create_accounts,
+    }, pool.clone());
     let world_repo = WorldRepository::new(pool.clone(), args.shard_id.clone());
+
     let mut app = App::new();
     app
         .add_plugins(MinimalPlugins)
@@ -120,19 +140,6 @@ async fn main() -> anyhow::Result<()> {
     info!("Spawned {} statics", query.iter(&app.world).count());
     load_static_entities(&mut app.world, &args.data_path.join("entities")).await?;
 
-    let external_ip = lookup_host(format!("{}:0", &args.advertise_address)).await?
-        .filter_map(|entry| match entry {
-            SocketAddr::V4(v4) => Some(*v4.ip()),
-            _ => None,
-        })
-        .next()
-        .ok_or_else(|| anyhow!("couldn't resolve {}", &args.advertise_address))?;
-
-    let game_port = SocketAddr::from_str(&args.game_bind)?.port();
-    let (new_session_requests_tx, new_session_requests) = mpsc::unbounded_channel();
-    let lobby = LocalLobby::new(
-        args.server_display_name, external_ip, game_port, 0, new_session_requests_tx);
-
     let (lobby_listener, game_listener) = join(
         TcpListener::bind(&args.lobby_bind),
         TcpListener::bind(&args.game_bind),
@@ -141,7 +148,10 @@ async fn main() -> anyhow::Result<()> {
     let lobby_listener = lobby_listener?;
     let game_listener = game_listener?;
 
-    let lobby_handle = tokio::spawn(listen_for_lobby(lobby_listener, args.encryption, move || lobby.clone()));
+    let accounts_repo_clone = accounts_repo.clone();
+    let lobby_handle = tokio::spawn(listen_for_lobby(
+        lobby_listener, args.encryption,
+        move || server_repo.clone(), move || accounts_repo_clone.clone()));
 
     let (new_session_tx, new_session_rx) = mpsc::unbounded_channel();
     let game_handle = tokio::spawn(listen_for_game(game_listener, new_session_tx));
@@ -158,6 +168,7 @@ async fn main() -> anyhow::Result<()> {
         .insert_resource(TileDataResource { tile_data })
         .insert_resource(MultiDataResource { multi_data })
         .insert_resource(world_repo.clone())
+        .insert_resource(accounts_repo.clone())
         .add_system(scheduled_save.in_base_set(CoreSet::Last));
 
     // Load previous state

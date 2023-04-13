@@ -12,6 +12,7 @@ use crate::characters::CharactersPlugin;
 use crate::chat::handle_incoming_chat;
 use crate::commands::CommandsPlugin;
 use crate::data::prefab::PrefabPlugin;
+use crate::entities::EntitiesPlugin;
 use crate::items::ItemsPlugin;
 use crate::persistence::PersistencePlugin;
 use crate::spawners::SpawnersPlugin;
@@ -56,9 +57,10 @@ impl PluginGroup for DefaultGamePlugins {
             .add(PrefabPlugin)
             .add(PersistencePlugin)
             .add(CommandsPlugin)
-            .add(AccountsPlugin)
+            .add(AccountsPlugin::<accounts::sql::SqlAccountRepository>::default())
             .add(DefaultGamePlugin)
             .add(ActivitiesPlugin)
+            .add(EntitiesPlugin)
             .add(CharactersPlugin)
             .add(ItemsPlugin)
             .add(SpawnersPlugin)

@@ -113,7 +113,7 @@ impl SerializedBuffers {
 }
 
 pub struct SerializedBundlesBuffer<T: BundleSerializer> {
-    items: Vec<T::Bundle>,
+    items: Vec<(Entity, T::Bundle)>,
 }
 
 impl<T: BundleSerializer> FromWorld for SerializedBundlesBuffer<T> {
@@ -149,20 +149,21 @@ pub struct SerializedBundles<'s, T: BundleSerializer> {
 }
 
 impl<'w, T: BundleSerializer> SerializedBundles<'w, T> {
-    pub fn push(&mut self, bundle: T::Bundle) {
-        self.deferred.items.push(bundle);
+    pub fn push(&mut self, entity: Entity, bundle: T::Bundle) {
+        self.deferred.items.push((entity, bundle));
     }
 
-    pub fn extend(&mut self, bundles: impl Iterator<Item=T::Bundle>) {
+    pub fn extend(&mut self, bundles: impl Iterator<Item=(Entity, T::Bundle)>) {
         self.deferred.items.extend(bundles);
     }
 }
 
 fn extract_bundles<T: BundleSerializer>(
-    query: Query<T::Query, T::Filter>,
+    query: Query<(Entity, T::Query), T::Filter>,
     mut bundles: SerializedBundles<T>,
 ) {
-    bundles.extend(query.iter().map(|item| T::extract(item)));
+    bundles.extend(query.iter()
+        .map(|(entity, item)| (entity, T::extract(item))));
 }
 
 fn deserialize_bundles<T: BundleSerializer>(ctx: &mut DeserializeContext, d: &mut dyn erased_serde::Deserializer) -> Result<(), erased_serde::Error> {

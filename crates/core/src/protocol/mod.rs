@@ -135,6 +135,7 @@ fn packet_registry() -> &'static PacketRegistry {
             // Login
             PacketRegistration::for_type::<Seed>(),
             PacketRegistration::for_type::<AccountLogin>(),
+            PacketRegistration::for_type::<LoginError>(),
             PacketRegistration::for_type::<ServerList>(),
             PacketRegistration::for_type::<SelectGameServer>(),
             PacketRegistration::for_type::<SwitchServer>(),

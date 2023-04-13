@@ -98,6 +98,33 @@ impl Packet for AccountLogin {
     }
 }
 
+#[derive(Debug, Clone, FromRepr)]
+#[repr(u8)]
+pub enum LoginError {
+    InvalidUsernamePassword = 0x00,
+    AccountInUse = 0x01,
+    AccountBlocked = 0x02,
+    InvalidCredentials = 0x03,
+    CommunicationProblem = 0x04,
+    IgrConcurrencyLimit = 0x05,
+    IgrTimeLimit = 0x06,
+    IgrAuthenticationFailure = 0x07,
+}
+
+impl Packet for LoginError {
+    fn packet_kind() -> u8 { 0x82 }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        Ok(LoginError::from_repr(payload.read_u8()?).ok_or_else(|| anyhow!("invalid login error"))?)
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        Ok(writer.write_u8(self.clone() as u8)?)
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct GameServer {
     pub server_index: u16,

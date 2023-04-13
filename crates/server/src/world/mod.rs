@@ -2,7 +2,7 @@ use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
 use crate::world::entity::{AttackTarget, Character, Container, EquippedBy, Flags, Graphic, Location, Multi, Notorious, ParentContainer, Quantity, Stats, Tooltip};
 
-use crate::world::events::{AttackRequestedEvent, CharacterListEvent, ChatRequestEvent, ContextMenuEvent, CreateCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
+use crate::world::events::{AttackRequestedEvent, CharacterListEvent, ChatRequestEvent, ContextMenuEvent, CreateCharacterEvent, DeleteCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::input::{handle_attack_packets, handle_context_menu_packets, send_context_menu, update_targets};
 use crate::world::net::{accept_new_clients, add_new_entities_to_lookup, finish_synchronizing, handle_input_packets, handle_login_packets, handle_new_packets, MapInfos, NetEntityAllocator, NetEntityLookup, remove_old_entities_from_lookup, send_change_map, send_ghost_updates, send_tooltips, send_updated_attack_target, start_synchronizing, sync_nearby, update_equipped_items, update_items_in_containers, update_nearby, update_nearby_moving, update_stats, update_tooltips};
 use crate::world::spatial::{EntityPositions, EntitySurfaces, NetClientPositions, update_client_positions, update_entity_positions, update_entity_surfaces};
@@ -64,6 +64,7 @@ impl Plugin for ServerPlugin {
             .add_event::<CharacterListEvent>()
             .add_event::<CreateCharacterEvent>()
             .add_event::<SelectCharacterEvent>()
+            .add_event::<DeleteCharacterEvent>()
             .add_event::<MoveEvent>()
             .add_event::<SingleClickEvent>()
             .add_event::<DoubleClickEvent>()

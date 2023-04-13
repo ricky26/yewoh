@@ -1,3 +1,4 @@
+use bevy_ecs::entity::Entity;
 use serde::{Serialize, Serializer};
 use serde::ser::{Error as SError, SerializeSeq, SerializeTuple};
 
@@ -57,6 +58,24 @@ impl<'a, T: BundleSerializer> Serialize for BufferValueSerializer<'a, T> {
     }
 }
 
+struct BufferValuePairSerializer<'a, T: BundleSerializer> {
+    ctx: &'a SerializeContext,
+    entity: Entity,
+    bundle: &'a T::Bundle,
+}
+
+impl<'a, T: BundleSerializer> Serialize for BufferValuePairSerializer<'a, T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+        let mut seq = serializer.serialize_seq(Some(2))?;
+        seq.serialize_element(&self.ctx.map_entity(self.entity))?;
+        seq.serialize_element(&BufferValueSerializer::<T> {
+            ctx: self.ctx,
+            bundle: self.bundle,
+        })?;
+        seq.end()
+    }
+}
+
 struct BufferValuesSerializer<'a> {
     ctx: &'a SerializeContext,
     buffer: &'a SerializedBuffer,
@@ -71,7 +90,7 @@ impl<'a> Serialize for BufferValuesSerializer<'a> {
 
         impl<'a> erased_serde::Serialize for Thunk<'a> {
             fn erased_serialize(&self, serializer: &mut dyn erased_serde::Serializer) -> Result<ErasedOk, erased_serde::Error> {
-                (self.buffer.serialize)(self.ctx, &mut <dyn erased_serde::Serializer>::erase(serializer))
+                (self.buffer.serialize)(self.ctx, serializer)
             }
         }
 
@@ -81,11 +100,11 @@ impl<'a> Serialize for BufferValuesSerializer<'a> {
 
 pub(crate) struct BufferSerializer<'a, T: BundleSerializer> {
     ctx: &'a SerializeContext,
-    bundles: &'a [T::Bundle],
+    bundles: &'a [(Entity, T::Bundle)],
 }
 
 impl<'a, T: BundleSerializer> BufferSerializer<'a, T> {
-    pub fn new(ctx: &'a SerializeContext, bundles: &'a [T::Bundle]) -> Self {
+    pub fn new(ctx: &'a SerializeContext, bundles: &'a [(Entity, T::Bundle)]) -> Self {
         Self { ctx, bundles }
     }
 }
@@ -93,8 +112,12 @@ impl<'a, T: BundleSerializer> BufferSerializer<'a, T> {
 impl<'a, T: BundleSerializer> Serialize for BufferSerializer<'a, T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
         let mut seq = serializer.serialize_seq(Some(self.bundles.len()))?;
-        for bundle in self.bundles {
-            seq.serialize_element(&BufferValueSerializer::<T> { ctx: self.ctx, bundle })?;
+        for (entity, bundle) in self.bundles {
+            seq.serialize_element(&BufferValuePairSerializer::<T> {
+                ctx: self.ctx,
+                entity: entity.clone(),
+                bundle,
+            })?;
         }
         seq.end()
     }

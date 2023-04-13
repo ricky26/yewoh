@@ -5,7 +5,7 @@ use bevy_ecs::prelude::*;
 use bevy_ecs::reflect::ReflectMapEntities;
 use bevy_reflect::prelude::*;
 use glam::{IVec2, IVec3};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use yewoh::{Direction, EntityId, Notoriety};
 use yewoh::protocol::{EntityFlags, EntityTooltipLine, EquipmentSlot, UpsertEntityStats};
@@ -13,12 +13,25 @@ use yewoh::types::FixedString;
 
 use crate::math::IVecExt;
 
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Reflect, Component, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Reflect, Component)]
 #[reflect(Component, Serialize, Deserialize)]
 pub struct Flags {
     #[reflect(ignore)]
-    #[serde(flatten)]
     pub flags: EntityFlags,
+}
+
+impl Serialize for Flags {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+        self.flags.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Flags {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+        Ok(Flags {
+            flags: EntityFlags::deserialize(deserializer)?,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Reflect, Component, Serialize, Deserialize)]
@@ -69,7 +82,7 @@ pub struct EquippedBy {
 
 impl FromWorld for EquippedBy {
     fn from_world(_world: &mut World) -> Self {
-       EquippedBy { parent: Entity::PLACEHOLDER, slot: EquipmentSlot::default() }
+        EquippedBy { parent: Entity::PLACEHOLDER, slot: EquipmentSlot::default() }
     }
 }
 
@@ -170,7 +183,7 @@ impl MapEntities for ParentContainer {
     }
 }
 
-#[derive(Debug, Clone, Default, Component, Reflect, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Component, Reflect, Eq, PartialEq, Serialize, Deserialize)]
 #[reflect(Component)]
 pub struct Stats {
     pub name: String,

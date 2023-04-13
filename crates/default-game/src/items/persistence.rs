@@ -9,7 +9,7 @@ use serde::de::{DeserializeSeed, Error, MapAccess, Visitor};
 use serde::ser::SerializeMap;
 
 use yewoh::protocol::EquipmentSlot;
-use yewoh_server::world::entity::{Container, EquippedBy, Flags, Graphic, ParentContainer};
+use yewoh_server::world::entity::{Container, EquippedBy, Flags, Graphic, Location, ParentContainer};
 
 use crate::entities::Persistent;
 use crate::persistence::{BundleSerializer, DeserializeContext, SerializeContext};
@@ -27,6 +27,7 @@ impl BundleSerializer for ItemSerializer {
     type Query = (
         &'static Graphic,
         &'static Flags,
+        Option<&'static Location>,
         Option<&'static Container>,
         Option<&'static ParentContainer>,
         Option<&'static EquippedBy>,
@@ -35,6 +36,7 @@ impl BundleSerializer for ItemSerializer {
     type Bundle = (
         Graphic,
         Flags,
+        Option<Location>,
         Option<Container>,
         Option<ParentContainer>,
         Option<EquippedBy>,
@@ -48,6 +50,7 @@ impl BundleSerializer for ItemSerializer {
         let (
             graphic,
             flags,
+            location,
             container,
             parent_container,
             equipped_by,
@@ -55,6 +58,7 @@ impl BundleSerializer for ItemSerializer {
         (
             graphic.clone(),
             flags.clone(),
+            location.cloned(),
             container.cloned(),
             parent_container.cloned(),
             equipped_by.cloned(),
@@ -65,6 +69,7 @@ impl BundleSerializer for ItemSerializer {
         let (
             graphic,
             flags,
+            location,
             container,
             parent_container,
             equipped_by,
@@ -72,6 +77,10 @@ impl BundleSerializer for ItemSerializer {
         let mut map = s.serialize_map(None)?;
         map.serialize_entry("graphic", graphic)?;
         map.serialize_entry("flags", flags)?;
+
+        if let Some(location) = location {
+            map.serialize_entry("location", location)?;
+        }
 
         if let Some(container) = container {
             map.serialize_entry("container", &ContainerSerializer { ctx, container })?;
@@ -106,6 +115,7 @@ impl BundleSerializer for ItemSerializer {
                 let entity = self.entity;
                 let mut graphic = None;
                 let mut flags = Flags::default();
+                let mut location = None;
                 let mut container = None;
                 let mut parent_container = None;
                 let mut equipped_by = None;
@@ -114,6 +124,7 @@ impl BundleSerializer for ItemSerializer {
                     match key.as_str() {
                         "graphic" => graphic = Some(map.next_value::<Graphic>()?),
                         "flags" => flags = map.next_value()?,
+                        "location" => location = Some(map.next_value::<Location>()?),
                         "container" => container = Some(map.next_value_seed(ContainerVisitor { ctx })?),
                         "parent_container" => parent_container = Some(map.next_value_seed(ParentContainerVisitor { ctx })?),
                         "equipped_by" => equipped_by = Some(map.next_value_seed(EquippedByVisitor { ctx })?),
@@ -127,7 +138,11 @@ impl BundleSerializer for ItemSerializer {
                 };
 
                 let mut entity_ref = ctx.world_mut().entity_mut(entity);
-                entity_ref.insert((graphic, flags));
+                entity_ref.insert((graphic, flags, Persistent));
+
+                if let Some(location) = location {
+                    entity_ref.insert(location);
+                }
 
                 if let Some(container) = container {
                     entity_ref.insert(container);

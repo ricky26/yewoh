@@ -12,10 +12,13 @@ use crate::characters::animation::AnimationStartedEvent;
 
 use crate::characters::prefabs::CharacterPrefab;
 use crate::data::prefab::PrefabAppExt;
+use crate::persistence::SerializationSetupExt;
 
 pub mod prefabs;
 
 pub mod animation;
+
+mod persistence;
 
 #[derive(Debug, Default, Clone, Component)]
 pub struct Alive;
@@ -89,6 +92,7 @@ impl Plugin for CharactersPlugin {
         app
             .init_prefab_bundle::<CharacterPrefab>("character")
             .add_event::<AnimationStartedEvent>()
-            .add_system(animation::send_animations.in_set(ServerSet::Send));
+            .add_system(animation::send_animations.in_set(ServerSet::Send))
+            .register_serializer::<persistence::CharacterSerializer>();
     }
 }
