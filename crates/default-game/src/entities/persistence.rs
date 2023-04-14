@@ -33,11 +33,9 @@ impl BundleSerializer for UniqueIdSerializer {
 
     fn deserialize<'de, D: Deserializer<'de>>(ctx: &mut DeserializeContext, d: D, entity: Entity) -> Result<(), D::Error> {
         let id = UniqueId::deserialize(d)?;
-        log::debug!("deserialized id {} for {entity:?}", &id.id);
-        let mut entity = ctx.world_mut()
-            .entity_mut(entity);
-        entity.insert(id);
-        log::debug!("components = {}", entity.archetype().components().count());
+        ctx.world_mut()
+            .entity_mut(entity)
+            .insert(id);
         Ok(())
     }
 }

@@ -14,11 +14,14 @@ use sqlx::{Database, Pool};
 use sqlx::migrate::Migrate;
 
 use de::{BundleValuesVisitor, WorldVisitor};
+pub use hierarchy::{ChangePersistence, PersistenceCommandsExt, set_persistent};
 use ser::{BufferBundlesSerializer, BufferSerializer, ErasedOk};
+
 use crate::persistence::prefab::PrefabSerializer;
 
 mod ser;
 mod de;
+mod hierarchy;
 pub mod prefab;
 pub mod entity;
 pub mod db;

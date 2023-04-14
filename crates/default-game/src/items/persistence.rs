@@ -10,6 +10,7 @@ use serde::ser::SerializeMap;
 
 use yewoh::protocol::EquipmentSlot;
 use yewoh_server::world::entity::{Container, EquippedBy, Flags, Graphic, Location, ParentContainer};
+use yewoh_server::world::net::NetCommandsExt;
 
 use crate::entities::Persistent;
 use crate::persistence::{BundleSerializer, DeserializeContext, SerializeContext};
@@ -119,6 +120,8 @@ impl BundleSerializer for ItemSerializer {
                 let mut container = None;
                 let mut parent_container = None;
                 let mut equipped_by = None;
+
+                ctx.world_mut().entity_mut(entity).assign_network_id();
 
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {

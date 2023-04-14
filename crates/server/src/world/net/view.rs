@@ -977,8 +977,8 @@ pub fn update_equipped_items(
 }
 
 pub fn start_synchronizing(
-    clients: Query<(Entity, &ViewState, Ref<Possessing>), Without<Synchronizing>>,
-    characters: Query<&Location, With<NetOwner>>,
+    clients: Query<(Entity, &ViewState, Ref<Possessing>), (With<NetClient>, Without<Synchronizing>)>,
+    characters: Query<&Location, (With<NetOwner>, With<NetEntity>, With<Location>, With<Character>)>,
     mut commands: Commands,
 ) {
     for (entity, view_state, possessing) in clients.iter() {
@@ -991,7 +991,9 @@ pub fn start_synchronizing(
             continue;
         }
 
-        commands.entity(entity).remove::<Synchronized>().insert(Synchronizing);
+        commands.entity(entity)
+            .remove::<Synchronized>()
+            .insert(Synchronizing);
     }
 }
 

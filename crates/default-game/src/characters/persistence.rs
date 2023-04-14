@@ -10,6 +10,7 @@ use yewoh::Notoriety;
 
 use yewoh::protocol::EquipmentSlot;
 use yewoh_server::world::entity::{Character, CharacterEquipped, Flags, Location, Notorious, Stats};
+use yewoh_server::world::net::NetCommandsExt;
 use crate::activities::CurrentActivity;
 
 use crate::characters::Alive;
@@ -89,7 +90,9 @@ impl BundleSerializer for CharacterSerializer {
             fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error> where A: MapAccess<'de> {
                 let ctx = self.ctx;
                 let entity = self.entity;
-                ctx.world_mut().entity_mut(entity).insert(Persistent);
+                ctx.world_mut().entity_mut(entity)
+                    .insert(Persistent)
+                    .assign_network_id();
 
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {

@@ -13,9 +13,10 @@ use yewoh_server::world::net::{NetClient, NetCommandsExt, ViewState};
 
 use crate::commands::{TextCommand, TextCommandQueue};
 use crate::data::prefab::{Prefab, PrefabCollection, PrefabCommandsExt};
-use crate::entities::{Persistent, PrefabInstance};
+use crate::entities::PrefabInstance;
 use crate::hues;
 use crate::networking::NetClientExt;
+use crate::persistence::PersistenceCommandsExt;
 
 #[derive(Parser, Resource)]
 pub struct Spawn {
@@ -110,13 +111,13 @@ pub fn spawn(
             .insert_prefab(spawn.prefab.clone())
             .insert((
                 prefab_instance,
-                Persistent,
                 Location {
                     map_id,
                     position,
                     direction: Default::default(),
                 },
             ))
+            .make_persistent()
             .assign_network_id();
     }
 
@@ -147,13 +148,13 @@ pub fn spawn(
             .insert_prefab(spawn.prefab.clone())
             .insert((
                 prefab_instance,
-                Persistent,
                 ParentContainer {
                     parent: target,
                     position: IVec2::ZERO,
                     grid_index: 0,
                 },
             ))
+            .make_persistent()
             .assign_network_id()
             .id();
         container.items.push(new_entity);
