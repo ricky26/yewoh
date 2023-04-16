@@ -1,14 +1,14 @@
 use bevy_ecs::prelude::*;
 use bevy_reflect::prelude::*;
 
-use yewoh::protocol::{CharacterAnimation, CharacterProfile, ContextMenuEntry, DamageDealt, EntityFlags, MoveConfirm, MoveEntityReject, MoveReject, OpenContainer, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, Swing, WarMode};
+use yewoh::protocol::{CharacterAnimation, CharacterProfile, ContextMenuEntry, DamageDealt, EntityFlags, MoveConfirm, MoveEntityReject, MoveReject, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, Swing, WarMode};
 use yewoh::types::FixedString;
 use yewoh_server::world::entity::{AttackTarget, Character, CharacterEquipped, Container, EquippedBy, Flags, Location, Notorious, ParentContainer};
 use yewoh_server::world::events::{ContextMenuEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SingleClickEvent};
 use yewoh_server::world::input::ContextMenuRequest;
 use yewoh_server::world::map::TileDataResource;
 use yewoh_server::world::navigation::try_move_in_direction;
-use yewoh_server::world::net::{NetClient, NetEntity, NetEntityLookup, Possessing, VisibleContainers};
+use yewoh_server::world::net::{ContainerOpenedEvent, NetClient, NetEntity, NetEntityLookup, Possessing};
 use yewoh_server::world::spatial::EntitySurfaces;
 
 #[derive(Debug, Clone, Component, Reflect)]
@@ -87,11 +87,12 @@ pub fn handle_single_click(
 
 pub fn handle_double_click(
     mut events: EventReader<DoubleClickEvent>,
-    mut clients: Query<(&NetClient, &mut VisibleContainers)>,
-    target_query: Query<(Entity, &NetEntity, Option<&Character>, Option<&Container>)>,
+    mut clients: Query<&NetClient>,
+    mut opened_containers: EventWriter<ContainerOpenedEvent>,
+    target_query: Query<(&NetEntity, Option<&Character>, Option<&Container>)>,
 ) {
-    for DoubleClickEvent { client_entity: client, target } in events.iter() {
-        let (client, mut visible_containers) = match clients.get_mut(*client) {
+    for DoubleClickEvent { client_entity, target } in events.iter() {
+        let client = match clients.get_mut(*client_entity) {
             Ok(x) => x,
             _ => continue,
         };
@@ -100,7 +101,7 @@ pub fn handle_double_click(
             None => continue,
         };
 
-        let (entity, net, character, container) = match target_query.get(target) {
+        let (net, character, container) = match target_query.get(target) {
             Ok(e) => e,
             _ => continue,
         };
@@ -113,12 +114,11 @@ pub fn handle_double_click(
             }.into());
         }
 
-        if let Some(container) = container {
-            client.send_packet(OpenContainer {
-                id: net.id,
-                gump_id: container.gump_id,
-            }.into());
-            visible_containers.containers.insert(entity);
+        if container.is_some() {
+            opened_containers.send(ContainerOpenedEvent {
+                client_entity: *client_entity,
+                container: target,
+            });
         }
     }
 }

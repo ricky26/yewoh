@@ -15,9 +15,9 @@ use crate::lobby::{NewSessionRequest, SessionAllocator};
 use crate::world::entity::Tooltip;
 use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DeleteCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::input::Targeting;
+use crate::world::net::ViewState;
 use crate::world::net::entity::NetEntityLookup;
 use crate::world::net::view::View;
-use crate::world::net::{ViewState, VisibleContainers};
 
 pub const DEFAULT_VIEW_RANGE: i32 = 18;
 
@@ -217,7 +217,6 @@ pub fn accept_new_clients(
                 client.clone(),
                 User { username },
                 Targeting::default(),
-                VisibleContainers::default(),
                 View { range: DEFAULT_VIEW_RANGE },
                 ViewState::new(),
             ))
