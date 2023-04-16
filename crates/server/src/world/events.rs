@@ -3,7 +3,7 @@ use std::sync::Arc;
 use bevy_ecs::prelude::*;
 use glam::IVec3;
 
-use yewoh::protocol::{AnyPacket, CreateCharacter, EquipmentSlot, Move, SelectCharacter, UnicodeTextMessageRequest};
+use yewoh::protocol::{AnyPacket, CreateCharacter, DeleteCharacter, EquipmentSlot, Move, SelectCharacter, UnicodeTextMessageRequest};
 
 #[derive(Debug)]
 pub struct ReceivedPacketEvent {
@@ -32,6 +32,12 @@ pub struct CreateCharacterEvent {
 pub struct SelectCharacterEvent {
     pub client_entity: Entity,
     pub request: SelectCharacter,
+}
+
+#[derive(Debug, Clone)]
+pub struct DeleteCharacterEvent {
+    pub client_entity: Entity,
+    pub request: DeleteCharacter,
 }
 
 #[derive(Debug, Clone)]

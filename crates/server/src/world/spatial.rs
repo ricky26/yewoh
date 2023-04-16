@@ -1,11 +1,9 @@
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::ops::Sub;
 
 use bevy_ecs::prelude::*;
 use glam::{IVec2, IVec3};
 use rstar::{AABB, Envelope, Point, PointDistance, RTree, RTreeObject, SelectionFunction};
-use rstar::primitives::Rectangle;
 
 use yewoh::assets::map::{CHUNK_SIZE, MapChunk};
 
@@ -44,25 +42,129 @@ impl Point for SpatialPoint {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct BoundingBox {
+    min: IVec2,
+    max: IVec2,
+}
+
+impl BoundingBox {
+    pub fn is_empty(&self) -> bool {
+        self.min.x >= self.max.x && self.min.y >= self.max.y
+    }
+
+    pub fn aabb(&self) -> AABB<SpatialPoint> {
+        AABB::from_corners(SpatialPoint(self.min), SpatialPoint(self.max))
+    }
+
+    pub fn empty() -> Self {
+        Default::default()
+    }
+
+    pub fn from_point(p: IVec2) -> Self {
+        Self {
+            min: p,
+            max: p + IVec2::ONE,
+        }
+    }
+
+    pub fn from_bounds(min: IVec2, max: IVec2) -> Self {
+        Self {
+            min: min.min(max),
+            max: max.max(min),
+        }
+    }
+}
+
+impl Envelope for BoundingBox {
+    type Point = SpatialPoint;
+
+    fn new_empty() -> Self {
+        Default::default()
+    }
+
+    fn contains_point(&self, point: &Self::Point) -> bool {
+        let p = point.0;
+        p.x >= self.min.x &&
+            p.y >= self.min.y &&
+            p.x < self.max.x &&
+            p.y < self.max.y
+    }
+
+    fn contains_envelope(&self, aabb: &Self) -> bool {
+        aabb.min.x >= self.min.x &&
+            aabb.min.y >= self.min.y &&
+            aabb.max.x <= self.max.x &&
+            aabb.max.y <= self.max.y
+    }
+
+    fn merge(&mut self, other: &Self) {
+        *self = self.merged(other);
+    }
+
+    fn merged(&self, other: &Self) -> Self {
+        Self {
+            min: self.min.min(other.min),
+            max: self.max.max(other.max),
+        }
+    }
+
+    fn intersects(&self, other: &Self) -> bool {
+        (other.max.x >= self.min.x && other.max.y >= self.min.y) ||
+            (other.min.x < self.max.x && other.min.y < self.max.y)
+    }
+
+    fn intersection_area(&self, other: &Self) -> <Self::Point as Point>::Scalar {
+        self.aabb().intersection_area(&other.aabb())
+    }
+
+    fn area(&self) -> <Self::Point as Point>::Scalar {
+        (self.max.x - self.min.x) * (self.max.y - self.min.y)
+    }
+
+    fn distance_2(&self, point: &Self::Point) -> <Self::Point as Point>::Scalar {
+        self.aabb().distance_2(point)
+    }
+
+    fn min_max_dist_2(&self, point: &Self::Point) -> <Self::Point as Point>::Scalar {
+        self.aabb().min_max_dist_2(point)
+    }
+
+    fn center(&self) -> Self::Point {
+        SpatialPoint((self.min + self.max) / 2)
+    }
+
+    fn perimeter_value(&self) -> <Self::Point as Point>::Scalar {
+        self.aabb().perimeter_value()
+    }
+
+    fn sort_envelopes<T: RTreeObject<Envelope=Self>>(axis: usize, envelopes: &mut [T]) {
+        envelopes.sort_by_key(|o| SpatialPoint(o.envelope().min).nth(axis))
+    }
+
+    fn partition_envelopes<T: RTreeObject<Envelope=Self>>(axis: usize, envelopes: &mut [T], selection_size: usize) {
+        envelopes.select_nth_unstable_by_key(selection_size, |o| SpatialPoint(o.envelope().min).nth(axis));
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Entry<T = ()> {
     entity: Entity,
     metadata: T,
-    aabb: Rectangle<SpatialPoint>,
+    aabb: BoundingBox,
 }
 
 impl<T> RTreeObject for Entry<T> {
-    type Envelope = AABB<SpatialPoint>;
+    type Envelope = BoundingBox;
 
     fn envelope(&self) -> Self::Envelope {
-        self.aabb.envelope()
+        self.aabb.clone()
     }
 }
 
 impl<T> PointDistance for Entry<T> {
     fn distance_2(&self, point: &SpatialPoint) -> i32 {
-        let delta = self.aabb.nearest_point(point).0.sub(point.0);
-        delta.x * delta.x + delta.y * delta.y
+        self.aabb.distance_2(point)
     }
 
     fn contains_point(&self, point: &SpatialPoint) -> bool {
@@ -81,12 +183,12 @@ impl<T> PointDistance for Entry<T> {
 
 struct SelectEntityFunction<T> {
     entity: Entity,
-    aabb: AABB<SpatialPoint>,
+    aabb: BoundingBox,
     _metadata: PhantomData<T>,
 }
 
 impl<T> SelectionFunction<Entry<T>> for SelectEntityFunction<T> {
-    fn should_unpack_parent(&self, parent_envelope: &AABB<SpatialPoint>) -> bool {
+    fn should_unpack_parent(&self, parent_envelope: &BoundingBox) -> bool {
         parent_envelope.contains_envelope(&self.aabb)
     }
 
@@ -95,16 +197,16 @@ impl<T> SelectionFunction<Entry<T>> for SelectEntityFunction<T> {
     }
 }
 
-fn clamp_point(pt: IVec2, aabb: &AABB<SpatialPoint>) -> IVec2 {
-    let min = aabb.lower();
-    let max = aabb.upper();
+fn clamp_point(pt: IVec2, aabb: &BoundingBox) -> IVec2 {
+    let min = aabb.min;
+    let max = aabb.max;
     IVec2::new(
-        pt.x.max(min.0.x).min(max.0.x),
-        pt.y.max(min.0.y).min(max.0.y),
+        pt.x.max(min.x).min(max.x - 1),
+        pt.y.max(min.y).min(max.y - 1),
     )
 }
 
-fn line_crosses_aabb(start: IVec2, end: IVec2, aabb: &AABB<SpatialPoint>) -> bool {
+fn line_crosses_aabb(start: IVec2, end: IVec2, aabb: &BoundingBox) -> bool {
     let clamped_start = clamp_point(start, aabb);
     let clamped_end = clamp_point(end, aabb);
     clamped_start != clamped_end || clamped_start != start
@@ -117,12 +219,12 @@ struct LineSelectionFunction<T> {
 }
 
 impl<T> SelectionFunction<Entry<T>> for LineSelectionFunction<T> {
-    fn should_unpack_parent(&self, parent_envelope: &AABB<SpatialPoint>) -> bool {
+    fn should_unpack_parent(&self, parent_envelope: &BoundingBox) -> bool {
         line_crosses_aabb(self.start, self.end, parent_envelope)
     }
 
     fn should_unpack_leaf(&self, leaf: &Entry<T>) -> bool {
-        line_crosses_aabb(self.start, self.end, &leaf.aabb.envelope())
+        line_crosses_aabb(self.start, self.end, &leaf.aabb)
     }
 }
 
@@ -143,7 +245,7 @@ impl<T: Iterator> Iterator for MaybeIter<T> {
 #[derive(Debug, Clone)]
 pub struct SpatialEntityTree<T = ()> {
     trees: HashMap<u8, RTree<Entry<T>>>,
-    entities: HashMap<Entity, (u8, Rectangle<SpatialPoint>)>,
+    entities: HashMap<Entity, (u8, BoundingBox)>,
 }
 
 impl<T> Default for SpatialEntityTree<T> {
@@ -161,7 +263,11 @@ impl<T> SpatialEntityTree<T> {
             .or_insert_with(|| RTree::new())
     }
 
-    fn insert(&mut self, entity: Entity, metadata: T, map: u8, aabb: Rectangle<SpatialPoint>) {
+    fn insert(&mut self, entity: Entity, metadata: T, map: u8, aabb: BoundingBox) {
+        if aabb.is_empty() {
+            return;
+        }
+
         match self.entities.get(&entity) {
             Some((old_map, old_aabb)) if (*old_map == map) && (old_aabb == &aabb) => return,
             Some(_) => self.remove(entity),
@@ -173,12 +279,12 @@ impl<T> SpatialEntityTree<T> {
     }
 
     pub fn insert_aabb(&mut self, entity: Entity, metadata: T, map: u8, min: IVec2, max: IVec2) {
-        let aabb = Rectangle::from_corners(SpatialPoint(min), SpatialPoint(max));
+        let aabb = BoundingBox::from_bounds(min, max);
         self.insert(entity, metadata, map, aabb);
     }
 
     pub fn insert_point(&mut self, entity: Entity, metadata: T, map: u8, position: IVec2) {
-        let aabb = AABB::from_point(SpatialPoint(position)).into();
+        let aabb = BoundingBox::from_point(position);
         self.insert(entity, metadata, map, aabb);
     }
 
@@ -187,7 +293,7 @@ impl<T> SpatialEntityTree<T> {
             if let Some(tree) = self.trees.get_mut(&map) {
                 tree.remove_with_selection_function(SelectEntityFunction {
                     entity,
-                    aabb: aabb.envelope(),
+                    aabb,
                     _metadata: Default::default(),
                 });
             }
@@ -197,12 +303,12 @@ impl<T> SpatialEntityTree<T> {
     pub fn iter(&self, map_id: u8) -> impl Iterator<Item=(Entity, &T, IVec2, IVec2)> + '_ {
         self.trees.get(&map_id).unwrap()
             .iter()
-            .map(|e| (e.entity, &e.metadata, e.aabb.lower().0, e.aabb.upper().0))
+            .map(|e| (e.entity, &e.metadata, e.aabb.min, e.aabb.max))
     }
 
     pub fn iter_aabb(&self, map_id: u8, min: IVec2, max: IVec2) -> impl Iterator<Item=(Entity, &T)> + '_ {
         MaybeIter(if let Some(tree) = self.trees.get(&map_id) {
-            let envelope = AABB::from_corners(SpatialPoint(min), SpatialPoint(max));
+            let envelope = BoundingBox::from_bounds(min, max);
             Some(tree.locate_in_envelope_intersecting(&envelope)
                 .map(|e| (e.entity, &e.metadata)))
         } else {
@@ -258,7 +364,7 @@ pub fn update_entity_surfaces(
 ) {
     for (entity, position, chunk) in chunks.iter() {
         let min = position.position.truncate();
-        let max = min + IVec2::new(CHUNK_SIZE as i32 - 1, CHUNK_SIZE as i32 - 1);
+        let max = min + IVec2::new(CHUNK_SIZE as i32, CHUNK_SIZE as i32);
         let kind = SurfaceKind::Chunk {
             position: min,
             chunk: chunk.map_chunk.clone(),
@@ -291,10 +397,20 @@ pub fn update_entity_surfaces(
     }
 }
 
-#[derive(Debug, Clone, Default, Component)]
-pub struct Size {
+#[derive(Debug, Clone, Component)]
+pub struct Extents {
     min: IVec3,
     max: IVec3,
+}
+
+impl Extents {
+    pub const ONE: Extents = Self { min: IVec3::ZERO, max: IVec3::ONE };
+}
+
+impl Default for Extents {
+    fn default() -> Self {
+        Self::ONE
+    }
 }
 
 #[derive(Debug, Clone, Default, Resource)]
@@ -304,14 +420,16 @@ pub struct EntityPositions {
 
 pub fn update_entity_positions(
     mut storage: ResMut<EntityPositions>,
-    entities: Query<(Entity, &Location, Option<&Size>), Or<(Changed<Location>, Changed<Size>)>>,
+    entities: Query<(Entity, &Location, Option<&Extents>), Or<(Changed<Location>, Changed<Extents>)>>,
     mut removed_entities: RemovedComponents<Location>,
 ) {
-    for (entity, position, size) in &entities {
-        let size = size.cloned().unwrap_or(Size::default());
-        let min = position.position - size.min;
-        let max = position.position + size.max;
-        storage.tree.insert_aabb(entity, (), position.map_id, min.truncate(), max.truncate());
+    for (entity, position, extents) in &entities {
+        let extents = extents.cloned().unwrap_or(Extents::default());
+        let map_id = position.map_id;
+        let position = position.position.truncate();
+        let min = position - extents.min.truncate();
+        let max = position + extents.max.truncate();
+        storage.tree.insert_aabb(entity, (), map_id, min, max);
     }
 
     for entity in removed_entities.iter() {
@@ -322,7 +440,7 @@ pub fn update_entity_positions(
 pub fn view_aabb(position: IVec2, range: i32) -> (IVec2, IVec2) {
     let size = IVec2::splat(range);
     let min = position - size;
-    let max = position + size;
+    let max = position + size + IVec2::ONE;
     (min, max)
 }
 

@@ -6,18 +6,18 @@ use bevy_reflect::prelude::*;
 use log::{info, warn};
 use tokio::sync::mpsc;
 
-use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, CharacterProfile, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DoubleClick, DropEntity, EntityRequest, EntityRequestKind, EntityTooltip, EquipEntity, FeatureFlags, GameServerLogin, Move, PickUpEntity, SelectCharacter, SingleClick, SupportedFeatures, UnicodeTextMessageRequest};
+use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, CharacterProfile, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DeleteCharacter, DoubleClick, DropEntity, EntityRequest, EntityRequestKind, EntityTooltip, EquipEntity, FeatureFlags, GameServerLogin, Move, PickUpEntity, SelectCharacter, SingleClick, SupportedFeatures, UnicodeTextMessageRequest};
 use yewoh::protocol::encryption::Encryption;
 
 use crate::async_runtime::AsyncRuntime;
 use crate::game_server::NewSessionAttempt;
 use crate::lobby::{NewSessionRequest, SessionAllocator};
 use crate::world::entity::Tooltip;
-use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
+use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DeleteCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::input::Targeting;
+use crate::world::net::ViewState;
 use crate::world::net::entity::NetEntityLookup;
 use crate::world::net::view::View;
-use crate::world::net::{ViewState, VisibleContainers};
 
 pub const DEFAULT_VIEW_RANGE: i32 = 18;
 
@@ -217,7 +217,6 @@ pub fn accept_new_clients(
                 client.clone(),
                 User { username },
                 Targeting::default(),
-                VisibleContainers::default(),
                 View { range: DEFAULT_VIEW_RANGE },
                 ViewState::new(),
             ))
@@ -286,6 +285,7 @@ pub fn handle_login_packets(
     mut character_list_events: EventWriter<CharacterListEvent>,
     mut character_creation_events: EventWriter<CreateCharacterEvent>,
     mut select_character_events: EventWriter<SelectCharacterEvent>,
+    mut delete_character_events: EventWriter<DeleteCharacterEvent>,
     mut commands: Commands,
 ) {
     for ReceivedPacketEvent { client_entity: connection, packet } in events.iter() {
@@ -335,6 +335,11 @@ pub fn handle_login_packets(
             select_character_events.send(SelectCharacterEvent {
                 client_entity: connection,
                 request: select_character.clone(),
+            });
+        } else if let Some(delete_character) = packet.downcast::<DeleteCharacter>() {
+            delete_character_events.send(DeleteCharacterEvent {
+                client_entity: connection,
+                request: delete_character.clone(),
             });
         }
     }

@@ -11,6 +11,7 @@ use crate::EntityId;
 use crate::protocol::{EntityFlags, PacketReadExt, PacketWriteExt};
 use crate::protocol::client_version::VERSION_HIGH_SEAS;
 use crate::protocol::format::utf16_slice_to_string;
+use crate::types::FixedString;
 
 use super::{ClientVersion, Packet, Endian};
 
@@ -34,7 +35,7 @@ impl Packet for OpenChatWindow {
 #[derive(Debug, Clone)]
 pub struct OpenPaperDoll {
     pub id: EntityId,
-    pub text: String,
+    pub text: FixedString<60>,
     pub flags: EntityFlags,
 }
 
@@ -44,14 +45,14 @@ impl Packet for OpenPaperDoll {
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
-        let text = payload.read_str_block(60)?;
+        let text = payload.read_str_fixed()?;
         let flags = EntityFlags::from_bits_truncate(payload.read_u8()?);
         Ok(Self { id, text, flags })
     }
 
     fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.id)?;
-        writer.write_str_block(&self.text, 60)?;
+        writer.write_str_fixed(&self.text)?;
         writer.write_u8(self.flags.bits())?;
         Ok(())
     }

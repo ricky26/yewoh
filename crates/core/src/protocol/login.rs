@@ -5,9 +5,11 @@ use anyhow::anyhow;
 use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use glam::{IVec3, UVec2};
+use strum_macros::FromRepr;
 
 use crate::{Direction, EntityId};
 use crate::protocol::{PacketReadExt, PacketWriteExt};
+use crate::types::FixedString;
 
 use super::{ClientFlags, ClientVersion, Endian, Packet};
 
@@ -46,8 +48,8 @@ impl Packet for Seed {
 
 #[derive(Clone)]
 pub struct AccountLogin {
-    pub username: String,
-    pub password: String,
+    pub username: FixedString<30>,
+    pub password: FixedString<30>,
     pub next_login_key: u8,
 }
 
@@ -77,8 +79,8 @@ impl Packet for AccountLogin {
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(62) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
-        let username = payload.read_str_block(30)?;
-        let password = payload.read_str_block(30)?;
+        let username = payload.read_str_fixed()?;
+        let password = payload.read_str_fixed()?;
         let next_login_key = payload.read_u8()?;
 
         Ok(AccountLogin {
@@ -89,17 +91,44 @@ impl Packet for AccountLogin {
     }
 
     fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
-        writer.write_str_block(&self.username, 30)?;
-        writer.write_str_block(&self.password, 30)?;
+        writer.write_str_fixed(&self.username)?;
+        writer.write_str_fixed(&self.password)?;
         writer.write_u8(self.next_login_key)?;
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, FromRepr)]
+#[repr(u8)]
+pub enum LoginError {
+    InvalidUsernamePassword = 0x00,
+    AccountInUse = 0x01,
+    AccountBlocked = 0x02,
+    InvalidCredentials = 0x03,
+    CommunicationProblem = 0x04,
+    IgrConcurrencyLimit = 0x05,
+    IgrTimeLimit = 0x06,
+    IgrAuthenticationFailure = 0x07,
+}
+
+impl Packet for LoginError {
+    fn packet_kind() -> u8 { 0x82 }
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        Ok(LoginError::from_repr(payload.read_u8()?).ok_or_else(|| anyhow!("invalid login error"))?)
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        Ok(writer.write_u8(self.clone() as u8)?)
     }
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct GameServer {
     pub server_index: u16,
-    pub server_name: String,
+    pub server_name: FixedString<32>,
     pub load_percent: u8,
     pub timezone: u8,
     pub ip: u32,
@@ -123,7 +152,7 @@ impl Packet for ServerList {
 
         for _ in 0..game_server_count {
             let server_index = payload.read_u16::<Endian>()?;
-            let server_name = payload.read_str_block(32)?;
+            let server_name = payload.read_str_fixed()?;
             let load_percent = payload.read_u8()?;
             let timezone = payload.read_u8()?;
             let ip = payload.read_u32::<Endian>()?;
@@ -148,7 +177,7 @@ impl Packet for ServerList {
 
         for server in self.game_servers.iter() {
             writer.write_u16::<Endian>(server.server_index)?;
-            writer.write_str_block(&server.server_name, 32)?;
+            writer.write_str_fixed(&server.server_name)?;
             writer.write_u8(server.load_percent)?;
             writer.write_u8(server.timezone)?;
             writer.write_u32::<Endian>(server.ip)?;
@@ -211,8 +240,8 @@ impl Packet for SwitchServer {
 #[derive(Clone)]
 pub struct GameServerLogin {
     pub token: u32,
-    pub username: String,
-    pub password: String,
+    pub username: FixedString<30>,
+    pub password: FixedString<30>,
 }
 
 impl Debug for GameServerLogin {
@@ -232,8 +261,8 @@ impl Packet for GameServerLogin {
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let token = payload.read_u32::<Endian>()?;
-        let username = payload.read_str_block(30)?;
-        let password = payload.read_str_block(30)?;
+        let username = payload.read_str_fixed()?;
+        let password = payload.read_str_fixed()?;
         Ok(GameServerLogin {
             token,
             username,
@@ -243,8 +272,8 @@ impl Packet for GameServerLogin {
 
     fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u32::<Endian>(self.token)?;
-        writer.write_str_block(&self.username, 30)?;
-        writer.write_str_block(&self.password, 30)?;
+        writer.write_str_fixed(&self.username)?;
+        writer.write_str_fixed(&self.password)?;
         Ok(())
     }
 }
@@ -320,8 +349,8 @@ impl Packet for SupportedFeatures {
 
 #[derive(Clone, Default)]
 pub struct CharacterFromList {
-    pub name: String,
-    pub password: String,
+    pub name: FixedString<30>,
+    pub password: FixedString<30>,
 }
 
 impl Debug for CharacterFromList {
@@ -383,8 +412,8 @@ impl Packet for CharacterList {
         let mut characters = Vec::with_capacity(slot_count);
 
         for _ in 0..slot_count {
-            let name = payload.read_str_block(30)?;
-            let password = payload.read_str_block(30)?;
+            let name = payload.read_str_fixed()?;
+            let password = payload.read_str_fixed()?;
 
             characters.push(if !name.is_empty() {
                 Some(CharacterFromList {
@@ -445,8 +474,8 @@ impl Packet for CharacterList {
         writer.write_u8(self.characters.len() as u8)?;
         for character in self.characters.iter() {
             if let Some(character) = character {
-                writer.write_str_block(&character.name, 30)?;
-                writer.write_str_block(&character.password, 30)?;
+                writer.write_str_fixed(&character.name)?;
+                writer.write_str_fixed(&character.password)?;
             } else {
                 writer.write_zeros(60)?;
             }
@@ -492,11 +521,24 @@ pub struct InitialCharacterVisual {
     pub hue: u16,
 }
 
+#[derive(Debug, Copy, Clone, FromRepr)]
+#[repr(u8)]
+pub enum NewCharacterProfession {
+    Custom = 0,
+    Warrior = 1,
+    Magician = 2,
+    Blacksmith = 3,
+    Necromancer = 4,
+    Paladin = 5,
+    Samurai = 6,
+    Ninja = 7,
+}
+
 #[derive(Debug, Clone)]
 pub struct CreateCharacter {
     pub client_flags: ClientFlags,
-    pub character_name: String,
-    pub profession: u8,
+    pub character_name: FixedString<30>,
+    pub profession: NewCharacterProfession,
     pub is_female: bool,
     pub race: u8,
     pub str: u8,
@@ -528,12 +570,13 @@ impl CreateCharacter {
         }
 
         payload.skip(1)?;
-        let character_name = payload.read_str_block(30)?;
+        let character_name = payload.read_str_fixed()?;
         payload.skip(2)?;
 
         let client_flags = ClientFlags::from_bits_truncate(payload.read_u32::<Endian>()?);
         payload.skip(8)?;
-        let profession = payload.read_u8()?;
+        let profession = NewCharacterProfession::from_repr(payload.read_u8()?)
+            .ok_or_else(|| anyhow!("invalid profession"))?;
         payload.skip(15)?;
 
         let race_and_gender = payload.read_u8()?;
@@ -600,12 +643,12 @@ impl CreateCharacter {
         writer.write_u32::<Endian>(CREATE_CHARACTER_MAGIC_1)?;
         writer.write_u32::<Endian>(CREATE_CHARACTER_MAGIC_2)?;
         writer.write_zeros(1)?;
-        writer.write_str_block(&self.character_name, 30)?;
+        writer.write_str_fixed(&self.character_name)?;
         writer.write_zeros(2)?;
         writer.write_u32::<Endian>(self.client_flags.bits())?;
         writer.write_u32::<Endian>(1)?;
         writer.write_u32::<Endian>(0)?;
-        writer.write_u8(self.profession)?;
+        writer.write_u8(self.profession as u8)?;
         writer.write_zeros(15)?;
 
         let mut race_and_gender = if self.is_female { 1 } else { 0 };
@@ -704,7 +747,7 @@ impl Packet for DeleteCharacter {
 pub struct SelectCharacter {
     pub client_flags: ClientFlags,
     pub character_index: u32,
-    pub name: String,
+    pub name: FixedString<30>,
     pub ip: u32,
 }
 
@@ -718,7 +761,7 @@ impl Packet for SelectCharacter {
             return Err(anyhow!("Invalid character select magic"));
         }
 
-        let name = payload.read_str_block(30)?;
+        let name = payload.read_str_fixed()?;
         payload.skip(2)?;
         let client_flags = ClientFlags::from_bits_truncate(payload.read_u32::<Endian>()?);
         payload.skip(24)?;
@@ -735,7 +778,7 @@ impl Packet for SelectCharacter {
 
     fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u32::<Endian>(CREATE_CHARACTER_MAGIC_1)?;
-        writer.write_str_block(&self.name, 30)?;
+        writer.write_str_fixed(&self.name)?;
         writer.write_zeros(2)?;
         writer.write_u32::<Endian>(self.client_flags.bits())?;
         writer.write_zeros(24)?;

@@ -121,7 +121,7 @@ struct PacketRegistry {
     registrations: Vec<Option<PacketRegistration>>,
 }
 
-const MAX_PACKET_STRUCT_SIZE: usize = 128;
+const MAX_PACKET_STRUCT_SIZE: usize = 136;
 static PACKET_REGISTRY: OnceCell<PacketRegistry> = OnceCell::new();
 
 fn packet_registry() -> &'static PacketRegistry {
@@ -135,6 +135,7 @@ fn packet_registry() -> &'static PacketRegistry {
             // Login
             PacketRegistration::for_type::<Seed>(),
             PacketRegistration::for_type::<AccountLogin>(),
+            PacketRegistration::for_type::<LoginError>(),
             PacketRegistration::for_type::<ServerList>(),
             PacketRegistration::for_type::<SelectGameServer>(),
             PacketRegistration::for_type::<SwitchServer>(),

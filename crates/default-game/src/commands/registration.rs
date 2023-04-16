@@ -186,9 +186,9 @@ impl<'w, 's> TextCommandExecutor<'w, 's> {
                 client.send_packet(UnicodeTextMessage {
                     entity_id: None,
                     kind: MessageKind::System,
-                    language: "".to_string(),
+                    language: Default::default(),
                     text: err.to_string(),
-                    name: "".to_string(),
+                    name: Default::default(),
                     hue: 2751,
                     font: 1,
                     ..Default::default()

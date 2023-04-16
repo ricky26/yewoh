@@ -12,7 +12,9 @@ use crate::characters::CharactersPlugin;
 use crate::chat::handle_incoming_chat;
 use crate::commands::CommandsPlugin;
 use crate::data::prefab::PrefabPlugin;
+use crate::entities::EntitiesPlugin;
 use crate::items::ItemsPlugin;
+use crate::persistence::PersistencePlugin;
 use crate::spawners::SpawnersPlugin;
 use crate::time::send_time;
 
@@ -38,6 +40,14 @@ pub mod items;
 
 pub mod ai;
 
+pub mod persistence;
+
+pub mod networking;
+
+pub mod hues;
+
+pub mod entities;
+
 #[derive(Default)]
 pub struct DefaultGamePlugins;
 
@@ -45,10 +55,12 @@ impl PluginGroup for DefaultGamePlugins {
     fn build(self) -> PluginGroupBuilder {
         PluginGroupBuilder::start::<Self>()
             .add(PrefabPlugin)
+            .add(PersistencePlugin)
             .add(CommandsPlugin)
-            .add(AccountsPlugin)
+            .add(AccountsPlugin::<accounts::sql::SqlAccountRepository>::default())
             .add(DefaultGamePlugin)
             .add(ActivitiesPlugin)
+            .add(EntitiesPlugin)
             .add(CharactersPlugin)
             .add(ItemsPlugin)
             .add(SpawnersPlugin)

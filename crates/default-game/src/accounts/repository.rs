@@ -1,12 +1,8 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-
-use anyhow::anyhow;
 use async_trait::async_trait;
 use bevy_ecs::system::Resource;
-use tokio::sync::Mutex;
+use uuid::Uuid;
 
-use yewoh::protocol::{CharacterFromList, CharacterList, CreateCharacter};
+use yewoh::protocol::{CreateCharacter, DeleteCharacter};
 use yewoh_server::world::entity::Stats;
 
 #[derive(Debug, Clone)]
@@ -23,54 +19,9 @@ pub struct CharacterInfo {
     pub stats: Stats,
 }
 
-#[async_trait]
-pub trait AccountRepository: Clone + Resource {
-    async fn list_characters(&self, username: &str) -> anyhow::Result<CharacterList>;
-    async fn create_character(&self, username: &str, request: CreateCharacter) -> anyhow::Result<CharacterInfo>;
-    async fn load_character(&self, username: &str, name: &str) -> anyhow::Result<CharacterInfo>;
-}
-
-const MAX_CHARACTERS: usize = 6;
-
-#[derive(Debug, Clone, Default)]
-struct MemoryUser {
-    characters: HashMap<String, CharacterInfo>,
-}
-
-#[derive(Debug, Clone, Default)]
-struct LockedMemoryAccountRepository {
-    users: HashMap<String, MemoryUser>,
-}
-
-#[derive(Debug, Clone, Default, Resource)]
-pub struct MemoryAccountRepository {
-    locked: Arc<Mutex<LockedMemoryAccountRepository>>,
-}
-
-#[async_trait]
-impl AccountRepository for MemoryAccountRepository {
-    async fn list_characters(&self, username: &str) -> anyhow::Result<CharacterList> {
-        let mut locked = self.locked.lock().await;
-        let user = locked.users.entry(username.to_string())
-            .or_insert_with(|| Default::default());
-        let padding = MAX_CHARACTERS - user.characters.len();
-        let characters = user.characters.keys()
-            .map(|name| CharacterFromList {
-                name: name.clone(),
-                ..Default::default()
-            })
-            .map(Some)
-            .chain((0..padding).map(|_| None))
-            .collect::<Vec<_>>();
-
-        Ok(CharacterList {
-            characters,
-            ..Default::default()
-        })
-    }
-
-    async fn create_character(&self, username: &str, request: CreateCharacter) -> anyhow::Result<CharacterInfo> {
-        let info = CharacterInfo {
+impl CharacterInfo {
+    pub fn from_request(request: &CreateCharacter) -> Self {
+        Self {
             race: request.race,
             hue: request.hue,
             is_female: request.is_female,
@@ -81,7 +32,7 @@ impl AccountRepository for MemoryAccountRepository {
             shirt_hue: request.shirt_hue,
             pants_hue: request.pants_hue,
             stats: Stats {
-                name: request.character_name.clone(),
+                name: request.character_name.to_string(),
                 race_and_gender: (request.race << 1) | if request.is_female { 1 } else { 0 },
                 str: request.str as u16,
                 dex: request.dex as u16,
@@ -94,24 +45,27 @@ impl AccountRepository for MemoryAccountRepository {
                 max_stamina: 500,
                 ..Default::default()
             },
-        };
-
-        let mut locked = self.locked.lock().await;
-        let user = locked.users.entry(username.to_string())
-            .or_insert_with(|| Default::default());
-        user.characters.insert(request.character_name.clone(), info.clone());
-        Ok(info)
-    }
-
-    async fn load_character(&self, username: &str, name: &str) -> anyhow::Result<CharacterInfo> {
-        let mut locked = self.locked.lock().await;
-        let user = locked.users.entry(username.to_string())
-            .or_insert_with(|| Default::default());
-
-        if let Some(info) = user.characters.get(name) {
-            Ok(info.clone())
-        } else {
-            Err(anyhow!("No such character"))
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum CharacterToSpawn {
+    NewCharacter(Uuid, CharacterInfo),
+    ExistingCharacter(Uuid),
+}
+
+#[derive(Debug, Clone)]
+pub struct AccountCharacter {
+    pub id: Uuid,
+}
+
+pub type AccountCharacters = Vec<Option<AccountCharacter>>;
+
+#[async_trait]
+pub trait AccountRepository: Clone + Resource {
+    async fn list_characters(&self, username: &str) -> anyhow::Result<AccountCharacters>;
+    async fn create_character(&self, username: &str, request: CreateCharacter) -> anyhow::Result<CharacterToSpawn>;
+    async fn delete_character(&self, username: &str, request: DeleteCharacter) -> anyhow::Result<()>;
+    async fn load_character(&self, username: &str, slot: i32) -> anyhow::Result<CharacterToSpawn>;
 }

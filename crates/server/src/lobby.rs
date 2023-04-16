@@ -10,21 +10,27 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::spawn;
 use tokio::sync::{mpsc, oneshot};
 
-use yewoh::protocol::{AccountLogin, ClientVersion, GameServer, GameServerLogin, new_io, Seed, SelectGameServer, ServerList, SwitchServer};
+use yewoh::protocol::{AccountLogin, ClientVersion, GameServer, GameServerLogin, LoginError, new_io, Seed, SelectGameServer, ServerList, SwitchServer};
 use yewoh::protocol::encryption::Encryption;
+use yewoh::types::FixedString;
 
 #[async_trait]
-pub trait Lobby {
-    type User;
+pub trait AccountRepository {
+    async fn login(&mut self, username: &str, password: &str) -> anyhow::Result<()>;
+}
 
-    async fn login(&mut self, username: String, password: String) -> anyhow::Result<Self::User>;
-    async fn list_servers(&mut self, user: &Self::User) -> anyhow::Result<ServerList>;
+#[async_trait]
+pub trait ServerRepository {
+    async fn list_servers(&mut self, username: &str) -> anyhow::Result<ServerList>;
     async fn allocate_session(
-        &mut self, user: &Self::User, server_id: u16, seed: u32, client_version: ClientVersion,
+        &mut self, username: &str, server_id: u16, seed: u32, client_version: ClientVersion,
     ) -> anyhow::Result<SwitchServer>;
 }
 
-pub async fn serve_lobby(mut lobby: impl Lobby, encrypted: bool, stream: TcpStream) -> anyhow::Result<()> {
+pub async fn serve_lobby(
+    mut servers: impl ServerRepository, mut accounts: impl AccountRepository,
+    encrypted: bool, stream: TcpStream,
+) -> anyhow::Result<()> {
     let (mut reader, mut writer) = new_io(stream, true);
     let seed = reader.recv(ClientVersion::default()).await?
         .into_downcast::<Seed>()
@@ -41,37 +47,47 @@ pub async fn serve_lobby(mut lobby: impl Lobby, encrypted: bool, stream: TcpStre
         .ok()
         .ok_or_else(|| anyhow!("expected account login attempt"))?;
 
-    let user = lobby.login(login.username, login.password).await?;
-    let servers = lobby.list_servers(&user).await?;
-    writer.send(seed.client_version, &servers).await?;
+    if let Err(err) = accounts.login(&login.username, &login.password).await {
+        writer.send(seed.client_version, &LoginError::InvalidUsernamePassword).await.ok();
+        return Err(err);
+    }
+
+    let server_list = servers.list_servers(&login.username).await?;
+    writer.send(seed.client_version, &server_list).await?;
 
     loop {
         let packet = reader.recv(seed.client_version).await?;
         if let Some(login_packet) = packet.downcast::<SelectGameServer>() {
-            let session = lobby.allocate_session(
-                &user,
+            let session = servers.allocate_session(
+                &login.username,
                 login_packet.server_id,
                 seed.seed,
-                seed.client_version
+                seed.client_version,
             ).await?;
             writer.send(seed.client_version, &session).await?;
         } else {
-            return Err(anyhow!("unexpected lobby packet {:?}", packet))
+            writer.send(seed.client_version, &LoginError::CommunicationProblem).await.ok();
+            return Err(anyhow!("unexpected lobby packet {:?}", packet));
         }
     }
 }
 
-pub async fn listen_for_lobby<L: Lobby + Send + 'static>(
+pub async fn listen_for_lobby<
+    S: ServerRepository + Send + 'static,
+    A: AccountRepository + Send + 'static,
+>(
     listener: TcpListener,
     encrypted: bool,
-    mut lobby_factory: impl FnMut() -> L,
-) -> anyhow::Result<()> where <L as Lobby>::User: Send + Sync {
+    mut servers_factory: impl FnMut() -> S,
+    mut accounts_factory: impl FnMut() -> A,
+) -> anyhow::Result<()> {
     loop {
         let (stream, address) = listener.accept().await?;
         info!("New lobby connection from {address}");
-        let lobby = lobby_factory();
+        let servers = servers_factory();
+        let accounts = accounts_factory();
         spawn(async move {
-            if let Err(err) = serve_lobby(lobby, encrypted, stream).await {
+            if let Err(err) = serve_lobby(servers, accounts, encrypted, stream).await {
                 warn!("error serving lobby: {:?}", err);
             }
             info!("Lobby connection disconnected {address}");
@@ -88,7 +104,7 @@ pub struct NewSessionRequest {
 }
 
 #[derive(Debug)]
-struct LocalLobbyShared {
+struct LocalServerRepositoryInner {
     server_name: String,
     next_token: AtomicU32,
     external_ip: Ipv4Addr,
@@ -99,19 +115,19 @@ struct LocalLobbyShared {
 }
 
 #[derive(Debug, Clone)]
-pub struct LocalLobby {
-    shared: Arc<LocalLobbyShared>,
+pub struct LocalServerRepository {
+    shared: Arc<LocalServerRepositoryInner>,
 }
 
-impl LocalLobby {
+impl LocalServerRepository {
     pub fn new(
         server_name: String,
         external_ip: Ipv4Addr,
         game_port: u16,
         timezone: u8,
         new_session_tx: mpsc::UnboundedSender<NewSessionRequest>,
-    ) -> LocalLobby {
-        let shared = Arc::new(LocalLobbyShared {
+    ) -> LocalServerRepository {
+        let shared = Arc::new(LocalServerRepositoryInner {
             server_name,
             next_token: AtomicU32::new(1),
             external_ip,
@@ -121,7 +137,7 @@ impl LocalLobby {
             new_session_tx,
         });
 
-        LocalLobby { shared }
+        LocalServerRepository { shared }
     }
 
     pub fn set_load(&self, load: u8) {
@@ -130,20 +146,14 @@ impl LocalLobby {
 }
 
 #[async_trait]
-impl Lobby for LocalLobby {
-    type User = String;
-
-    async fn login(&mut self, username: String, _password: String) -> anyhow::Result<Self::User> {
-        Ok(username)
-    }
-
-    async fn list_servers(&mut self, _user: &Self::User) -> anyhow::Result<ServerList> {
+impl ServerRepository for LocalServerRepository {
+    async fn list_servers(&mut self, _user: &str) -> anyhow::Result<ServerList> {
         Ok(ServerList {
             system_info_flags: 0,
             game_servers: vec![
                 GameServer {
                     server_index: 0,
-                    server_name: self.shared.server_name.to_string(),
+                    server_name: FixedString::from_str(&self.shared.server_name),
                     load_percent: self.shared.load.load(Ordering::Relaxed),
                     timezone: self.shared.timezone,
                     ip: self.shared.external_ip.into(),
@@ -152,16 +162,13 @@ impl Lobby for LocalLobby {
         })
     }
 
-    async fn allocate_session(&mut self,
-        user: &Self::User,
-        _server_id: u16,
-        seed: u32,
-        client_version: ClientVersion,
+    async fn allocate_session(
+        &mut self, username: &str, _server_id: u16, seed: u32, client_version: ClientVersion,
     ) -> anyhow::Result<SwitchServer> {
         let (tx, rx) = oneshot::channel();
         let token = self.shared.next_token.fetch_add(1, Ordering::Relaxed);
         let request = NewSessionRequest {
-            username: user.to_string(),
+            username: username.to_string(),
             client_version,
             seed,
             token,
@@ -226,13 +233,13 @@ impl SessionAllocator {
             None => return Err(anyhow!("no such session token")),
         };
 
-        if test_session.username != login.username {
+        if login.username.as_str() != &test_session.username {
             return Err(anyhow!("wrong user for session"));
         }
 
         self.pending_sessions.remove(&token);
         Ok(NewSession {
-            username: login.username,
+            username: login.username.to_string(),
         })
     }
 }

@@ -205,7 +205,9 @@ pub fn handle_context_menu_packets(
                     option: response.id,
                 });
             }
-            _ => {},
+            p => {
+                log::debug!("unhandled extended packet {:?}", p);
+            },
         }
     }
 }

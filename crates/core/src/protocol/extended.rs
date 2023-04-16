@@ -47,7 +47,7 @@ pub struct ContextMenuResponse {
 
 #[derive(Debug, Clone)]
 pub enum ExtendedCommand {
-    Unknown,
+    Unknown(u16),
     ScreenSize(ScreenSize),
     ChangeMap(u8),
     Language(String),
@@ -73,7 +73,7 @@ impl ExtendedCommand {
 
     pub fn kind(&self) -> u16 {
         match self {
-            ExtendedCommand::Unknown => panic!("Tried to send unknown extended command"),
+            ExtendedCommand::Unknown(_) => panic!("Tried to send unknown extended command"),
             ExtendedCommand::ScreenSize(_) => Self::SCREEN_SIZE,
             ExtendedCommand::ChangeMap(_) => Self::CHANGE_MAP,
             ExtendedCommand::Language(_) => Self::LANGUAGE,
@@ -138,7 +138,7 @@ impl Packet for ExtendedCommand {
 
                         Ok(ExtendedCommand::ContextMenuEnhanced(ContextMenu { target_id, entries }))
                     }
-                    _ => Ok(ExtendedCommand::Unknown),
+                    _ => Ok(ExtendedCommand::Unknown(Self::CONTEXT_MENU)),
                 }
             }
             Self::CONTEXT_MENU_RESPONSE => {
@@ -146,9 +146,9 @@ impl Packet for ExtendedCommand {
                 let id = payload.read_u16::<Endian>()?;
                 Ok(ExtendedCommand::ContextMenuResponse(ContextMenuResponse { id, target_id }))
             }
-            _ => {
+            c => {
                 log::warn!("Unknown extended packet {kind}");
-                Ok(ExtendedCommand::Unknown)
+                Ok(ExtendedCommand::Unknown(c))
             }
         }
     }
@@ -156,7 +156,8 @@ impl Packet for ExtendedCommand {
     fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u16::<Endian>(self.kind())?;
         match self {
-            ExtendedCommand::Unknown => return Err(anyhow!("tried to send unknown extended command")),
+            ExtendedCommand::Unknown(_) =>
+                return Err(anyhow!("tried to send unknown extended command")),
             ExtendedCommand::ScreenSize(screen_size) => {
                 writer.write_u32::<Endian>(screen_size.width)?;
                 writer.write_u32::<Endian>(screen_size.height)?;

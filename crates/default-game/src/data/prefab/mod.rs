@@ -8,7 +8,7 @@ use anyhow::Context;
 use bevy_app::{App, Plugin};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::system::{Command, EntityCommands, Resource};
-use bevy_ecs::world::World;
+use bevy_ecs::world::{EntityMut, World};
 use serde::{Deserialize, Deserializer};
 use serde::de::{DeserializeSeed, Error, MapAccess, Visitor};
 use tokio::fs;
@@ -170,7 +170,7 @@ impl PrefabFactory {
 
 #[derive(Default, Clone, Resource)]
 pub struct PrefabCollection {
-    prefabs: HashMap<String, Arc<Prefab>>,
+    prefabs: HashMap<Arc<str>, Arc<Prefab>>,
 }
 
 impl PrefabCollection {
@@ -182,12 +182,16 @@ impl PrefabCollection {
         self.prefabs.len()
     }
 
-    pub fn prefabs(&self) -> &HashMap<String, Arc<Prefab>> {
+    pub fn prefabs(&self) -> &HashMap<Arc<str>, Arc<Prefab>> {
         &self.prefabs
     }
 
     pub fn get(&self, id: &str) -> Option<&Arc<Prefab>> {
         self.prefabs.get(id)
+    }
+
+    pub fn get_key_value(&self, id: &str) -> Option<(&Arc<str>, &Arc<Prefab>)> {
+        self.prefabs.get_key_value(id)
     }
 
     pub async fn load_from_directory(&mut self, factory: &PrefabFactory, path: &Path) -> anyhow::Result<()> {
@@ -232,6 +236,14 @@ impl PrefabAppExt for App {
 
 pub trait PrefabCommandsExt {
     fn insert_prefab(&mut self, prefab: Arc<Prefab>) -> &mut Self;
+}
+
+impl<'w> PrefabCommandsExt for EntityMut<'w> {
+    fn insert_prefab(&mut self, prefab: Arc<Prefab>) -> &mut Self {
+        let command = InsertPrefab { prefab, entity: self.id() };
+        self.world_scope(|world| command.write(world));
+        self
+    }
 }
 
 impl<'w, 's, 'a> PrefabCommandsExt for EntityCommands<'w, 's, 'a> {

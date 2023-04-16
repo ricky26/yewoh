@@ -4,12 +4,13 @@ use bevy_reflect::prelude::*;
 use bevy_reflect::TypeRegistry;
 use clap::Parser;
 
-use yewoh::protocol::{MessageKind, TargetType, UnicodeTextMessage};
+use yewoh::protocol::TargetType;
 use yewoh_server::world::input::{EntityTargetRequest, EntityTargetResponse, WorldTargetRequest, WorldTargetResponse};
 use yewoh_server::world::net::{NetClient, ViewState};
 use yewoh_server::world::spatial::EntityPositions;
 
 use crate::commands::{TextCommand, TextCommandQueue};
+use crate::networking::NetClientExt;
 
 #[derive(Parser, Resource)]
 pub struct Info;
@@ -58,17 +59,7 @@ pub fn start_info(
 }
 
 fn send_entity_info(world: &World, type_registry: &TypeRegistry, client: &NetClient, entity: Entity) {
-    let kind = MessageKind::System;
-    let hue = 120;
-    let font = 3;
-
-    let add_line = |text| client.send_packet(UnicodeTextMessage {
-        kind,
-        text,
-        hue,
-        font,
-        ..Default::default()
-    }.into());
+    let add_line = |text| client.send_system_message(text);
     add_line(format!("Entity {:?}", entity));
 
     let target_entity = world.entity(entity);
