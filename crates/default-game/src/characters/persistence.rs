@@ -91,8 +91,7 @@ impl BundleSerializer for CharacterSerializer {
                 let ctx = self.ctx;
                 let entity = self.entity;
                 ctx.world_mut().entity_mut(entity)
-                    .insert(Persistent)
-                    .assign_network_id();
+                    .insert(Persistent);
 
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
@@ -128,6 +127,7 @@ impl BundleSerializer for CharacterSerializer {
                     };
                 }
 
+                ctx.world_mut().entity_mut(entity).assign_network_id();
                 Ok(())
             }
         }
