@@ -6,12 +6,10 @@ use bevy_ecs::query::{With, WorldQuery};
 use serde::{Deserializer, Serialize, Serializer};
 use serde::de::{DeserializeSeed, Error, MapAccess, SeqAccess, Visitor};
 use serde::ser::{SerializeMap, SerializeSeq};
-use yewoh::Notoriety;
 
 use yewoh::protocol::EquipmentSlot;
-use yewoh_server::world::entity::{Character, CharacterEquipped, Flags, Location, Notorious, Stats};
+use yewoh_server::world::entity::{Character, CharacterEquipped, Flags, Location, Stats};
 use yewoh_server::world::net::NetCommandsExt;
-use crate::activities::CurrentActivity;
 
 use crate::characters::Alive;
 use crate::entities::Persistent;
@@ -121,7 +119,7 @@ impl BundleSerializer for CharacterSerializer {
                             let bundle = map.next_value_seed(CharacterVisitor { ctx })?;
                             ctx.world_mut()
                                 .entity_mut(entity)
-                                .insert((bundle, Notorious(Notoriety::Neutral), CurrentActivity::Idle, Persistent));
+                                .insert((bundle, Persistent));
                         }
                         name => return Err(A::Error::unknown_field(name, &["character", "stats", "flags", "location"])),
                     };
@@ -225,7 +223,7 @@ impl<'a, 'w, 'de> Visitor<'de> for EquipmentVisitor<'a, 'w> {
         }
 
         if let Some(equipment) = equipment {
-            Ok(CharacterEquipped { equipment, slot })
+            Ok(CharacterEquipped { entity: equipment, slot })
         } else {
             Err(A::Error::custom("missing equipment"))
         }
@@ -278,7 +276,7 @@ struct EquipmentSerializer<'a> {
 impl<'a> Serialize for EquipmentSerializer<'a> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
         let mut map = serializer.serialize_map(None)?;
-        map.serialize_entry("equipment", &self.ctx.map_entity(self.equipment.equipment))?;
+        map.serialize_entry("equipment", &self.ctx.map_entity(self.equipment.entity))?;
         map.serialize_entry("slot", &self.equipment.slot)?;
         map.end()
     }

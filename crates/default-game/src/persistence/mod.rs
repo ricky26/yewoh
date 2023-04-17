@@ -1,5 +1,6 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::cmp::Ordering;
+use std::collections::{HashMap, VecDeque};
 
 use bevy_app::{App, IntoSystemAppConfig, Plugin};
 use bevy_ecs::entity::Entity;
@@ -89,6 +90,7 @@ pub trait BundleSerializer: FromWorld + Send + 'static {
     type Bundle: Send + Sync + 'static;
 
     fn id() -> &'static str;
+    fn priority() -> i32 { 0 }
     fn extract(item: <Self::Query as WorldQuery>::Item<'_>) -> Self::Bundle;
     fn serialize<S: Serializer>(ctx: &SerializeContext, s: S, bundle: &Self::Bundle) -> Result<S::Ok, S::Error>;
     fn deserialize<'de, D: Deserializer<'de>>(ctx: &mut DeserializeContext, d: D, entity: Entity) -> Result<(), D::Error>;
@@ -98,12 +100,33 @@ type BundleDeserializer = fn(ctx: &mut DeserializeContext, d: &mut dyn erased_se
 
 pub struct SerializedBuffer {
     serializer_id: String,
+    priority: i32,
     serialize: Box<dyn (Fn(&SerializeContext, &mut dyn erased_serde::Serializer) -> Result<ErasedOk, erased_serde::Error>) + Send + Sync + 'static>,
+}
+
+impl PartialEq<Self> for SerializedBuffer {
+    fn eq(&self, _other: &Self) -> bool {
+        false
+    }
+}
+
+impl Eq for SerializedBuffer {}
+
+impl PartialOrd for SerializedBuffer {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.priority.partial_cmp(&other.priority)
+    }
+}
+
+impl Ord for SerializedBuffer {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.priority.cmp(&other.priority)
+    }
 }
 
 #[derive(Resource, Default)]
 pub struct SerializedBuffers {
-    buffers: Vec<SerializedBuffer>,
+    buffers: VecDeque<SerializedBuffer>,
 }
 
 impl SerializedBuffers {
@@ -136,13 +159,20 @@ impl<T: BundleSerializer> SystemBuffer for SerializedBundlesBuffer<T> {
 
         let serialize = move |ctx: &SerializeContext, s: &mut dyn erased_serde::Serializer|
             erased_serde::serialize(&BufferSerializer::<T>::new(ctx, &items), s);
-
-        world.resource_mut::<SerializedBuffers>()
-            .buffers
-            .push(SerializedBuffer {
-                serializer_id: T::id().to_string(),
-                serialize: Box::new(serialize),
-            });
+        let buffer = SerializedBuffer {
+            serializer_id: T::id().to_string(),
+            priority: T::priority(),
+            serialize: Box::new(serialize),
+        };
+        let buffers = &mut world.resource_mut::<SerializedBuffers>()
+            .buffers;
+        let index = match buffers.binary_search_by(|i|
+            i.priority.cmp(&buffer.priority)
+            .then(Ordering::Greater)) {
+            Ok(x) => x,
+            Err(x) => x,
+        };
+        buffers.insert(index, buffer);
     }
 }
 

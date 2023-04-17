@@ -119,7 +119,7 @@ pub fn assign_network_id(world: &mut World, entity: Entity) {
         }
 
         if let Some(character) = world.get::<Character>(next) {
-            queue.extend(character.equipment.iter().map(|e| e.equipment));
+            queue.extend(character.equipment.iter().map(|e| e.entity));
         }
 
         let allocator = world.resource::<NetEntityAllocator>();

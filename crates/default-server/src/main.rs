@@ -193,6 +193,7 @@ async fn main() -> anyhow::Result<()> {
             let contents = app.world.serialize();
             let repo = app.world.resource::<WorldRepository>();
             write_save(repo, contents).await?;
+            info!("Saved snapshot");
             return Ok(());
         }
 
@@ -288,6 +289,8 @@ fn scheduled_save(world: &mut World, mut timer: Local<SaveTimer>) {
     world.resource::<AsyncRuntime>().spawn(async move {
         if let Err(e) = write_save(&repo, buffers).await {
             log::warn!("failed to save: {e}");
+        } else {
+            info!("Saved snapshot");
         }
     });
 }

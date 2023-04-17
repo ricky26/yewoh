@@ -23,7 +23,7 @@ pub fn despawn_recursive(world: &mut World, entity: Entity) {
 
     if let Some(mut character) = world.get_mut::<Character>(entity) {
         for equipped in std::mem::take(&mut character.equipment) {
-            despawn_recursive(world, equipped.equipment);
+            despawn_recursive(world, equipped.entity);
         }
     }
 

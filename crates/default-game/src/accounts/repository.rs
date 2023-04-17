@@ -2,12 +2,12 @@ use async_trait::async_trait;
 use bevy_ecs::system::Resource;
 use uuid::Uuid;
 
-use yewoh::protocol::{CreateCharacter, DeleteCharacter};
+use yewoh::protocol::{CreateCharacter, DeleteCharacter, Race};
 use yewoh_server::world::entity::Stats;
 
 #[derive(Debug, Clone)]
 pub struct CharacterInfo {
-    pub race: u8,
+    pub race: Race,
     pub hue: u16,
     pub is_female: bool,
     pub hair: u16,
@@ -33,7 +33,8 @@ impl CharacterInfo {
             pants_hue: request.pants_hue,
             stats: Stats {
                 name: request.character_name.to_string(),
-                race_and_gender: (request.race << 1) | if request.is_female { 1 } else { 0 },
+                female: request.is_female,
+                race: request.race,
                 str: request.str as u16,
                 dex: request.dex as u16,
                 int: request.int as u16,

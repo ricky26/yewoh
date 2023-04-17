@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use bevy_ecs::entity::Entity;
 use serde::{Serialize, Serializer};
 use serde::ser::{Error as SError, SerializeSeq, SerializeTuple};
@@ -22,11 +24,11 @@ impl<'a> Serialize for BufferBundleSerializer<'a> {
 
 pub(crate) struct BufferBundlesSerializer<'a> {
     ctx: &'a SerializeContext,
-    buffers: &'a [SerializedBuffer],
+    buffers: &'a VecDeque<SerializedBuffer>,
 }
 
 impl<'a> BufferBundlesSerializer<'a> {
-    pub fn new(ctx: &'a SerializeContext, buffers: &'a [SerializedBuffer]) -> Self {
+    pub fn new(ctx: &'a SerializeContext, buffers: &'a VecDeque<SerializedBuffer>) -> Self {
         Self { ctx, buffers }
     }
 }

@@ -27,6 +27,10 @@ impl BundleSerializer for PrefabSerializer {
         "Prefab"
     }
 
+    fn priority() -> i32 {
+        -1000
+    }
+
     fn extract(item: &PrefabInstance) -> Self::Bundle {
         item.clone()
     }
@@ -39,7 +43,11 @@ impl BundleSerializer for PrefabSerializer {
         let prefab_name = String::deserialize(d)?;
         if let Some(prefab) = ctx.world.resource::<PrefabCollection>().get(&prefab_name).cloned() {
             ctx.world.entity_mut(entity)
-                .insert_prefab(prefab);
+                .insert_prefab(prefab)
+                .insert((
+                    PrefabInstance { prefab_name: prefab_name.into() },
+                    Persistent,
+                ));
             Ok(())
         } else {
             Err(D::Error::custom(format!("Unable to deserialize prefab {}", &prefab_name)))

@@ -6,7 +6,7 @@ use bevy_reflect::prelude::*;
 use log::{info, warn};
 use tokio::sync::mpsc;
 
-use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, CharacterProfile, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DeleteCharacter, DoubleClick, DropEntity, EntityRequest, EntityRequestKind, EntityTooltip, EquipEntity, FeatureFlags, GameServerLogin, Move, PickUpEntity, SelectCharacter, SingleClick, SupportedFeatures, UnicodeTextMessageRequest};
+use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, CharacterProfile, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DeleteCharacter, DoubleClick, DropEntity, EntityRequest, EntityRequestKind, EntityTooltip, EntityTooltipLine, EquipEntity, FeatureFlags, GameServerLogin, Move, PickUpEntity, SelectCharacter, SingleClick, SupportedFeatures, UnicodeTextMessageRequest};
 use yewoh::protocol::encryption::Encryption;
 
 use crate::async_runtime::AsyncRuntime;
@@ -446,6 +446,8 @@ pub fn send_tooltips(
     tooltips: Query<&Tooltip>,
     mut events: EventReader<ReceivedPacketEvent>,
 ) {
+    let mut scratch = Vec::new();
+
     for ReceivedPacketEvent { client_entity: connection, packet } in events.iter() {
         let connection = *connection;
         let client = match clients.get(connection) {
@@ -463,7 +465,22 @@ pub fn send_tooltips(
                 for id in ids.iter().copied() {
                     let entries = lookup.net_to_ecs(id)
                         .and_then(|e| tooltips.get(e).ok())
-                        .map_or(Vec::new(), |t| t.entries.clone());
+                        .map_or(Vec::new(), |t| {
+                            scratch.extend(t.entries.keys());
+                            scratch.sort_by(|a, b| {
+                                t.entries[*a].cmp(&t.entries[*b])
+                            });
+
+                            scratch.drain(..)
+                                .map(|key| {
+                                    let entry = &t.entries[key];
+                                    EntityTooltipLine {
+                                        text_id: entry.text_id,
+                                        params: entry.arguments.clone(),
+                                    }
+                                })
+                                .collect()
+                        });
                     client.send_packet(EntityTooltip::Response { id, entries }.into());
                 }
             }

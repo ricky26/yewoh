@@ -568,9 +568,9 @@ impl<'w, 's> WorldObserver<'w, 's> {
         }));
 
         for equipped in &character.equipment {
-            if let Ok((graphic, tooltip, quantity, container)) = self.equipped_items.get(equipped.equipment) {
+            if let Ok((graphic, tooltip, quantity, container)) = self.equipped_items.get(equipped.entity) {
                 self.observe_equipped(
-                    viewer, view_state, entity, equipped.equipment, equipped.slot,
+                    viewer, view_state, entity, equipped.entity, equipped.slot,
                     graphic, tooltip, quantity, container,
                 );
             }

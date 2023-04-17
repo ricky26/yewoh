@@ -18,6 +18,9 @@ use yewoh_server::world::spatial::NetClientPositions;
 use crate::activities::{CurrentActivity, progress_current_activity};
 use crate::characters::{Alive, CharacterDied, Corpse, CorpseSpawned, DamageDealt, HitAnimation, MeleeWeapon, Unarmed};
 use crate::characters::animation::AnimationStartedEvent;
+use crate::data::prefab::PrefabAppExt;
+
+mod prefabs;
 
 pub const CORPSE_GRAPHIC_ID: u16 = 0x2006;
 pub const CORPSE_BOX_GUMP_ID: u16 = 9;
@@ -47,7 +50,7 @@ pub fn update_weapon_stats(
     for (entity, character, unarmed) in &mut characters {
         let weapon = character.equipment.iter()
             .filter(|e| e.slot == EquipmentSlot::MainHand)
-            .map(|e| e.equipment)
+            .map(|e| e.entity)
             .next()
             .and_then(|e| weapons.get(e).ok());
 
@@ -217,6 +220,8 @@ impl Plugin for CombatPlugin {
             .add_event::<CharacterDied>()
             .add_event::<CorpseSpawned>()
             .add_event::<DamageDealt>()
+            .init_prefab_bundle::<prefabs::MeleeWeaponPrefab>("melee_weapon")
+            .init_prefab_bundle::<prefabs::UnarmedPrefab>("unarmed")
             .add_systems((
                 handle_attack_requests,
                 update_weapon_stats,

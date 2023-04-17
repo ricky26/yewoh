@@ -18,6 +18,7 @@ pub struct ContainedItemPrefab {
 #[derive(Deserialize)]
 pub struct ContainerPrefab {
     gump: u16,
+    #[serde(default)]
     contents: Vec<ContainedItemPrefab>,
 }
 

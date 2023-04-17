@@ -26,7 +26,7 @@ pub fn set_persistent(world: &mut World, entity: Entity, persistent: bool) {
         }
 
         if let Some(character) = world.get::<Character>(next) {
-            queue.extend(character.equipment.iter().map(|e| e.equipment));
+            queue.extend(character.equipment.iter().map(|e| e.entity));
         }
 
         if persistent {

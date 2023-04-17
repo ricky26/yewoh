@@ -1,26 +1,30 @@
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::time::Duration;
 
 use bevy_app::{App, CoreSet, Plugin};
-use bevy_ecs::prelude::*;
-use glam::{IVec2, IVec3};
+use bevy_ecs::entity::Entity;
+use bevy_ecs::event::EventReader;
+use bevy_ecs::query::With;
+use bevy_ecs::schedule::IntoSystemConfigs;
+use bevy_ecs::system::{Commands, Local, Query, Res, ResMut, Resource};
+use bevy_ecs::world::World;
+use glam::IVec3;
 use tokio::sync::mpsc;
 use uuid::Uuid;
+use yewoh::Direction;
 
-use yewoh::{Direction, Notoriety};
-use yewoh::protocol::{CharacterFromList, CharacterList, CharacterListFlags, EntityFlags, EntityTooltipLine, EquipmentSlot};
+use yewoh::protocol::{CharacterFromList, CharacterList, CharacterListFlags, EquipmentSlot, Race};
 use yewoh::types::FixedString;
 use yewoh_server::async_runtime::AsyncRuntime;
-use yewoh_server::world::entity::{Character, CharacterEquipped, Container, EquippedBy, Flags, Graphic, Location, Notorious, ParentContainer, Stats, Tooltip};
+use yewoh_server::world::entity::{Character, CharacterEquipped, Flags, Graphic, Location, Stats};
 use yewoh_server::world::events::{CharacterListEvent, CreateCharacterEvent, DeleteCharacterEvent, SelectCharacterEvent};
 use yewoh_server::world::net::{NetClient, NetCommandsExt, NetOwner, Possessing, User};
 
 use crate::accounts::repository::{AccountCharacters, AccountRepository, CharacterInfo, CharacterToSpawn};
-use crate::activities::CurrentActivity;
-use crate::characters::{Alive, Animation, MeleeWeapon, PredefinedAnimation, Unarmed};
+use crate::data::prefab::{PrefabCollection, PrefabCommandsExt};
 use crate::data::static_data::StaticData;
-use crate::entities::{Persistent, UniqueId};
+use crate::entities::{PrefabInstance, UniqueId};
+use crate::persistence::PersistenceCommandsExt;
 
 pub mod repository;
 
@@ -224,158 +228,95 @@ pub fn handle_delete_character<T: AccountRepository>(
     }
 }
 
-pub fn create_new_character(commands: &mut Commands, info: CharacterInfo) -> Entity {
-    let body_type = match (info.race, info.is_female) {
-        (1, false) => 605,
-        (1, true) => 606,
-        (2, false) => 666,
-        (2, true) => 6667,
-        (_, false) => 400,
-        (_, true) => 401,
+pub fn create_new_character(
+    prefabs: &PrefabCollection, commands: &mut Commands, info: CharacterInfo,
+) -> Entity {
+    let race_name = match info.race {
+        Race::Human => "human",
+        Race::Elf => "elf",
+        Race::Gargoyle => "gargoyle",
     };
 
-    let bottom_graphic = match info.is_female {
-        true => 0x1516,
-        false => 0x1539,
+    let gender_name = match info.is_female {
+        false => "male",
+        true => "female",
     };
 
-    let child_entity = commands.spawn((
-        Flags { flags: EntityFlags::default() },
-        Graphic { id: 0x9b2, hue: 120 },
-        Container { gump_id: 0x3c, items: vec![] },
-        Tooltip {
-            entries: vec![
-                EntityTooltipLine { text_id: 1042971, params: "Hello, world!".into() },
-            ],
-        },
-        Persistent,
-    )).id();
+    let prefab_name = format!("player_{race_name}_{gender_name}");
 
-    let knife_entity = commands
-        .spawn((
-            Flags { flags: EntityFlags::default() },
-            Graphic { id: 0xec3, hue: 16 },
-            Tooltip {
-                entries: vec![
-                    EntityTooltipLine { text_id: 1042971, params: "Stabby stabby".into() },
-                ],
-            },
-            MeleeWeapon {
-                damage: 10,
-                delay: Duration::from_secs(3),
-                range: 4,
-                swing_animation: Animation::Predefined(PredefinedAnimation {
-                    kind: 0,
-                    action: 4,
-                    variant: 0,
-                }),
-            },
-            Persistent,
-        ))
-        .id();
+    let prefab = match prefabs.get(&prefab_name) {
+        Some(x) => x.clone(),
+        None => panic!("missing prefab for {prefab_name}"),
+    };
 
-    let backpack_entity = commands.spawn((
-        Flags::default(),
-        Graphic { id: 0xe75, hue: 0 },
-        Container { gump_id: 0x3c, items: vec![child_entity] },
-        Persistent,
-    )).id();
-    let top_entity = commands.spawn((
-        Flags::default(),
-        Graphic { id: 0x1517, hue: info.shirt_hue },
-        Persistent,
-    )).id();
-    let bottom_entity = commands.spawn((
-        Flags::default(),
-        Graphic { id: bottom_graphic, hue: info.pants_hue },
-        Persistent,
-    )).id();
-    let shoes_entity = commands.spawn((
-        Flags::default(),
-        Graphic { id: 0x170f, hue: 0 },
-        Persistent,
-    )).id();
+    commands.spawn_empty()
+        .insert_prefab(prefab)
+        .add(move |entity, world: &mut World| {
+            let mut equipment = Vec::new();
 
-    let mut equipment = vec![
-        (EquipmentSlot::Backpack, backpack_entity),
-        (EquipmentSlot::Top, top_entity),
-        (EquipmentSlot::Bottom, bottom_entity),
-        (EquipmentSlot::Shoes, shoes_entity),
-        (EquipmentSlot::MainHand, knife_entity),
-    ];
+            if info.hair != 0 {
+                let entity = world.spawn((
+                    Flags::default(),
+                    Graphic { id: info.hair, hue: info.hair_hue },
+                )).id();
+                equipment.push(CharacterEquipped::new(EquipmentSlot::Hair, entity));
+            }
 
-    if info.hair != 0 {
-        let entity = commands.spawn((
-            Flags::default(),
-            Graphic { id: info.hair, hue: info.hair_hue },
-            Persistent,
-        )).id();
-        equipment.push((EquipmentSlot::Hair, entity));
-    }
+            if info.beard != 0 {
+                let entity = world.spawn((
+                    Flags::default(),
+                    Graphic { id: info.beard, hue: info.beard_hue },
+                )).id();
+                equipment.push(CharacterEquipped::new(EquipmentSlot::FacialHair, entity));
+            }
 
-    if info.beard != 0 {
-        let entity = commands.spawn((
-            Flags::default(),
-            Graphic { id: info.beard, hue: info.beard_hue },
-            Persistent,
-        )).id();
-        equipment.push((EquipmentSlot::FacialHair, entity));
-    }
+            let mut entity_ref = world.entity_mut(entity);
+            entity_ref.insert(PrefabInstance { prefab_name: prefab_name.into() });
 
-    commands.entity(child_entity)
-        .insert(ParentContainer {
-            parent: backpack_entity,
-            position: IVec2::new(0, 0),
-            grid_index: 0,
-        });
+            if let Some(mut c) = entity_ref.get_mut::<Character>() {
+                let mut c = std::mem::take(&mut *c);
+                c.hue = info.hue;
+                c.equipment.extend(equipment.into_iter());
 
-    let primary_entity = commands
-        .spawn((
-            Flags { flags: EntityFlags::default() },
+                entity_ref.world_scope(|world| {
+                    for equipped in &c.equipment {
+                        match equipped.slot {
+                            EquipmentSlot::Top => {
+                                world.entity_mut(equipped.entity)
+                                    .get_mut::<Graphic>()
+                                    .unwrap()
+                                    .hue = info.shirt_hue;
+                            }
+                            EquipmentSlot::Bottom => {
+                                world.entity_mut(equipped.entity)
+                                    .get_mut::<Graphic>()
+                                    .unwrap()
+                                    .hue = info.pants_hue;
+                            }
+                            _ => {}
+                        }
+                    }
+                });
+
+                *entity_ref.get_mut().unwrap() = c;
+            }
+        })
+        .insert((
             Location {
                 map_id: 1,
                 position: IVec3::new(1325, 1624, 55),
                 direction: Direction::North,
             },
-            Character {
-                body_type,
-                hue: info.hue,
-                equipment: equipment.iter()
-                    .copied()
-                    .map(|(slot, equipment)|
-                        CharacterEquipped { equipment, slot })
-                    .collect(),
-            },
-            Notorious(Notoriety::Innocent),
             info.stats,
-            Unarmed {
-                weapon: MeleeWeapon {
-                    damage: 1,
-                    delay: Duration::from_secs(2),
-                    range: 3,
-                    swing_animation: Animation::Predefined(PredefinedAnimation {
-                        kind: 0,
-                        action: 0,
-                        variant: 0,
-                    }),
-                },
-            },
-            Alive,
-            CurrentActivity::Idle,
-            Persistent,
         ))
-        .id();
-
-    for (slot, equipment_entity) in equipment {
-        commands.entity(equipment_entity)
-            .insert(EquippedBy { parent: primary_entity, slot });
-    }
-
-    primary_entity
+        .make_persistent()
+        .assign_network_id()
+        .id()
 }
 
 pub fn handle_spawn_character<T: AccountRepository>(
     runtime: Res<AsyncRuntime>,
+    prefabs: Res<PrefabCollection>,
     mut pending: ResMut<PendingCharacterInfo>,
     pending_list: ResMut<PendingCharacterLists>,
     mut commands: Commands,
@@ -426,7 +367,7 @@ pub fn handle_spawn_character<T: AccountRepository>(
             }
             CharacterToSpawn::NewCharacter(id, info) => {
                 log::info!("Creating new character: {}", &id);
-                let primary_entity = create_new_character(&mut commands, info);
+                let primary_entity = create_new_character(&prefabs, &mut commands, info);
                 all_players.insert(id, primary_entity);
                 commands.entity(primary_entity)
                     .insert(UniqueId { id })

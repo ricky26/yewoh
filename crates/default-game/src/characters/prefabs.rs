@@ -5,6 +5,7 @@ use serde::Deserialize;
 use yewoh::Notoriety;
 use yewoh::protocol::EquipmentSlot;
 use yewoh_server::world::entity::{Character, CharacterEquipped, EquippedBy, Flags, Location, Notorious, Stats};
+use crate::activities::CurrentActivity;
 
 use crate::characters::{Alive, Animation, HitAnimation};
 use crate::data::prefab::{FromPrefabTemplate, Prefab, PrefabBundle};
@@ -50,7 +51,7 @@ impl PrefabBundle for CharacterPrefab {
                 .id();
             child.prefab.write(world, child_entity);
             equipment.push(CharacterEquipped {
-                equipment: child_entity,
+                entity: child_entity,
                 slot: child.slot,
             });
         }
@@ -72,6 +73,7 @@ impl PrefabBundle for CharacterPrefab {
                     max_hp: 100,
                     ..Default::default()
                 },
+                CurrentActivity::Idle,
                 Alive,
             ));
 

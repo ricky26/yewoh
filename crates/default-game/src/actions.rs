@@ -169,7 +169,7 @@ pub fn handle_pick_up(
                 .remove::<ParentContainer>();
         } else if let Some(equipped) = equipped {
             let mut equipped_character = character_equipment.get_mut(equipped.parent).unwrap();
-            equipped_character.equipment.retain(|e| e.equipment != entity);
+            equipped_character.equipment.retain(|e| e.entity != entity);
             commands.entity(entity)
                 .insert(Holder { held_by: character })
                 .remove::<EquippedBy>();
@@ -271,7 +271,7 @@ pub fn handle_equip(
         let target = event.target;
         if let Ok(mut target_character) = loadouts.get_mut(event.character) {
             target_character.equipment.push(CharacterEquipped {
-                equipment: target,
+                entity: target,
                 slot: event.slot,
             });
             commands.entity(target)

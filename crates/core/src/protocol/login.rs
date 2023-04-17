@@ -5,6 +5,7 @@ use anyhow::anyhow;
 use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use glam::{IVec3, UVec2};
+use serde::{Deserialize, Serialize};
 use strum_macros::FromRepr;
 
 use crate::{Direction, EntityId};
@@ -534,13 +535,22 @@ pub enum NewCharacterProfession {
     Ninja = 7,
 }
 
+#[derive(Default, Debug, Copy, Clone, Eq, PartialEq, FromRepr, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum Race {
+    #[default]
+    Human = 0,
+    Elf = 1,
+    Gargoyle = 2,
+}
+
 #[derive(Debug, Clone)]
 pub struct CreateCharacter {
     pub client_flags: ClientFlags,
     pub character_name: FixedString<30>,
     pub profession: NewCharacterProfession,
     pub is_female: bool,
-    pub race: u8,
+    pub race: Race,
     pub str: u8,
     pub dex: u8,
     pub int: u8,
@@ -581,13 +591,13 @@ impl CreateCharacter {
 
         let race_and_gender = payload.read_u8()?;
         let is_female = race_and_gender & 1 != 0;
-        let race = if client_version.major >= 7 {
-            race_and_gender >> 1
-        } else if client_version > Self::CLIENT_MIN_VERSION_RACE {
+        let race = Race::from_repr(if client_version.major >= 7 {
             (race_and_gender >> 1) - 1
+        } else if client_version > Self::CLIENT_MIN_VERSION_RACE {
+            race_and_gender >> 1
         } else {
             0
-        };
+        }).ok_or_else(|| anyhow!("invalid race"))?;
 
         let str = payload.read_u8()?;
         let dex = payload.read_u8()?;
@@ -653,9 +663,9 @@ impl CreateCharacter {
 
         let mut race_and_gender = if self.is_female { 1 } else { 0 };
         if client_version.major >= 7 {
-            race_and_gender |= self.race << 1;
+            race_and_gender |= (self.race as u8 + 1) << 1;
         } else if client_version >= Self::CLIENT_MIN_VERSION_RACE {
-            race_and_gender |= (self.race << 1) + 1;
+            race_and_gender |= (self.race as u8) << 1;
         }
         writer.write_u8(race_and_gender)?;
         writer.write_u8(self.str)?;

@@ -49,8 +49,11 @@ pub struct CorpseSpawned {
 pub struct AnimationDefinition {
     pub animation_id: u16,
     pub frame_count: u16,
+    #[serde(default)]
     pub repeat_count: u16,
+    #[serde(default)]
     pub reverse: bool,
+    #[serde(default)]
     pub speed: u8,
 }
 
@@ -58,10 +61,12 @@ pub struct AnimationDefinition {
 pub struct PredefinedAnimation {
     pub kind: u16,
     pub action: u16,
+    #[serde(default)]
     pub variant: u8,
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
 pub enum Animation {
     Inline(AnimationDefinition),
     Predefined(PredefinedAnimation),
@@ -72,9 +77,10 @@ pub struct HitAnimation {
     pub hit_animation: Animation,
 }
 
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, Component, Deserialize)]
 pub struct MeleeWeapon {
     pub damage: u16,
+    #[serde(with = "humantime_serde")]
     pub delay: Duration,
     pub range: i32,
     pub swing_animation: Animation,

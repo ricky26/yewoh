@@ -1,7 +1,7 @@
 character:
   name: Rat
   body_type: 0xee
-  hit_animation: !Predefined
+  hit_animation:
     kind: 4
     action: 0
     variant: 0

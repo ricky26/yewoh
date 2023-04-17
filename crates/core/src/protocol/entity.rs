@@ -10,7 +10,7 @@ use strum_macros::FromRepr;
 
 use crate::{Direction, EntityId, EntityKind, Notoriety};
 use crate::protocol::client_version::{VERSION_GRID_INVENTORY, VERSION_HIGH_SEAS};
-use crate::protocol::PacketWriteExt;
+use crate::protocol::{Race, PacketWriteExt};
 use crate::types::FixedString;
 
 use super::{ClientVersion, Endian, Packet, PacketReadExt};
@@ -801,7 +801,8 @@ pub struct UpsertEntityStats {
     pub max_info_level: u8,
     pub name: FixedString<30>,
     pub allow_name_change: bool,
-    pub race_and_gender: u8,
+    pub female: bool,
+    pub race: Race,
     pub hp: u16,
     pub max_hp: u16,
     pub str: u16,
@@ -875,7 +876,7 @@ impl Packet for UpsertEntityStats {
             });
         }
 
-        let race_and_gender = payload.read_u8()?;
+        let female = payload.read_u8()? != 0;
         let str = payload.read_u16::<Endian>()?;
         let dex = payload.read_u16::<Endian>()?;
         let int = payload.read_u16::<Endian>()?;
@@ -887,7 +888,8 @@ impl Packet for UpsertEntityStats {
         let armor = payload.read_u16::<Endian>()?;
         let weight = payload.read_u16::<Endian>()?;
         let max_weight = payload.read_u16::<Endian>()?;
-        payload.skip(1)?;
+        let race = Race::from_repr(payload.read_u8()?)
+            .ok_or_else(|| anyhow!("invalid race"))?;
         let stats_cap = payload.read_u16::<Endian>()?;
         let pet_count = payload.read_u8()?;
         let max_pets = payload.read_u8()?;
@@ -928,7 +930,8 @@ impl Packet for UpsertEntityStats {
             max_info_level: level,
             name,
             allow_name_change,
-            race_and_gender,
+            female,
+            race,
             hp,
             max_hp,
             str,
@@ -991,7 +994,7 @@ impl Packet for UpsertEntityStats {
 
         // TODO: in order to support older clients, this needs to be more granular
         if level > 0 {
-            writer.write_u8(self.race_and_gender)?;
+            writer.write_u8(if self.female { 1 } else { 0 })?;
             writer.write_u16::<Endian>(self.str)?;
             writer.write_u16::<Endian>(self.dex)?;
             writer.write_u16::<Endian>(self.int)?;
@@ -1003,7 +1006,7 @@ impl Packet for UpsertEntityStats {
             writer.write_u16::<Endian>(self.armor)?;
             writer.write_u16::<Endian>(self.weight)?;
             writer.write_u16::<Endian>(self.max_weight)?;
-            writer.write_u8((self.race_and_gender >> 1) + 1)?;
+            writer.write_u8(self.race as u8 + 1)?;
             writer.write_u16::<Endian>(self.stats_cap)?;
             writer.write_u8(self.pet_count)?;
             writer.write_u8(self.max_pets)?;

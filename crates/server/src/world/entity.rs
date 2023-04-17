@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
 use bevy_ecs::entity::{EntityMap, MapEntities, MapEntitiesError};
@@ -8,7 +10,7 @@ use glam::{IVec2, IVec3};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use yewoh::{Direction, EntityId, Notoriety};
-use yewoh::protocol::{EntityFlags, EntityTooltipLine, EquipmentSlot, UpsertEntityStats};
+use yewoh::protocol::{EntityFlags, EquipmentSlot, Race, UpsertEntityStats};
 use yewoh::types::FixedString;
 
 use crate::math::IVecExt;
@@ -50,9 +52,18 @@ impl DerefMut for Notorious {
 
 #[derive(Debug, Clone, Eq, PartialEq, Reflect, FromReflect)]
 pub struct CharacterEquipped {
-    pub equipment: Entity,
+    pub entity: Entity,
     #[reflect(ignore)]
     pub slot: EquipmentSlot,
+}
+
+impl CharacterEquipped {
+    pub fn new(slot: EquipmentSlot, entity: Entity) -> CharacterEquipped {
+        Self {
+            entity,
+            slot,
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone, Eq, PartialEq, Component, Reflect)]
@@ -66,7 +77,7 @@ pub struct Character {
 impl MapEntities for Character {
     fn map_entities(&mut self, entity_map: &EntityMap) -> Result<(), MapEntitiesError> {
         for equipment in &mut self.equipment {
-            equipment.equipment = entity_map.get(equipment.equipment)?;
+            equipment.entity = entity_map.get(equipment.entity)?;
         }
         Ok(())
     }
@@ -187,7 +198,9 @@ impl MapEntities for ParentContainer {
 #[reflect(Component)]
 pub struct Stats {
     pub name: String,
-    pub race_and_gender: u8,
+    pub female: bool,
+    #[reflect(ignore)]
+    pub race: Race,
     pub hp: u16,
     pub max_hp: u16,
     pub str: u16,
@@ -245,7 +258,8 @@ impl Stats {
             max_info_level,
             name: FixedString::from_str(&self.name),
             allow_name_change: owned,
-            race_and_gender: self.race_and_gender,
+            female: self.female,
+            race: self.race,
             hp: self.hp,
             max_hp: self.max_hp,
             str: self.str,
@@ -297,11 +311,58 @@ impl Stats {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]
+pub struct TooltipLine {
+    pub text_id: u32,
+    pub arguments: String,
+    pub priority: u32,
+}
+
+impl TooltipLine {
+    pub fn from_static(text_id: u32, priority: u32) -> TooltipLine {
+        Self {
+            text_id,
+            arguments: Default::default(),
+            priority,
+        }
+    }
+
+    pub fn from_str(text: String, priority: u32) -> TooltipLine {
+        Self {
+            text_id: 1042971,
+            arguments: text,
+            priority,
+        }
+    }
+}
+
+impl Ord for TooltipLine {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.text_id.cmp(&other.text_id)
+    }
+}
+
 #[derive(Debug, Clone, Default, Component, Eq, PartialEq, Reflect)]
 #[reflect(Component)]
 pub struct Tooltip {
     #[reflect(ignore)]
-    pub entries: Vec<EntityTooltipLine>,
+    pub entries: HashMap<String, TooltipLine>,
+}
+
+impl Tooltip {
+    pub fn contains(&self, key: &str, line: &TooltipLine) -> bool {
+        self.entries.get(key).map_or(false, |e| e == line)
+    }
+
+    pub fn push(&mut self, key: impl Into<String>, line: TooltipLine) {
+        self.entries.insert(key.into(), line);
+    }
+
+    pub fn push_mut(this: &mut Mut<Tooltip>, key: impl AsRef<str> + ToOwned<Owned = String>, line: TooltipLine) {
+        if !this.contains(key.as_ref(), &line) {
+            this.push(key.to_owned(), line);
+        }
+    }
 }
 
 #[derive(Debug, Clone, Component, Eq, PartialEq, Reflect)]
