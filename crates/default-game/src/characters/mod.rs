@@ -1,10 +1,10 @@
 use std::time::Duration;
 
-use bevy_app::{App, Last, Plugin};
-use bevy_ecs::component::Component;
-use bevy_ecs::entity::Entity;
-use bevy_ecs::event::Event;
-use bevy_ecs::schedule::IntoSystemConfigs;
+use bevy::app::{App, Last, Plugin};
+use bevy::ecs::component::Component;
+use bevy::ecs::entity::Entity;
+use bevy::ecs::event::Event;
+use bevy::ecs::schedule::IntoSystemConfigs;
 use serde::Deserialize;
 
 use crate::characters::animation::AnimationStartedEvent;

@@ -1,6 +1,5 @@
-use bevy_ecs::prelude::*;
-use bevy_reflect::prelude::*;
-use bevy_reflect::TypeRegistry;
+use bevy::prelude::*;
+use bevy::reflect::TypeRegistry;
 use clap::Parser;
 
 use yewoh::protocol::TargetType;

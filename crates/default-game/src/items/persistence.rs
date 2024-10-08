@@ -1,8 +1,8 @@
 use std::fmt::Formatter;
 
-use bevy_ecs::entity::Entity;
-use bevy_ecs::prelude::{FromWorld, World};
-use bevy_ecs::query::{With, WorldQuery};
+use bevy::ecs::entity::Entity;
+use bevy::ecs::world::{FromWorld, World};
+use bevy::ecs::query::{With, WorldQuery};
 use glam::IVec2;
 use serde::{Deserializer, Serialize, Serializer};
 use serde::de::{DeserializeSeed, Error, MapAccess, Visitor};

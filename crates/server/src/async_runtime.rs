@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use bevy_ecs::system::Resource;
+use bevy::ecs::system::Resource;
 use tokio::runtime::Handle;
 
 #[derive(Resource, Clone)]

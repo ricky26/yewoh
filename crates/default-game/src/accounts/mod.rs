@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
-use bevy_app::{App, Plugin, Update};
-use bevy_ecs::entity::Entity;
-use bevy_ecs::event::EventReader;
-use bevy_ecs::query::With;
-use bevy_ecs::system::{Commands, Local, Query, Res, ResMut, Resource};
-use bevy_ecs::world::World;
+use bevy::app::{App, Plugin, Update};
+use bevy::ecs::entity::Entity;
+use bevy::ecs::event::EventReader;
+use bevy::ecs::query::With;
+use bevy::ecs::system::{Commands, Local, Query, Res, ResMut, Resource};
+use bevy::ecs::world::World;
 use glam::IVec3;
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};

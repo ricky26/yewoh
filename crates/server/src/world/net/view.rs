@@ -1,13 +1,13 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use bevy_ecs::change_detection::DetectChanges;
-use bevy_ecs::component::Component;
-use bevy_ecs::entity::Entity;
-use bevy_ecs::event::{Event, EventReader};
-use bevy_ecs::query::{With, Without};
-use bevy_ecs::system::{Commands, Query, Res, Resource, SystemParam};
-use bevy_ecs::world::{Mut, Ref};
-use bevy_reflect::Reflect;
+use bevy::ecs::change_detection::DetectChanges;
+use bevy::ecs::component::Component;
+use bevy::ecs::entity::Entity;
+use bevy::ecs::event::{Event, EventReader};
+use bevy::ecs::query::{With, Without};
+use bevy::ecs::system::{Commands, Query, Res, Resource, SystemParam};
+use bevy::ecs::world::{Mut, Ref};
+use bevy::reflect::Reflect;
 use bitflags::bitflags;
 use glam::UVec2;
 

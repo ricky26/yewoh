@@ -16,10 +16,7 @@ anyhow = { workspace = true }
 tracing = { workspace = true }
 clap = { workspace = true }
 async-trait = { workspace = true }
-bevy_ecs = { workspace = true }
-bevy_app = { workspace = true }
-bevy_reflect = { workspace = true }
-bevy_time = { workspace = true }
+bevy = { workspace = true, default-features = false }
 glam = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_yaml = { workspace = true }

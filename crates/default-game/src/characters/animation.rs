@@ -1,8 +1,8 @@
 use crate::characters::Animation;
-use bevy_ecs::entity::Entity;
-use bevy_ecs::event::{Event, EventReader};
-use bevy_ecs::query::With;
-use bevy_ecs::system::{Query, Res};
+use bevy::ecs::entity::Entity;
+use bevy::ecs::event::{Event, EventReader};
+use bevy::ecs::query::With;
+use bevy::ecs::system::{Query, Res};
 use yewoh::protocol::{CharacterAnimation, CharacterPredefinedAnimation};
 use yewoh_server::world::entity::Location;
 use yewoh_server::world::net::{NetClient, NetEntityLookup, Synchronized};

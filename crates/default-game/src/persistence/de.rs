@@ -1,7 +1,7 @@
 use std::fmt::Formatter;
 use std::marker::PhantomData;
 
-use bevy_ecs::entity::Entity;
+use bevy::ecs::entity::Entity;
 use serde::de::{DeserializeSeed, Error as DError, MapAccess, SeqAccess, Visitor};
 use serde::Deserializer;
 

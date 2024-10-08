@@ -5,10 +5,10 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Context;
-use bevy_app::{App, Plugin};
-use bevy_ecs::entity::Entity;
-use bevy_ecs::system::{EntityCommands, Resource};
-use bevy_ecs::world::{Command, EntityWorldMut, World};
+use bevy::app::{App, Plugin};
+use bevy::ecs::entity::Entity;
+use bevy::ecs::system::{EntityCommands, Resource};
+use bevy::ecs::world::{Command, EntityWorldMut, World};
 use serde::{Deserialize, Deserializer};
 use serde::de::{DeserializeSeed, Error, MapAccess, Visitor};
 use tokio::fs;

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use bevy_ecs::system::Resource;
+use bevy::ecs::system::Resource;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 

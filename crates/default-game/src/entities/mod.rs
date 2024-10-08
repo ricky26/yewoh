@@ -1,7 +1,7 @@
 use std::sync::Arc;
-use bevy_app::{App, Plugin};
-use bevy_ecs::component::Component;
-use bevy_reflect::Reflect;
+use bevy::app::{App, Plugin};
+use bevy::ecs::component::Component;
+use bevy::reflect::Reflect;
 use rand::{RngCore, thread_rng};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use uuid::{Uuid, Bytes};

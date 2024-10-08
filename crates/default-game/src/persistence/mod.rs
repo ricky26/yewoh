@@ -2,12 +2,12 @@ use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::{HashMap, VecDeque};
 
-use bevy_app::{App, Plugin};
-use bevy_ecs::entity::Entity;
-use bevy_ecs::query::{QueryFilter, ReadOnlyQueryData, WorldQuery};
-use bevy_ecs::schedule::ScheduleLabel;
-use bevy_ecs::system::{Deferred, Query, Resource, SystemBuffer, SystemMeta, SystemParam};
-use bevy_ecs::world::{FromWorld, Mut, World};
+use bevy::app::{App, Plugin};
+use bevy::ecs::entity::Entity;
+use bevy::ecs::query::{QueryFilter, ReadOnlyQueryData, WorldQuery};
+use bevy::ecs::schedule::ScheduleLabel;
+use bevy::ecs::system::{Deferred, Query, Resource, SystemBuffer, SystemMeta, SystemParam};
+use bevy::ecs::world::{FromWorld, Mut, World};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Error as DError;
 use serde::ser::SerializeStruct;

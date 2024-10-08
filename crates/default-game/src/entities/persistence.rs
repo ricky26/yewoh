@@ -1,6 +1,6 @@
-use bevy_ecs::entity::Entity;
-use bevy_ecs::prelude::{FromWorld, World};
-use bevy_ecs::query::{With, WorldQuery};
+use bevy::ecs::entity::Entity;
+use bevy::ecs::query::{With, WorldQuery};
+use bevy::ecs::world::{FromWorld, World};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::entities::{Persistent, UniqueId};

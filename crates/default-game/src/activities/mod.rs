@@ -1,7 +1,7 @@
-use bevy_app::{App, Plugin, Update};
-use bevy_ecs::component::Component;
-use bevy_ecs::system::{Query, Res};
-use bevy_time::{Time, Timer};
+use bevy::app::{App, Plugin, Update};
+use bevy::ecs::component::Component;
+use bevy::ecs::system::{Query, Res};
+use bevy::time::{Time, Timer};
 
 use crate::activities::combat::CombatPlugin;
 

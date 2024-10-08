@@ -2,16 +2,15 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
-use bevy_ecs::entity::MapEntities;
-use bevy_ecs::prelude::*;
-use bevy_ecs::reflect::ReflectMapEntities;
-use bevy_reflect::prelude::*;
+use bevy::ecs::entity::MapEntities;
+use bevy::ecs::reflect::ReflectMapEntities;
+use bevy::prelude::*;
 use glam::{IVec2, IVec3};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use yewoh::{Direction, EntityId, Notoriety};
 use yewoh::protocol::{EntityFlags, EquipmentSlot, Race, UpsertEntityStats};
 use yewoh::types::FixedString;
+use yewoh::{Direction, EntityId, Notoriety};
 
 use crate::math::IVecExt;
 

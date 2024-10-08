@@ -4,9 +4,8 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
 
-use bevy_app::App;
-use bevy_ecs::prelude::*;
-use bevy_ecs::system::{Resource, SystemParam};
+use bevy::prelude::*;
+use bevy::ecs::system::{Resource, SystemParam};
 use clap::Parser;
 
 use yewoh::protocol::{MessageKind, UnicodeTextMessage};

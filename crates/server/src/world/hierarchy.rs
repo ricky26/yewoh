@@ -1,6 +1,6 @@
-use bevy_ecs::entity::Entity;
-use bevy_ecs::system::EntityCommands;
-use bevy_ecs::world::{Command, EntityWorldMut, World};
+use bevy::ecs::entity::Entity;
+use bevy::ecs::system::EntityCommands;
+use bevy::ecs::world::{Command, EntityWorldMut, World};
 
 use crate::world::entity::{Character, Container};
 

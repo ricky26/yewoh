@@ -1,11 +1,11 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use bevy_ecs::entity::Entity;
-use bevy_ecs::prelude::*;
-use bevy_ecs::system::{EntityCommands};
-use bevy_ecs::world::{Command, World};
-use bevy_reflect::Reflect;
+use bevy::ecs::entity::Entity;
+use bevy::ecs::prelude::*;
+use bevy::ecs::system::{EntityCommands};
+use bevy::ecs::world::{Command, World};
+use bevy::reflect::Reflect;
 
 use yewoh::EntityId;
 

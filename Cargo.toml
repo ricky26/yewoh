@@ -31,9 +31,6 @@ anyhow = "1.0.89"
 async-trait = "0.1.83"
 tracing = "0.1.40"
 bevy = { version = "0.14.2", default-features = false }
-bevy_ecs = "0.14.2"
-bevy_app = "0.14.2"
-bevy_reflect = "0.14.2"
 bevy_kira_audio = { version = "0.20.0", default-features = false }
 bevy_egui = "0.30.0"
 bevy_reflect_derive = "0.14.2"

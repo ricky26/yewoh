@@ -1,15 +1,14 @@
 use std::ops::Deref;
 use std::path::Path;
 
-use bevy_ecs::prelude::*;
-use bevy_ecs::world::CommandQueue;
-use bevy_reflect::prelude::*;
+use bevy::ecs::world::CommandQueue;
+use bevy::prelude::*;
 use futures::{future, TryFutureExt};
 use glam::IVec3;
 use tokio::spawn;
 use tokio::sync::mpsc;
 
-use yewoh::assets::map::{CHUNK_SIZE, load_map, load_statics, MapChunk};
+use yewoh::assets::map::{load_map, load_statics, MapChunk, CHUNK_SIZE};
 use yewoh::assets::multi::MultiData;
 use yewoh::assets::tiles::{TileData, TileFlags};
 use yewoh::Direction;

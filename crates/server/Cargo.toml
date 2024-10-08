@@ -15,9 +15,7 @@ futures = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 tracing = { workspace = true }
-bevy_ecs = { workspace = true }
-bevy_app = { workspace = true }
-bevy_reflect = { workspace = true }
+bevy = { workspace = true, default-features = false }
 glam = { workspace = true }
 rstar = { workspace = true }
 bitflags = { workspace = true }

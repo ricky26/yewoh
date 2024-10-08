@@ -1,6 +1,6 @@
-use bevy_ecs::prelude::RemovedComponents;
-use bevy_ecs::query::Changed;
-use bevy_ecs::system::{Query, Res};
+use bevy::ecs::query::Changed;
+use bevy::ecs::removal_detection::RemovedComponents;
+use bevy::ecs::system::{Query, Res};
 use yewoh::protocol::SetAttackTarget;
 
 use crate::world::entity::AttackTarget;

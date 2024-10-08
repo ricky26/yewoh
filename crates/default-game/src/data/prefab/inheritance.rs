@@ -1,6 +1,6 @@
 use std::fmt::Formatter;
-use bevy_ecs::entity::Entity;
-use bevy_ecs::prelude::World;
+use bevy::ecs::entity::Entity;
+use bevy::ecs::world::World;
 use serde::{Deserialize, Deserializer};
 use serde::de::{Error, SeqAccess, Visitor};
 use crate::data::prefab::{FromPrefabTemplate, PrefabBundle, PrefabCollection};

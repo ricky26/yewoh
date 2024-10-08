@@ -1,5 +1,4 @@
-use bevy_ecs::prelude::*;
-use bevy_reflect::prelude::*;
+use bevy::prelude::*;
 
 use yewoh::protocol::{CharacterAnimation, CharacterProfile, ContextMenuEntry, DamageDealt, EntityFlags, MoveConfirm, MoveEntityReject, MoveReject, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, Swing, WarMode};
 use yewoh::types::FixedString;

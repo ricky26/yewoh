@@ -1,4 +1,4 @@
-use bevy_app::{App, Plugin};
+use bevy::app::{App, Plugin};
 use crate::data::prefab::PrefabAppExt;
 use crate::items::persistence::ItemSerializer;
 use crate::items::prefabs::container::ContainerPrefab;

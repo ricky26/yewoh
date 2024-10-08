@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use bevy_ecs::component::Component;
-use bevy_ecs::entity::Entity;
-use bevy_ecs::system::{Commands, Query, Res, Resource};
+use bevy::ecs::component::Component;
+use bevy::ecs::entity::Entity;
+use bevy::ecs::system::{Commands, Query, Res, Resource};
 use clap::Parser;
 use glam::IVec2;
 

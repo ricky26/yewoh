@@ -1,4 +1,4 @@
-use bevy_ecs::prelude::*;
+use bevy::prelude::*;
 use clap::Parser;
 use glam::IVec2;
 use tracing::info;

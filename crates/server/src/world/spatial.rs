@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
-use bevy_ecs::prelude::*;
+use bevy::prelude::*;
 use glam::{IVec2, IVec3};
 use rstar::{AABB, Envelope, Point, PointDistance, RTree, RTreeObject, SelectionFunction};
 

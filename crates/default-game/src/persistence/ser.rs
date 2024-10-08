@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use bevy_ecs::entity::Entity;
+use bevy::ecs::entity::Entity;
 use serde::{Serialize, Serializer};
 use serde::ser::{Error as SError, SerializeSeq, SerializeTuple};
 

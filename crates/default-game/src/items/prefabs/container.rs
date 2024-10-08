@@ -1,5 +1,5 @@
-use bevy_ecs::entity::Entity;
-use bevy_ecs::world::World;
+use bevy::ecs::entity::Entity;
+use bevy::ecs::world::World;
 use glam::IVec2;
 use serde::Deserialize;
 

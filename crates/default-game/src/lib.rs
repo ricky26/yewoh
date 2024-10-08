@@ -1,6 +1,5 @@
-use bevy_app::PluginGroupBuilder;
-use bevy_app::prelude::*;
-use bevy_ecs::prelude::*;
+use bevy::app::PluginGroupBuilder;
+use bevy::prelude::*;
 
 use yewoh_server::world::ServerSet;
 

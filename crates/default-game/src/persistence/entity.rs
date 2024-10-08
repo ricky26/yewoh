@@ -1,6 +1,6 @@
 use std::fmt::Formatter;
 
-use bevy_ecs::entity::Entity;
+use bevy::ecs::entity::Entity;
 use serde::de::{DeserializeSeed, SeqAccess, Visitor};
 use serde::{Deserializer, Serialize, Serializer};
 use serde::ser::SerializeSeq;

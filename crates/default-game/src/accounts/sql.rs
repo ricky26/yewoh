@@ -4,7 +4,7 @@ use anyhow::anyhow;
 use argon2::password_hash::SaltString;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use async_trait::async_trait;
-use bevy_ecs::system::Resource;
+use bevy::ecs::system::Resource;
 use futures::StreamExt;
 use rand::thread_rng;
 use sqlx::{FromRow, PgPool};

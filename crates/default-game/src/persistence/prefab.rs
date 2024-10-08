@@ -1,6 +1,6 @@
-use bevy_ecs::entity::Entity;
-use bevy_ecs::prelude::{FromWorld, World};
-use bevy_ecs::query::With;
+use bevy::ecs::entity::Entity;
+use bevy::ecs::world::{FromWorld, World};
+use bevy::ecs::query::With;
 use serde::{Deserialize, Deserializer, Serializer};
 use serde::de::Error;
 

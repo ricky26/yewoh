@@ -1,12 +1,12 @@
 use std::time::Duration;
 
-use bevy_ecs::component::Component;
-use bevy_ecs::entity::Entity;
-use bevy_ecs::prelude::World;
-use bevy_ecs::query::With;
-use bevy_ecs::system::{Query, Res};
-use bevy_reflect::Reflect;
-use bevy_time::{Time, Timer, TimerMode};
+use bevy::ecs::component::Component;
+use bevy::ecs::entity::Entity;
+use bevy::ecs::prelude::World;
+use bevy::ecs::query::With;
+use bevy::ecs::system::{Query, Res};
+use bevy::reflect::Reflect;
+use bevy::time::{Time, Timer, TimerMode};
 use rand::{thread_rng, Rng};
 use serde::Deserialize;
 

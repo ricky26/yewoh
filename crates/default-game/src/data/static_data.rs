@@ -1,5 +1,5 @@
 use std::path::Path;
-use bevy_ecs::system::Resource;
+use bevy::ecs::system::Resource;
 use tokio::fs;
 use crate::data::cities::Cities;
 use crate::data::maps::Maps;

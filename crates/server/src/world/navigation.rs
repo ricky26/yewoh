@@ -1,4 +1,4 @@
-use bevy_ecs::entity::Entity;
+use bevy::ecs::entity::Entity;
 use yewoh::assets::tiles::{TileData, TileFlags};
 
 use yewoh::Direction;

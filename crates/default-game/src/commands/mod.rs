@@ -1,4 +1,4 @@
-use bevy_app::{App, Plugin, Update};
+use bevy::app::{App, Plugin, Update};
 pub use registration::{
     TextCommand,
     TextCommandExecutor,

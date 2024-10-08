@@ -1,10 +1,10 @@
-use bevy_app::{App, Last, Plugin, Update};
-use bevy_ecs::entity::Entity;
-use bevy_ecs::event::{EventReader, EventWriter};
-use bevy_ecs::query::{Changed, With};
-use bevy_ecs::schedule::{IntoSystemConfigs};
-use bevy_ecs::system::{Commands, Query, Res};
-use bevy_time::{Timer, TimerMode};
+use bevy::app::{App, Last, Plugin, Update};
+use bevy::ecs::entity::Entity;
+use bevy::ecs::event::{EventReader, EventWriter};
+use bevy::ecs::query::{Changed, With};
+use bevy::ecs::schedule::{IntoSystemConfigs};
+use bevy::ecs::system::{Commands, Query, Res};
+use bevy::time::{Timer, TimerMode};
 
 use yewoh::protocol;
 use yewoh::protocol::EquipmentSlot;

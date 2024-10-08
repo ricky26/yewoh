@@ -1,6 +1,7 @@
+use bevy::app::{App, Plugin, Update};
+
 use crate::ai::behaviours::wander::{wander, WanderPrefab};
 use crate::data::prefab::PrefabAppExt;
-use bevy_app::{App, Plugin, Update};
 
 pub mod behaviours;
 
