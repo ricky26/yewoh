@@ -4,20 +4,20 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy_egui = "0.20.2"
-bevy_reflect_derive = "0.10.0"
-bevy_prototype_debug_lines = "0.10.1"
-bevy-inspector-egui = "0.18.1"
-serde = "1.0.158"
-serde_derive = "1.0.158"
-serde_json = "1.0.95"
-anyhow = "1.0.70"
-futures = "0.3.27"
-rand = "0.8.5"
-egui = "0.21.0"
+bevy_egui = { workspace = true }
+bevy_reflect_derive = { workspace = true }
+bevy_prototype_debug_lines = { workspace = true }
+bevy-inspector-egui = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+futures = { workspace = true }
+rand = { workspace = true }
+egui = { workspace = true }
 
 [dependencies.bevy]
-version = "0.10.0"
+workspace = true
 default-features = false
 features = [
     "animation",
@@ -33,7 +33,7 @@ features = [
 ]
 
 [dependencies.bevy_kira_audio]
-version = "0.15.0"
+workspace = true
 default-features = false
 features = [
     "wav",

@@ -9,15 +9,15 @@ edition = "2021"
 
 [dependencies]
 yewoh = { path = "../core" }
-tokio = { version = "1.26.0", default_features = false, features = ["net"] }
-serde = { version = "1.0.159", features = ["derive"] }
-futures = "0.3.27"
-anyhow = "1.0.70"
-async-trait = "0.1.68"
-log = "0.4.17"
-bevy_ecs = "0.10.0"
-bevy_app = "0.10.0"
-bevy_reflect = "0.10.0"
-glam = "0.23.0"
-rstar = "0.10.0"
-bitflags = "2.0.2"
+tokio = { workspace = true, default_features = false, features = ["net"] }
+serde = { workspace = true, features = ["derive"] }
+futures = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+log = { workspace = true }
+bevy_ecs = { workspace = true }
+bevy_app = { workspace = true }
+bevy_reflect = { workspace = true }
+glam = { workspace = true }
+rstar = { workspace = true }
+bitflags = { workspace = true }
