@@ -13,7 +13,7 @@ yewoh-server = { path = "../server" }
 tokio = { workspace = true, default_features = false, features = ["fs", "net", "macros"] }
 futures = { workspace = true }
 anyhow = { workspace = true }
-log = { workspace = true }
+tracing = { workspace = true }
 clap = { workspace = true }
 async-trait = { workspace = true }
 bevy_ecs = { workspace = true }
@@ -21,8 +21,7 @@ bevy_app = { workspace = true }
 bevy_reflect = { workspace = true }
 bevy_time = { workspace = true }
 glam = { workspace = true }
-serde = { workspace = true }
-serde_derive = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 serde_yaml = { workspace = true }
 erased-serde = { workspace = true }
 shell-words = { workspace = true }

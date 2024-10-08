@@ -1,6 +1,6 @@
 use bevy_ecs::entity::Entity;
-use bevy_ecs::system::{Command, EntityCommands};
-use bevy_ecs::world::{EntityMut, World};
+use bevy_ecs::system::EntityCommands;
+use bevy_ecs::world::{Command, EntityWorldMut, World};
 
 use crate::world::entity::{Character, Container};
 
@@ -9,7 +9,7 @@ pub struct DespawnRecursive {
 }
 
 impl Command for DespawnRecursive {
-    fn write(self, world: &mut World) {
+    fn apply(self, world: &mut World) {
         despawn_recursive(world, self.entity);
     }
 }
@@ -34,14 +34,14 @@ pub trait DespawnRecursiveExt {
     fn despawn_recursive(self);
 }
 
-impl<'w, 's, 'a> DespawnRecursiveExt for EntityCommands<'w, 's, 'a> {
+impl<'w> DespawnRecursiveExt for EntityCommands<'w> {
     fn despawn_recursive(mut self) {
         let entity = self.id();
         self.commands().add(DespawnRecursive { entity });
     }
 }
 
-impl<'w> DespawnRecursiveExt for EntityMut<'w> {
+impl<'w> DespawnRecursiveExt for EntityWorldMut<'w> {
     fn despawn_recursive(self) {
         let entity = self.id();
         despawn_recursive(self.into_world_mut(), entity);

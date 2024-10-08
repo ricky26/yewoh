@@ -2,9 +2,9 @@ use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::{HashMap, VecDeque};
 
-use bevy_app::{App, IntoSystemAppConfig, Plugin};
+use bevy_app::{App, Plugin};
 use bevy_ecs::entity::Entity;
-use bevy_ecs::query::{ReadOnlyWorldQuery, WorldQuery};
+use bevy_ecs::query::{QueryFilter, ReadOnlyQueryData, WorldQuery};
 use bevy_ecs::schedule::ScheduleLabel;
 use bevy_ecs::system::{Deferred, Query, Resource, SystemBuffer, SystemMeta, SystemParam};
 use bevy_ecs::world::{FromWorld, Mut, World};
@@ -16,7 +16,7 @@ use sqlx::migrate::Migrate;
 
 use de::{BundleValuesVisitor, WorldVisitor};
 pub use hierarchy::{ChangePersistence, PersistenceCommandsExt, set_persistent};
-use ser::{BufferBundlesSerializer, BufferSerializer, ErasedOk};
+use ser::{BufferBundlesSerializer, BufferSerializer};
 
 use crate::persistence::prefab::PrefabSerializer;
 
@@ -28,7 +28,9 @@ pub mod entity;
 pub mod db;
 
 pub async fn migrate<D: Database>(db: &Pool<D>) -> anyhow::Result<()>
-    where <D as Database>::Connection: Migrate {
+where
+    <D as Database>::Connection: Migrate,
+{
     sqlx::migrate!("./migrations")
         .run(db)
         .await?;
@@ -85,8 +87,8 @@ impl<'w> DeserializeContext<'w> {
 pub struct SerializeSchedule;
 
 pub trait BundleSerializer: FromWorld + Send + 'static {
-    type Query: ReadOnlyWorldQuery;
-    type Filter: ReadOnlyWorldQuery;
+    type Query: ReadOnlyQueryData;
+    type Filter: QueryFilter;
     type Bundle: Send + Sync + 'static;
 
     fn id() -> &'static str;
@@ -101,7 +103,7 @@ type BundleDeserializer = fn(ctx: &mut DeserializeContext, d: &mut dyn erased_se
 pub struct SerializedBuffer {
     serializer_id: String,
     priority: i32,
-    serialize: Box<dyn (Fn(&SerializeContext, &mut dyn erased_serde::Serializer) -> Result<ErasedOk, erased_serde::Error>) + Send + Sync + 'static>,
+    serialize: Box<dyn Fn(&SerializeContext, &mut dyn FnMut(&dyn erased_serde::Serialize)) + Send + Sync + 'static>,
 }
 
 impl PartialEq<Self> for SerializedBuffer {
@@ -157,8 +159,8 @@ impl<T: BundleSerializer> SystemBuffer for SerializedBundlesBuffer<T> {
             return;
         }
 
-        let serialize = move |ctx: &SerializeContext, s: &mut dyn erased_serde::Serializer|
-            erased_serde::serialize(&BufferSerializer::<T>::new(ctx, &items), s);
+        let serialize = move |ctx: &SerializeContext, callback: &mut dyn FnMut(&dyn erased_serde::Serialize)|
+            callback(&BufferSerializer::<T>::new(ctx, &items));
         let buffer = SerializedBuffer {
             serializer_id: T::id().to_string(),
             priority: T::priority(),
@@ -166,12 +168,9 @@ impl<T: BundleSerializer> SystemBuffer for SerializedBundlesBuffer<T> {
         };
         let buffers = &mut world.resource_mut::<SerializedBuffers>()
             .buffers;
-        let index = match buffers.binary_search_by(|i|
-            i.priority.cmp(&buffer.priority)
-            .then(Ordering::Greater)) {
-            Ok(x) => x,
-            Err(x) => x,
-        };
+        let index = buffers.binary_search_by(|i|
+            i.priority.cmp(&buffer.priority).then(Ordering::Greater))
+            .unwrap_or_else(|x| x);
         buffers.insert(index, buffer);
     }
 }
@@ -216,7 +215,7 @@ impl BundleSerializers {
     pub fn deserialize_bundle_values<'de, D: Deserializer<'de>>(&self, ctx: &mut DeserializeContext, id: &str, d: D) -> Result<(), D::Error> {
         if let Some(deserialize) = self.deserializers.get(id) {
             let mut d = <dyn erased_serde::Deserializer>::erase(d);
-            (deserialize)(ctx, &mut d)
+            deserialize(ctx, &mut d)
                 .map_err(|e| D::Error::custom(e))
         } else {
             Err(D::Error::custom(format!("unknown bundle ID {id}")))
@@ -260,10 +259,10 @@ pub trait SerializationSetupExt {
 
 impl SerializationSetupExt for App {
     fn register_serializer<T: BundleSerializer>(&mut self) -> &mut Self {
-        self.world.init_resource::<BundleSerializers>();
-        self.world.resource_mut::<BundleSerializers>().insert::<T>();
+        self.world_mut().init_resource::<BundleSerializers>();
+        self.world_mut().resource_mut::<BundleSerializers>().insert::<T>();
         self
-            .add_system(extract_bundles::<T>.in_schedule(SerializeSchedule))
+            .add_systems(SerializeSchedule, extract_bundles::<T>)
     }
 }
 

@@ -9,7 +9,6 @@ bevy_reflect_derive = { workspace = true }
 bevy_prototype_debug_lines = { workspace = true }
 bevy-inspector-egui = { workspace = true }
 serde = { workspace = true }
-serde_derive = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 futures = { workspace = true }
@@ -18,18 +17,8 @@ egui = { workspace = true }
 
 [dependencies.bevy]
 workspace = true
-default-features = false
 features = [
-    "animation",
-    "bevy_asset",
-    "bevy_gilrs",
-    "bevy_render",
-    "bevy_scene",
-    "bevy_winit",
-    "png",
-    "hdr",
-    "filesystem_watcher",
-    "x11"
+    "wayland"
 ]
 
 [dependencies.bevy_kira_audio]

@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use bevy_ecs::prelude::*;
 use bevy_reflect::prelude::*;
 use glam::IVec3;
-
+use tracing::debug;
 use yewoh::protocol::{AttackRequest, ContextMenu, ContextMenuEntry, ExtendedCommand, PickTarget, SetAttackTarget, TargetType};
 
 use crate::world::events::{AttackRequestedEvent, ContextMenuEvent, ReceivedPacketEvent};
@@ -69,7 +69,7 @@ pub fn update_targets(
     mut events: EventReader<ReceivedPacketEvent>,
     mut commands: Commands,
 ) {
-    for ReceivedPacketEvent { client_entity, packet } in events.iter() {
+    for ReceivedPacketEvent { client_entity, packet } in events.read() {
         let client_entity = *client_entity;
         let request = match packet.downcast::<PickTarget>() {
             Some(x) => x,
@@ -139,7 +139,7 @@ pub fn update_targets(
         });
     }
 
-    for entity in removed_world_targets.iter().chain(removed_entity_targets.iter()) {
+    for entity in removed_world_targets.read().chain(removed_entity_targets.read()) {
         let client_entity = match all_targets.get(entity) {
             Ok((_, Some(r), _)) => r.client_entity,
             Ok((_, _, Some(r))) => r.client_entity,
@@ -173,7 +173,7 @@ pub fn handle_context_menu_packets(
     mut invoked_events: EventWriter<ContextMenuEvent>,
     mut commands: Commands,
 ) {
-    for ReceivedPacketEvent { client_entity: client, packet } in events.iter() {
+    for ReceivedPacketEvent { client_entity: client, packet } in events.read() {
         let client_entity = *client;
         let packet = match packet.downcast::<ExtendedCommand>() {
             Some(x) => x,
@@ -206,8 +206,8 @@ pub fn handle_context_menu_packets(
                 });
             }
             p => {
-                log::debug!("unhandled extended packet {:?}", p);
-            },
+                debug!("unhandled extended packet {:?}", p);
+            }
         }
     }
 }
@@ -244,7 +244,7 @@ pub fn handle_attack_packets(
     mut events: EventReader<ReceivedPacketEvent>,
     mut invoked_events: EventWriter<AttackRequestedEvent>,
 ) {
-    for ReceivedPacketEvent { client_entity: client, packet } in events.iter() {
+    for ReceivedPacketEvent { client_entity: client, packet } in events.read() {
         let client_entity = *client;
         let packet = match packet.downcast::<AttackRequest>() {
             Some(x) => x,
@@ -261,7 +261,7 @@ pub fn handle_attack_packets(
                 }
 
                 continue;
-            },
+            }
         };
 
         invoked_events.send(AttackRequestedEvent {

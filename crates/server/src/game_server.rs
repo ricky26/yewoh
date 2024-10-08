@@ -1,11 +1,11 @@
 use std::net::SocketAddr;
 
 use anyhow::anyhow;
-use log::{info, warn};
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::spawn;
 use tokio::sync::mpsc;
+use tracing::{info, warn};
 
 use yewoh::protocol::{new_io, Reader, Writer};
 

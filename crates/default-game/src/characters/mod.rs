@@ -1,14 +1,15 @@
 use std::time::Duration;
 
-use bevy_app::{App, Plugin};
+use bevy_app::{App, Last, Plugin};
 use bevy_ecs::component::Component;
 use bevy_ecs::entity::Entity;
-use bevy_ecs::schedule::IntoSystemConfig;
-use serde_derive::Deserialize;
+use bevy_ecs::event::Event;
+use bevy_ecs::schedule::IntoSystemConfigs;
+use serde::Deserialize;
 
+use crate::characters::animation::AnimationStartedEvent;
 use yewoh_server::world::entity::Location;
 use yewoh_server::world::ServerSet;
-use crate::characters::animation::AnimationStartedEvent;
 
 use crate::characters::prefabs::CharacterPrefab;
 use crate::data::prefab::PrefabAppExt;
@@ -23,7 +24,7 @@ mod persistence;
 #[derive(Debug, Default, Clone, Component)]
 pub struct Alive;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Event)]
 pub struct DamageDealt {
     pub target: Entity,
     pub source: Entity,
@@ -31,7 +32,7 @@ pub struct DamageDealt {
     pub location: Location,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Event)]
 pub struct CharacterDied {
     pub character: Entity,
 }
@@ -39,7 +40,7 @@ pub struct CharacterDied {
 #[derive(Debug, Default, Clone, Component)]
 pub struct Corpse;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Event)]
 pub struct CorpseSpawned {
     pub character: Entity,
     pub corpse: Entity,
@@ -98,7 +99,9 @@ impl Plugin for CharactersPlugin {
         app
             .init_prefab_bundle::<CharacterPrefab>("character")
             .add_event::<AnimationStartedEvent>()
-            .add_system(animation::send_animations.in_set(ServerSet::Send))
+            .add_systems(Last, (
+                animation::send_animations.in_set(ServerSet::Send),
+            ))
             .register_serializer::<persistence::CharacterSerializer>();
     }
 }

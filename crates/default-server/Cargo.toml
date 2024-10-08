@@ -16,12 +16,24 @@ clap = { workspace = true, features = ["derive", "env"] }
 serde = { workspace = true, features = ["derive"] }
 serde_yaml = { workspace = true }
 serde_json = { workspace = true }
-bevy = { workspace = true, default_features = false }
 async-trait = { workspace = true }
 futures = { workspace = true }
 anyhow = { workspace = true }
-log = { workspace = true }
+tracing = { workspace = true }
 axum = { workspace = true }
+axum-server = { workspace = true }
 glam = { workspace = true }
 ctrlc = { workspace = true, features = ["termination"] }
 sqlx = { workspace = true, features = ["postgres", "runtime-tokio", "tls-rustls", "macros", "migrate", "chrono", "uuid", "json"] }
+
+[dependencies.bevy]
+workspace = true
+default_features = false
+features = [
+    "bevy_asset",
+    "bevy_color",
+    "bevy_scene",
+    "bevy_state",
+    "multi_threaded",
+    "sysinfo_plugin",
+]

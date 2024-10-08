@@ -14,7 +14,7 @@ pub fn handle_incoming_chat(
     clients: Query<(&NetClient, &Possessing)>,
     character_query: Query<(&NetEntity, &Stats)>,
 ) {
-    for ChatRequestEvent { client_entity: client, request } in events.iter() {
+    for ChatRequestEvent { client_entity: client, request } in events.read() {
         if command_executor.try_split_exec(*client, &request.text) {
             continue;
         }

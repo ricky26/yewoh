@@ -6,8 +6,6 @@ use serde::ser::{Error as SError, SerializeSeq, SerializeTuple};
 
 use super::{BundleSerializer, SerializeContext, SerializedBuffer};
 
-pub(crate) type ErasedOk = <&'static mut dyn erased_serde::Serializer as Serializer>::Ok;
-
 struct BufferBundleSerializer<'a> {
     ctx: &'a SerializeContext,
     buffer: &'a SerializedBuffer,
@@ -85,18 +83,12 @@ struct BufferValuesSerializer<'a> {
 
 impl<'a> Serialize for BufferValuesSerializer<'a> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-        struct Thunk<'a> {
-            ctx: &'a SerializeContext,
-            buffer: &'a SerializedBuffer,
-        }
-
-        impl<'a> erased_serde::Serialize for Thunk<'a> {
-            fn erased_serialize(&self, serializer: &mut dyn erased_serde::Serializer) -> Result<ErasedOk, erased_serde::Error> {
-                (self.buffer.serialize)(self.ctx, serializer)
-            }
-        }
-
-        erased_serde::serialize(&Thunk { ctx: self.ctx, buffer: self.buffer }, serializer)
+        let mut serializer = Some(serializer);
+        let mut result = None;
+        (self.buffer.serialize)(self.ctx, &mut |s| {
+            result = Some(erased_serde::serialize(s, serializer.take().unwrap()));
+        });
+        result.unwrap()
     }
 }
 

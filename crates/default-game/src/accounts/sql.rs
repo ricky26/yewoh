@@ -1,20 +1,21 @@
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use argon2::password_hash::SaltString;
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use async_trait::async_trait;
 use bevy_ecs::system::Resource;
 use futures::StreamExt;
 use rand::thread_rng;
 use sqlx::{FromRow, PgPool};
+use tracing::warn;
 use uuid::Uuid;
 
 use yewoh::protocol::{CreateCharacter, DeleteCharacter};
 use yewoh_server::lobby;
 
-use crate::accounts::DEFAULT_CHARACTER_SLOTS;
 use crate::accounts::repository::{AccountCharacter, AccountCharacters, AccountRepository, CharacterInfo, CharacterToSpawn};
+use crate::accounts::DEFAULT_CHARACTER_SLOTS;
 use crate::entities::new_uuid;
 
 #[derive(Debug, Clone)]
@@ -101,7 +102,7 @@ impl AccountRepository for SqlAccountRepository {
         while let Some(result) = fetched_characters.next().await {
             let character = result?;
             if character.slot < 0 || character.slot >= characters.len() as i32 {
-                log::warn!("character {} is in invalid slot {}", &character.id, character.slot);
+                warn!("character {} is in invalid slot {}", &character.id, character.slot);
             } else {
                 characters[character.slot as usize] = Some(AccountCharacter {
                     id: character.id,
@@ -117,11 +118,11 @@ impl AccountRepository for SqlAccountRepository {
         let account = self.get_account(username).await?;
         let mut tx = self.inner.pool.begin().await?;
 
-        let used_slots: Vec<(i32, )> = sqlx::query_as("SELECT slot FROM characters WHERE username = $1")
+        let used_slots: Vec<(i32,)> = sqlx::query_as("SELECT slot FROM characters WHERE username = $1")
             .bind(username)
             .fetch_all(&mut *tx)
             .await?;
-        let slot = match (0..account.character_slots).filter(|i| !used_slots.contains(&(*i, ))).next() {
+        let slot = match (0..account.character_slots).filter(|i| !used_slots.contains(&(*i,))).next() {
             Some(x) => x as i32,
             None => {
                 tx.rollback().await?;
@@ -191,7 +192,7 @@ impl lobby::AccountRepository for SqlAccountRepository {
 
         let hash = PasswordHash::new(&account.password_hash)?;
         if let Err(err) = self.inner.password_hasher.verify_password(password.as_bytes(), &hash) {
-            log::warn!("bad login attempt: {err}");
+            warn!("bad login attempt: {err}");
             Err(anyhow!("invalid username or password"))
         } else {
             Ok(())

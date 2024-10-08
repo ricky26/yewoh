@@ -2,7 +2,7 @@ use std::ops::Deref;
 use std::path::Path;
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::system::CommandQueue;
+use bevy_ecs::world::CommandQueue;
 use bevy_reflect::prelude::*;
 use futures::{future, TryFutureExt};
 use glam::IVec3;

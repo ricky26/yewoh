@@ -3,9 +3,10 @@ use std::io::Write;
 use anyhow::anyhow;
 use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
+use tracing::warn;
 
-use crate::EntityId;
 use crate::protocol::{ClientFlags, PacketReadExt, PacketWriteExt};
+use crate::EntityId;
 
 use super::{ClientVersion, Endian, Packet};
 
@@ -147,7 +148,7 @@ impl Packet for ExtendedCommand {
                 Ok(ExtendedCommand::ContextMenuResponse(ContextMenuResponse { id, target_id }))
             }
             c => {
-                log::warn!("Unknown extended packet {kind}");
+                warn!("Unknown extended packet {kind}");
                 Ok(ExtendedCommand::Unknown(c))
             }
         }

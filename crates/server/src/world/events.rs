@@ -5,66 +5,66 @@ use glam::IVec3;
 
 use yewoh::protocol::{AnyPacket, CreateCharacter, DeleteCharacter, EquipmentSlot, Move, SelectCharacter, UnicodeTextMessageRequest};
 
-#[derive(Debug)]
+#[derive(Debug, Event)]
 pub struct ReceivedPacketEvent {
     pub client_entity: Entity,
     pub packet: AnyPacket,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Event)]
 pub struct SentPacketEvent {
     pub client_entity: Option<Entity>,
     pub packet: Arc<AnyPacket>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Event)]
 pub struct CharacterListEvent {
     pub client_entity: Entity,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Event)]
 pub struct CreateCharacterEvent {
     pub client_entity: Entity,
     pub request: CreateCharacter,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Event)]
 pub struct SelectCharacterEvent {
     pub client_entity: Entity,
     pub request: SelectCharacter,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Event)]
 pub struct DeleteCharacterEvent {
     pub client_entity: Entity,
     pub request: DeleteCharacter,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Event)]
 pub struct MoveEvent {
     pub client_entity: Entity,
     pub request: Move,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Event)]
 pub struct SingleClickEvent {
     pub client_entity: Entity,
     pub target: Option<Entity>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Event)]
 pub struct DoubleClickEvent {
     pub client_entity: Entity,
     pub target: Option<Entity>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Event)]
 pub struct PickUpEvent {
     pub client_entity: Entity,
     pub target: Entity,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Event)]
 pub struct DropEvent {
     pub client_entity: Entity,
     pub target: Entity,
@@ -73,7 +73,7 @@ pub struct DropEvent {
     pub dropped_on: Option<Entity>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Event)]
 pub struct EquipEvent {
     pub client_entity: Entity,
     pub target: Entity,
@@ -81,33 +81,33 @@ pub struct EquipEvent {
     pub slot: EquipmentSlot,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Event)]
 pub struct ChatRequestEvent {
     pub client_entity: Entity,
     pub request: UnicodeTextMessageRequest,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Event)]
 pub struct ContextMenuEvent {
     pub client_entity: Entity,
     pub target: Entity,
     pub option: u16,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Event)]
 pub struct ProfileEvent {
     pub client_entity: Entity,
     pub target: Entity,
     pub new_profile: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Event)]
 pub struct RequestSkillsEvent {
     pub client_entity: Entity,
     pub target: Entity,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Event)]
 pub struct AttackRequestedEvent {
     pub client_entity: Entity,
     pub target: Entity,

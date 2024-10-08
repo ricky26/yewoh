@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use bevy_ecs::entity::Entity;
-use bevy_ecs::system::{Command, EntityCommands};
-use bevy_ecs::world::{EntityMut, World};
+use bevy_ecs::system::{EntityCommands};
+use bevy_ecs::world::{Command, EntityWorldMut, World};
 use yewoh_server::world::entity::{Character, Container};
 use crate::entities::Persistent;
 
@@ -11,7 +11,7 @@ pub struct ChangePersistence {
 }
 
 impl Command for ChangePersistence {
-    fn write(self, world: &mut World) {
+    fn apply(self, world: &mut World) {
         set_persistent(world, self.entity, self.persistent);
     }
 }
@@ -49,7 +49,7 @@ pub trait PersistenceCommandsExt {
     }
 }
 
-impl<'w, 's, 'a> PersistenceCommandsExt for EntityCommands<'w, 's, 'a> {
+impl<'w> PersistenceCommandsExt for EntityCommands<'w> {
     fn change_persistence(&mut self, persistent: bool) -> &mut Self {
         let entity = self.id();
         self.commands().add(ChangePersistence { entity, persistent });
@@ -57,7 +57,7 @@ impl<'w, 's, 'a> PersistenceCommandsExt for EntityCommands<'w, 's, 'a> {
     }
 }
 
-impl<'w> PersistenceCommandsExt for EntityMut<'w> {
+impl<'w> PersistenceCommandsExt for EntityWorldMut<'w> {
     fn change_persistence(&mut self, persistent: bool) -> &mut Self {
         let entity = self.id();
         self.world_scope(|world| set_persistent(world, entity, persistent));

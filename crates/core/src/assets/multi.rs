@@ -2,6 +2,7 @@ use std::path::Path;
 
 use byteorder::{LittleEndian as Endian, ReadBytesExt};
 use glam::IVec3;
+use tracing::warn;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 
@@ -46,7 +47,7 @@ pub async fn load_multi_data(data_path: &Path) -> anyhow::Result<MultiData> {
 
         let id = entry.read_u32::<Endian>()? as usize;
         if id != i {
-            log::warn!("multi {i} has wrong ID {id}");
+            warn!("multi {i} has wrong ID {id}");
         }
 
         let count = entry.read_u32::<Endian>()? as usize;

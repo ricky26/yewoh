@@ -1,22 +1,21 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use bevy_app::{App, Plugin};
+use bevy_app::{App, Plugin, Update};
 use bevy_ecs::component::Component;
 use bevy_ecs::entity::Entity;
-use bevy_ecs::prelude::*;
 use bevy_ecs::prelude::World;
+use bevy_ecs::prelude::*;
 use bevy_ecs::system::{Commands, Query, Res};
 use bevy_reflect::Reflect;
-use bevy_time::{Timer, TimerMode};
 use bevy_time::Time;
-use serde_derive::Deserialize;
-
+use bevy_time::{Timer, TimerMode};
+use serde::Deserialize;
 use yewoh_server::world::entity::Location;
 use yewoh_server::world::net::NetCommandsExt;
 
-use crate::data::prefab::{FromPrefabTemplate, Prefab, PrefabAppExt, PrefabBundle, PrefabCollection};
 use crate::data::prefab::PrefabCommandsExt;
+use crate::data::prefab::{FromPrefabTemplate, Prefab, PrefabAppExt, PrefabBundle, PrefabCollection};
 
 #[derive(Component)]
 struct HookupSpawner {
@@ -89,7 +88,7 @@ pub struct SpawnedEntities {
 pub fn spawn_from_spawners(
     time: Res<Time>,
     mut spawners: Query<(&mut Spawner, &mut SpawnedEntities, &Location)>,
-    spawned_entities: Query<With<Spawned>>,
+    spawned_entities: Query<(), With<Spawned>>,
     mut commands: Commands,
 ) {
     for (mut spawner, mut spawned, position) in spawners.iter_mut() {
@@ -114,8 +113,10 @@ pub struct SpawnersPlugin;
 impl Plugin for SpawnersPlugin {
     fn build(&self, app: &mut App) {
         app
-            .add_system(setup_spawner_prefabs)
-            .add_system(spawn_from_spawners)
+            .add_systems(Update, (
+                setup_spawner_prefabs,
+                spawn_from_spawners,
+            ))
             .init_prefab_bundle::<SpawnerPrefab>("spawner");
     }
 }

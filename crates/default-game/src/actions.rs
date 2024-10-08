@@ -28,7 +28,7 @@ pub fn handle_move(
     connection_query: Query<(&NetClient, &Possessing)>,
     mut characters: Query<(&mut Location, &Notorious)>,
 ) {
-    for MoveEvent { client_entity: connection, request } in events.iter() {
+    for MoveEvent { client_entity: connection, request } in events.read() {
         let connection = *connection;
         let (client, owned) = match connection_query.get(connection) {
             Ok(x) => x,
@@ -70,7 +70,7 @@ pub fn handle_single_click(
     mut click_events: EventReader<SingleClickEvent>,
     mut commands: Commands,
 ) {
-    for SingleClickEvent { client_entity: client, target } in click_events.iter() {
+    for SingleClickEvent { client_entity: client, target } in click_events.read() {
         let client_entity = *client;
         let target = match target {
             Some(x) => *x,
@@ -91,7 +91,7 @@ pub fn handle_double_click(
     mut opened_containers: EventWriter<ContainerOpenedEvent>,
     target_query: Query<(&NetEntity, Option<&Character>, Option<&Container>)>,
 ) {
-    for DoubleClickEvent { client_entity, target } in events.iter() {
+    for DoubleClickEvent { client_entity, target } in events.read() {
         let client = match clients.get_mut(*client_entity) {
             Ok(x) => x,
             _ => continue,
@@ -132,7 +132,7 @@ pub fn handle_pick_up(
     mut character_equipment: Query<&mut Character>,
     mut commands: Commands,
 ) {
-    for event in events.iter() {
+    for event in events.read() {
         let (client, owner) = match clients.get(event.client_entity) {
             Ok(x) => x,
             _ => continue,
@@ -191,7 +191,7 @@ pub fn handle_drop(
     mut containers: Query<&mut Container>,
     mut commands: Commands,
 ) {
-    for event in events.iter() {
+    for event in events.read() {
         let (client, owner) = match clients.get(event.client_entity) {
             Ok(x) => x,
             _ => continue,
@@ -251,7 +251,7 @@ pub fn handle_equip(
     mut loadouts: Query<&mut Character>,
     mut commands: Commands,
 ) {
-    for event in events.iter() {
+    for event in events.read() {
         let (client, owner) = match clients.get(event.client_entity) {
             Ok(x) => x,
             _ => continue,
@@ -311,7 +311,7 @@ pub fn handle_context_menu(
         });
     }
 
-    for ContextMenuEvent { client_entity, target, .. } in context_events.iter() {
+    for ContextMenuEvent { client_entity, target, .. } in context_events.read() {
         let (client, owned) = match clients.get(*client_entity) {
             Ok(x) => x,
             _ => continue,
@@ -359,7 +359,7 @@ pub fn handle_profile_requests(
     clients: Query<&NetClient>,
     mut requests: EventReader<ProfileEvent>,
 ) {
-    for request in requests.iter() {
+    for request in requests.read() {
         let client_entity = request.client_entity;
         let client = match clients.get(client_entity) {
             Ok(x) => x,
@@ -384,7 +384,7 @@ pub fn handle_skills_requests(
     clients: Query<&NetClient>,
     mut requests: EventReader<RequestSkillsEvent>,
 ) {
-    for request in requests.iter() {
+    for request in requests.read() {
         let client_entity = request.client_entity;
         let client = match clients.get(client_entity) {
             Ok(x) => x,
@@ -412,7 +412,7 @@ pub fn handle_war_mode(
     mut characters: Query<&mut Flags>,
     mut new_packets: EventReader<ReceivedPacketEvent>,
 ) {
-    for ReceivedPacketEvent { client_entity, packet } in new_packets.iter() {
+    for ReceivedPacketEvent { client_entity, packet } in new_packets.read() {
         let packet = match packet.downcast::<WarMode>() {
             Some(x) => x,
             _ => continue,

@@ -1,17 +1,17 @@
 use std::collections::{hash_map, HashMap};
 use std::net::Ipv4Addr;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use log::{info, warn};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::spawn;
 use tokio::sync::{mpsc, oneshot};
+use tracing::{info, warn};
 
-use yewoh::protocol::{AccountLogin, ClientVersion, GameServer, GameServerLogin, LoginError, new_io, Seed, SelectGameServer, ServerList, SwitchServer};
 use yewoh::protocol::encryption::Encryption;
+use yewoh::protocol::{new_io, AccountLogin, ClientVersion, GameServer, GameServerLogin, LoginError, Seed, SelectGameServer, ServerList, SwitchServer};
 use yewoh::types::FixedString;
 
 #[async_trait]

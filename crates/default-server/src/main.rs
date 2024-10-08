@@ -8,13 +8,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context};
-use bevy::ecs::system::CommandQueue;
+use bevy::ecs::world::CommandQueue;
 use bevy::log::LogPlugin;
 use bevy::prelude::*;
 use bevy::time::Time;
 use clap::Parser;
 use futures::future::join;
-use log::info;
+use tracing::info;
 use serde::Deserialize;
 use tokio::fs;
 use tokio::net::{lookup_host, TcpListener};
@@ -111,10 +111,12 @@ async fn main() -> anyhow::Result<()> {
 
     let mut app = App::new();
     app
-        .add_plugins(MinimalPlugins)
-        .add_plugin(LogPlugin::default())
-        .add_plugin(ServerPlugin)
-        .add_plugins(DefaultGamePlugins);
+        .add_plugins((
+            MinimalPlugins,
+            LogPlugin::default(),
+            ServerPlugin,
+            DefaultGamePlugins,
+        ));
 
     let static_data = static_data::load_from_directory(&args.data_path).await?;
     let map_infos = static_data.maps.map_infos();
@@ -123,22 +125,22 @@ async fn main() -> anyhow::Result<()> {
 
     // Load UO data
     info!("Loading map data...");
-    create_map_entities(&mut app.world, &map_infos, &args.uo_data_path).await?;
+    create_map_entities(app.world_mut(), &map_infos, &args.uo_data_path).await?;
     info!("Loading statics...");
-    create_statics(&mut app.world, &map_infos, &tile_data, &args.uo_data_path).await?;
+    create_statics(app.world_mut(), &map_infos, &tile_data, &args.uo_data_path).await?;
 
     // Load server data
     let mut prefabs = PrefabCollection::default();
-    prefabs.load_from_directory(&app.world.resource(), &args.data_path.join("prefabs")).await?;
+    prefabs.load_from_directory(&app.world_mut().resource(), &args.data_path.join("prefabs")).await?;
     info!("Loaded {} prefabs", prefabs.len());
     app.insert_resource(prefabs);
 
     // Spawn map data
-    let mut query = app.world.query_filtered::<(), With<Chunk>>();
-    info!("Spawned {} map chunks", query.iter(&app.world).count());
-    let mut query = app.world.query_filtered::<(), With<Static>>();
-    info!("Spawned {} statics", query.iter(&app.world).count());
-    load_static_entities(&mut app.world, &args.data_path.join("entities")).await?;
+    let mut query = app.world_mut().query_filtered::<(), With<Chunk>>();
+    info!("Spawned {} map chunks", query.iter(app.world()).count());
+    let mut query = app.world_mut().query_filtered::<(), With<Static>>();
+    info!("Spawned {} statics", query.iter(app.world()).count());
+    load_static_entities(app.world_mut(), &args.data_path.join("entities")).await?;
 
     let (lobby_listener, game_listener) = join(
         TcpListener::bind(&args.lobby_bind),
@@ -157,7 +159,7 @@ async fn main() -> anyhow::Result<()> {
     let game_handle = tokio::spawn(listen_for_game(game_listener, new_session_tx));
 
     let http_app = axum::Router::new();
-    let http_server_handle = tokio::spawn(axum::Server::bind(&SocketAddr::from_str(&args.http_bind)?)
+    let http_server_handle = tokio::spawn(axum_server::bind(SocketAddr::from_str(&args.http_bind)?)
         .serve(http_app.into_make_service()));
 
     app
@@ -169,12 +171,14 @@ async fn main() -> anyhow::Result<()> {
         .insert_resource(MultiDataResource { multi_data })
         .insert_resource(world_repo.clone())
         .insert_resource(accounts_repo.clone())
-        .add_system(scheduled_save.in_base_set(CoreSet::Last));
+        .add_systems(Last, (
+            scheduled_save,
+        ));
 
     // Load previous state
     if let Some(contents) = world_repo.get_snapshot().await? {
         let mut d = serde_json::Deserializer::from_reader(Cursor::new(&contents));
-        app.world.deserialize(&mut d)?;
+        app.world_mut().deserialize(&mut d)?;
     }
 
     static SHOULD_EXIT: AtomicBool = AtomicBool::new(false);
@@ -190,8 +194,8 @@ async fn main() -> anyhow::Result<()> {
     let frame_wait = Duration::from_millis(20);
     loop {
         if SHOULD_EXIT.load(Ordering::Relaxed) {
-            let contents = app.world.serialize();
-            let repo = app.world.resource::<WorldRepository>();
+            let contents = app.world_mut().serialize();
+            let repo = app.world().resource::<WorldRepository>();
             write_save(repo, contents).await?;
             info!("Saved snapshot");
             return Ok(());
@@ -257,7 +261,7 @@ async fn load_static_entities(world: &mut World, path: &Path) -> anyhow::Result<
     }
 
     queue.apply(world);
-    log::info!("Spawned {count} entities");
+    info!("Spawned {count} entities");
     Ok(())
 }
 
@@ -288,7 +292,7 @@ fn scheduled_save(world: &mut World, mut timer: Local<SaveTimer>) {
     let repo = world.resource::<WorldRepository>().clone();
     world.resource::<AsyncRuntime>().spawn(async move {
         if let Err(e) = write_save(&repo, buffers).await {
-            log::warn!("failed to save: {e}");
+            warn!("failed to save: {e}");
         } else {
             info!("Saved snapshot");
         }

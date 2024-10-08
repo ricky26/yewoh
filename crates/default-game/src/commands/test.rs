@@ -1,9 +1,9 @@
 use bevy_ecs::prelude::*;
 use clap::Parser;
 use glam::IVec2;
-
-use yewoh::Direction;
+use tracing::info;
 use yewoh::protocol::{EntityFlags, GumpLayout, OpenGump};
+use yewoh::Direction;
 use yewoh_server::world::entity::{Flags, Graphic, Location};
 use yewoh_server::world::net::{NetClient, NetEntity, NetEntityAllocator, Possessing};
 
@@ -22,7 +22,7 @@ impl TextCommand for Echo {
 
 pub fn echo(mut exec: TextCommandQueue<Echo>) {
     for (from, cmd) in exec.iter() {
-        log::info!("echo {:?}: {}", from, cmd.what.join(" "));
+        info!("echo {:?}: {}", from, cmd.what.join(" "));
     }
 }
 

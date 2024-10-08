@@ -1,14 +1,14 @@
+use crate::characters::Animation;
 use bevy_ecs::entity::Entity;
-use bevy_ecs::event::EventReader;
+use bevy_ecs::event::{Event, EventReader};
 use bevy_ecs::query::With;
 use bevy_ecs::system::{Query, Res};
 use yewoh::protocol::{CharacterAnimation, CharacterPredefinedAnimation};
 use yewoh_server::world::entity::Location;
 use yewoh_server::world::net::{NetClient, NetEntityLookup, Synchronized};
 use yewoh_server::world::spatial::NetClientPositions;
-use crate::characters::Animation;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Event)]
 pub struct AnimationStartedEvent {
     pub entity: Entity,
     pub location: Location,
@@ -21,7 +21,7 @@ pub fn send_animations(
     clients: Query<&NetClient, With<Synchronized>>,
     mut events: EventReader<AnimationStartedEvent>,
 ) {
-    for event in &mut events {
+    for event in events.read() {
         let target_id = match entity_lookup.ecs_to_net(event.entity) {
             Some(x) => x,
             None => continue,

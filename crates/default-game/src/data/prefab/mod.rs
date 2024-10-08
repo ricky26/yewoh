@@ -7,8 +7,8 @@ use std::sync::Arc;
 use anyhow::Context;
 use bevy_app::{App, Plugin};
 use bevy_ecs::entity::Entity;
-use bevy_ecs::system::{Command, EntityCommands, Resource};
-use bevy_ecs::world::{EntityMut, World};
+use bevy_ecs::system::{EntityCommands, Resource};
+use bevy_ecs::world::{Command, EntityWorldMut, World};
 use serde::{Deserialize, Deserializer};
 use serde::de::{DeserializeSeed, Error, MapAccess, Visitor};
 use tokio::fs;
@@ -89,7 +89,7 @@ pub struct InsertPrefab {
 }
 
 impl Command for InsertPrefab {
-    fn write(self, world: &mut World) {
+    fn apply(self, world: &mut World) {
         self.prefab.write(world, self.entity);
     }
 }
@@ -228,7 +228,7 @@ pub trait PrefabAppExt {
 
 impl PrefabAppExt for App {
     fn init_prefab_bundle<P: FromPrefabTemplate>(&mut self, name: &str) -> &mut Self {
-        self.world.resource_mut::<PrefabFactory>()
+        self.world_mut().resource_mut::<PrefabFactory>()
             .register_template::<P>(name);
         self
     }
@@ -238,15 +238,15 @@ pub trait PrefabCommandsExt {
     fn insert_prefab(&mut self, prefab: Arc<Prefab>) -> &mut Self;
 }
 
-impl<'w> PrefabCommandsExt for EntityMut<'w> {
+impl<'w> PrefabCommandsExt for EntityWorldMut<'w> {
     fn insert_prefab(&mut self, prefab: Arc<Prefab>) -> &mut Self {
         let command = InsertPrefab { prefab, entity: self.id() };
-        self.world_scope(|world| command.write(world));
+        self.world_scope(|world| command.apply(world));
         self
     }
 }
 
-impl<'w, 's, 'a> PrefabCommandsExt for EntityCommands<'w, 's, 'a> {
+impl<'w> PrefabCommandsExt for EntityCommands<'w> {
     fn insert_prefab(&mut self, prefab: Arc<Prefab>) -> &mut Self {
         let entity = self.id();
         self.commands().add(InsertPrefab { prefab, entity });

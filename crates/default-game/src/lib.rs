@@ -74,7 +74,7 @@ pub struct DefaultGamePlugin;
 impl Plugin for DefaultGamePlugin {
     fn build(&self, app: &mut App) {
         app
-            .add_systems((
+            .add_systems(Update, (
                 handle_move,
                 handle_single_click,
                 handle_double_click,
@@ -86,8 +86,10 @@ impl Plugin for DefaultGamePlugin {
                 handle_context_menu,
                 handle_profile_requests,
                 handle_skills_requests,
-            ).in_base_set(CoreSet::Update))
-            .add_system(send_time.in_set(ServerSet::Send));
+            ))
+            .add_systems(Last, (
+                send_time.in_set(ServerSet::Send),
+            ));
     }
 
     fn name(&self) -> &str { "Yewoh Default Game" }

@@ -25,7 +25,7 @@ pub fn send_updated_attack_target(
         }.into());
     }
 
-    for entity in &mut removed_targets {
+    for entity in removed_targets.read() {
         let owner = match owners.get(entity) {
             Ok(x) => x,
             _ => continue,

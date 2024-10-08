@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
-use bevy_ecs::entity::{EntityMap, MapEntities, MapEntitiesError};
+use bevy_ecs::entity::MapEntities;
 use bevy_ecs::prelude::*;
 use bevy_ecs::reflect::ReflectMapEntities;
 use bevy_reflect::prelude::*;
@@ -50,7 +50,7 @@ impl DerefMut for Notorious {
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Reflect, FromReflect)]
+#[derive(Debug, Clone, Eq, PartialEq, Reflect)]
 pub struct CharacterEquipped {
     pub entity: Entity,
     #[reflect(ignore)]
@@ -75,11 +75,10 @@ pub struct Character {
 }
 
 impl MapEntities for Character {
-    fn map_entities(&mut self, entity_map: &EntityMap) -> Result<(), MapEntitiesError> {
+    fn map_entities<M: EntityMapper>(&mut self, entity_mapper: &mut M) {
         for equipment in &mut self.equipment {
-            equipment.entity = entity_map.get(equipment.entity)?;
+            equipment.entity = entity_mapper.map_entity(equipment.entity);
         }
-        Ok(())
     }
 }
 
@@ -98,9 +97,8 @@ impl FromWorld for EquippedBy {
 }
 
 impl MapEntities for EquippedBy {
-    fn map_entities(&mut self, entity_map: &EntityMap) -> Result<(), MapEntitiesError> {
-        self.parent = entity_map.get(self.parent)?;
-        Ok(())
+    fn map_entities<M: EntityMapper>(&mut self, entity_mapper: &mut M) {
+        self.parent = entity_mapper.map_entity(self.parent);
     }
 }
 
@@ -161,11 +159,10 @@ pub struct Container {
 }
 
 impl MapEntities for Container {
-    fn map_entities(&mut self, entity_map: &EntityMap) -> Result<(), MapEntitiesError> {
+    fn map_entities<M: EntityMapper>(&mut self, entity_mapper: &mut M) {
         for item in &mut self.items {
-            *item = entity_map.get(*item)?;
+            *item = entity_mapper.map_entity(*item);
         }
-        Ok(())
     }
 }
 
@@ -188,9 +185,8 @@ impl FromWorld for ParentContainer {
 }
 
 impl MapEntities for ParentContainer {
-    fn map_entities(&mut self, entity_map: &EntityMap) -> Result<(), MapEntitiesError> {
-        self.parent = entity_map.get(self.parent)?;
-        Ok(())
+    fn map_entities<M: EntityMapper>(&mut self, entity_mapper: &mut M) {
+        self.parent = entity_mapper.map_entity(self.parent);
     }
 }
 
@@ -380,8 +376,7 @@ impl FromWorld for AttackTarget {
 }
 
 impl MapEntities for AttackTarget {
-    fn map_entities(&mut self, entity_map: &EntityMap) -> Result<(), MapEntitiesError> {
-        self.target = entity_map.get(self.target)?;
-        Ok(())
+    fn map_entities<M: EntityMapper>(&mut self, entity_mapper: &mut M) {
+        self.target = entity_mapper.map_entity(self.target);
     }
 }

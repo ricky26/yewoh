@@ -388,11 +388,11 @@ pub fn update_entity_surfaces(
         storage.tree.insert_point(entity, kind, position.map_id, position.position.truncate());
     }
 
-    for entity in removed_chunks.iter() {
+    for entity in removed_chunks.read() {
         storage.tree.remove(entity);
     }
 
-    for entity in removed_surfaces.iter() {
+    for entity in removed_surfaces.read() {
         storage.tree.remove(entity);
     }
 }
@@ -432,7 +432,7 @@ pub fn update_entity_positions(
         storage.tree.insert_aabb(entity, (), map_id, min, max);
     }
 
-    for entity in removed_entities.iter() {
+    for entity in removed_entities.read() {
         storage.tree.remove(entity);
     }
 }
@@ -486,7 +486,7 @@ pub fn update_client_positions(
         storage.tree.insert_aabb(entity, (), map_position.map_id, min, max);
     }
 
-    for entity in removed_clients.iter() {
+    for entity in removed_clients.read() {
         storage.tree.remove(entity);
     }
 }

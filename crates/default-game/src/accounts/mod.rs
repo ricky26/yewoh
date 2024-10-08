@@ -1,15 +1,15 @@
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
-use bevy_app::{App, CoreSet, Plugin};
+use bevy_app::{App, Plugin, Update};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::event::EventReader;
 use bevy_ecs::query::With;
-use bevy_ecs::schedule::IntoSystemConfigs;
 use bevy_ecs::system::{Commands, Local, Query, Res, ResMut, Resource};
 use bevy_ecs::world::World;
 use glam::IVec3;
 use tokio::sync::mpsc;
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 use yewoh::Direction;
 
@@ -67,7 +67,7 @@ pub fn handle_list_characters<T: AccountRepository>(
     pending: Res<PendingCharacterLists>,
     mut events: EventReader<CharacterListEvent>,
 ) {
-    for event in events.iter() {
+    for event in events.read() {
         let user = match users.get(event.client_entity) {
             Ok(x) => x,
             _ => continue,
@@ -129,7 +129,7 @@ pub fn handle_list_characters_callback(
                 }
 
                 for (player, id) in &all_players {
-                    log::debug!("existing player id={} e={:?} n={}", player, &id.0, &id.1);
+                    debug!("existing player id={} e={:?} n={}", player, &id.0, &id.1);
                 }
 
                 let character_list = CharacterList {
@@ -147,7 +147,7 @@ pub fn handle_list_characters_callback(
 
                 client.send_packet(character_list.into());
             }
-            Err(err) => log::warn!("Failed to list characters: {err}"),
+            Err(err) => warn!("Failed to list characters: {err}"),
         }
     }
 }
@@ -159,7 +159,7 @@ pub fn handle_create_character<T: AccountRepository>(
     pending: Res<PendingCharacterInfo>,
     mut events: EventReader<CreateCharacterEvent>,
 ) {
-    for CreateCharacterEvent { client_entity, request } in events.iter() {
+    for CreateCharacterEvent { client_entity, request } in events.read() {
         let client_entity = *client_entity;
         let user = match users.get(client_entity) {
             Ok(x) => x,
@@ -183,7 +183,7 @@ pub fn handle_select_character<T: AccountRepository>(
     pending: Res<PendingCharacterInfo>,
     mut events: EventReader<SelectCharacterEvent>,
 ) {
-    for SelectCharacterEvent { client_entity, request } in events.iter() {
+    for SelectCharacterEvent { client_entity, request } in events.read() {
         let client_entity = *client_entity;
         let user = match users.get(client_entity) {
             Ok(x) => x,
@@ -207,7 +207,7 @@ pub fn handle_delete_character<T: AccountRepository>(
     mut events: EventReader<DeleteCharacterEvent>,
     pending: ResMut<PendingCharacterLists>,
 ) {
-    for DeleteCharacterEvent { client_entity, request } in events.iter() {
+    for DeleteCharacterEvent { client_entity, request } in events.read() {
         let client_entity = *client_entity;
         let user = match users.get(client_entity) {
             Ok(x) => x,
@@ -220,7 +220,7 @@ pub fn handle_delete_character<T: AccountRepository>(
         let tx = pending.tx.clone();
         runtime.spawn(async move {
             if let Err(err) = repository.delete_character(&username, request).await {
-                log::warn!("failed to delete character: {err}");
+                warn!("failed to delete character: {err}");
             }
 
             tx.send((client_entity, repository.list_characters(&username).await)).ok();
@@ -332,7 +332,7 @@ pub fn handle_spawn_character<T: AccountRepository>(
         let info = match result {
             Ok(x) => x,
             Err(err) => {
-                log::warn!("While spawning character: {err}");
+                warn!("While spawning character: {err}");
                 continue;
             }
         };
@@ -346,11 +346,11 @@ pub fn handle_spawn_character<T: AccountRepository>(
 
         let primary_entity = match info {
             CharacterToSpawn::ExistingCharacter(id) => {
-                log::info!("Attaching to existing character: {}", &id);
+                info!("Attaching to existing character: {}", &id);
                 if let Some(character_entity) = all_players.get(&id).copied() {
                     character_entity
                 } else {
-                    log::warn!("Failed to connect to existing character: {}", &id);
+                    warn!("Failed to connect to existing character: {}", &id);
                     let user = match users.get(client_entity) {
                         Ok(x) => x,
                         _ => continue,
@@ -366,7 +366,7 @@ pub fn handle_spawn_character<T: AccountRepository>(
                 }
             }
             CharacterToSpawn::NewCharacter(id, info) => {
-                log::info!("Creating new character: {}", &id);
+                info!("Creating new character: {}", &id);
                 let primary_entity = create_new_character(&prefabs, &mut commands, info);
                 all_players.insert(id, primary_entity);
                 commands.entity(primary_entity)
@@ -378,7 +378,7 @@ pub fn handle_spawn_character<T: AccountRepository>(
 
         commands.entity(primary_entity).insert(NetOwner { client_entity });
         commands.entity(client_entity).insert(Possessing { entity: primary_entity });
-        log::info!("Attached character for {:?} = {:?}", client_entity, primary_entity);
+        info!("Attached character for {:?} = {:?}", client_entity, primary_entity);
     }
 }
 
@@ -395,13 +395,13 @@ impl<T: AccountRepository> Plugin for AccountsPlugin<T> {
         app
             .init_resource::<PendingCharacterLists>()
             .init_resource::<PendingCharacterInfo>()
-            .add_systems((
+            .add_systems(Update, (
                 handle_list_characters::<T>,
                 handle_list_characters_callback,
                 handle_create_character::<T>,
                 handle_select_character::<T>,
                 handle_delete_character::<T>,
                 handle_spawn_character::<T>,
-            ).in_base_set(CoreSet::Update));
+            ));
     }
 }

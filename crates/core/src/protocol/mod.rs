@@ -2,30 +2,31 @@ use std::any::type_name;
 use std::fmt;
 use std::fmt::Debug;
 use std::io::Write;
-use std::mem::{MaybeUninit, size_of, transmute};
+use std::mem::{size_of, transmute, MaybeUninit};
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use byteorder::ByteOrder;
 pub use byteorder::BigEndian as Endian;
+use byteorder::ByteOrder;
 use once_cell::sync::OnceCell;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
+use tracing::trace;
 
+pub use character::*;
+pub use chat::*;
 pub use client_version::{ClientFlags, ClientVersion, ExtendedClientVersion};
+pub use entity::*;
+pub use extended::*;
 pub use format::{PacketReadExt, PacketWriteExt};
+pub use input::*;
 pub use login::*;
 pub use map::*;
-pub use extended::*;
-pub use input::*;
-pub use entity::*;
-pub use chat::*;
 pub use sound::*;
 pub use ui::*;
-pub use character::*;
 
-use crate::protocol::compression::{HuffmanVecWriter};
+use crate::protocol::compression::HuffmanVecWriter;
 use crate::protocol::encryption::Encryption;
 
 mod format;
@@ -54,7 +55,10 @@ mod chat;
 
 mod character;
 
-pub trait Packet where Self: Sized {
+pub trait Packet
+where
+    Self: Sized,
+{
     fn packet_kind() -> u8;
     fn fixed_length(client_version: ClientVersion) -> Option<usize>;
 
@@ -83,13 +87,13 @@ impl PacketRegistration {
         }
 
         fn decode_packet<T: Packet>(client_version: ClientVersion, from_client: bool,
-            payload: &[u8]) -> anyhow::Result<AnyPacket> {
-            log::trace!("Decoding {}", type_name::<T>());
+                                    payload: &[u8]) -> anyhow::Result<AnyPacket> {
+            trace!("Decoding {}", type_name::<T>());
             Ok(AnyPacket::from_packet(T::decode(client_version, from_client, payload)?))
         }
 
         fn encode_packet<T: Packet>(client_version: ClientVersion, to_client: bool,
-            mut writer: &mut dyn Write, ptr: *mut ()) -> anyhow::Result<()> {
+                                    mut writer: &mut dyn Write, ptr: *mut ()) -> anyhow::Result<()> {
             let packet = unsafe { &*(ptr as *const T) };
             packet.encode(client_version, to_client, &mut writer)
         }
@@ -293,7 +297,7 @@ impl AnyPacket {
     }
 
     pub fn encode(&self, client_version: ClientVersion, to_client: bool, writer: &mut impl Write)
-        -> anyhow::Result<()> {
+                  -> anyhow::Result<()> {
         (self.registration().encode)(client_version, to_client, writer, unsafe { transmute(&self.buffer) })
     }
 }
@@ -343,7 +347,7 @@ impl Reader {
     }
 
     pub async fn recv(&mut self, client_version: ClientVersion)
-        -> anyhow::Result<AnyPacket> {
+                      -> anyhow::Result<AnyPacket> {
         let mut packet_kind = self.reader.read_u8().await?;
 
         if let Some(encryption) = self.encryption.as_mut() {
@@ -381,7 +385,7 @@ impl Reader {
             Endian::read_u16(&bytes) as usize - 3
         };
 
-        log::trace!("Beginning {packet_kind:2x} length {length}");
+        trace!("Beginning {packet_kind:2x} length {length}");
 
         self.buffer.resize(length, 0u8);
         self.reader.read_exact(&mut self.buffer[..]).await?;

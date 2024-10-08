@@ -238,7 +238,7 @@ impl TextCommandRegistrationExt for World {
 
 impl TextCommandRegistrationExt for App {
     fn add_text_command<T: TextCommand>(&mut self) -> &mut Self {
-        self.world.add_text_command::<T>();
+        self.world_mut().add_text_command::<T>();
         self
     }
 }

@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use bevy_ecs::change_detection::DetectChanges;
 use bevy_ecs::component::Component;
 use bevy_ecs::entity::Entity;
-use bevy_ecs::event::EventReader;
+use bevy_ecs::event::{Event, EventReader};
 use bevy_ecs::query::{With, Without};
 use bevy_ecs::system::{Commands, Query, Res, Resource, SystemParam};
 use bevy_ecs::world::{Mut, Ref};
@@ -20,7 +20,7 @@ use crate::world::net::{NetClient, NetEntity, NetEntityLookup, NetOwner};
 use crate::world::net::connection::Possessing;
 use crate::world::spatial::{EntityPositions, view_aabb};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Event)]
 pub struct ContainerOpenedEvent {
     pub client_entity: Entity,
     pub container: Entity,
@@ -344,7 +344,7 @@ pub fn send_ghost_updates(
         }
 
         let possessed = view_state.possessed;
-        let mut view_state = view_state.as_mut();
+        let view_state = view_state.as_mut();
         view_state.dirty = false;
 
         view_state.for_each_removal(|entity, _| {
@@ -716,7 +716,7 @@ pub fn send_opened_containers(
     clients: Query<(&NetClient, &ViewState)>,
     mut events: EventReader<ContainerOpenedEvent>,
 ) {
-    for event in &mut events {
+    for event in events.read() {
         let (client, view_state) = match clients.get(event.client_entity) {
             Ok(x) => x,
             _ => continue,

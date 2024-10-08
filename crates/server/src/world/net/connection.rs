@@ -3,11 +3,10 @@ use std::sync::Arc;
 
 use bevy_ecs::prelude::*;
 use bevy_reflect::prelude::*;
-use log::{info, warn};
 use tokio::sync::mpsc;
-
-use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, CharacterProfile, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DeleteCharacter, DoubleClick, DropEntity, EntityRequest, EntityRequestKind, EntityTooltip, EntityTooltipLine, EquipEntity, FeatureFlags, GameServerLogin, Move, PickUpEntity, SelectCharacter, SingleClick, SupportedFeatures, UnicodeTextMessageRequest};
+use tracing::{info, trace, warn};
 use yewoh::protocol::encryption::Encryption;
+use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, CharacterProfile, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DeleteCharacter, DoubleClick, DropEntity, EntityRequest, EntityRequestKind, EntityTooltip, EntityTooltipLine, EquipEntity, FeatureFlags, GameServerLogin, Move, PickUpEntity, SelectCharacter, SingleClick, SupportedFeatures, UnicodeTextMessageRequest};
 
 use crate::async_runtime::AsyncRuntime;
 use crate::game_server::NewSessionAttempt;
@@ -15,9 +14,9 @@ use crate::lobby::{NewSessionRequest, SessionAllocator};
 use crate::world::entity::Tooltip;
 use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DeleteCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::input::Targeting;
-use crate::world::net::ViewState;
 use crate::world::net::entity::NetEntityLookup;
 use crate::world::net::view::View;
+use crate::world::net::ViewState;
 
 pub const DEFAULT_VIEW_RANGE: i32 = 18;
 
@@ -49,13 +48,13 @@ impl NetClient {
     pub fn client_version(&self) -> ClientVersion { self.client_version }
 
     pub fn send_packet(&self, packet: AnyPacket) {
-        log::trace!("OUT ({:?}): {:?}", self.address, packet);
+        trace!("OUT ({:?}): {:?}", self.address, packet);
         self.tx.send(WriterAction::Send(self.client_version, packet)).ok();
     }
 
     pub fn send_packet_arc(&self, packet: impl Into<Arc<AnyPacket>>) {
         let packet = packet.into();
-        log::trace!("OUT ({:?}): {:?}", self.address, packet);
+        trace!("OUT ({:?}): {:?}", self.address, packet);
         self.tx.send(WriterAction::SendArc(self.client_version, packet)).ok();
     }
 }
@@ -229,7 +228,7 @@ pub fn accept_new_clients(
             loop {
                 match reader.recv(client_version).await {
                     Ok(packet) => {
-                        log::trace!("IN ({:?}): {:?}", address, packet);
+                        trace!("IN ({:?}): {:?}", address, packet);
                         if let Err(err) = internal_tx.send((entity, packet)) {
                             warn!("Error forwarding packet {err}");
                             break;
@@ -267,7 +266,7 @@ pub fn handle_new_packets(
         read_events.send(ReceivedPacketEvent { client_entity: connection, packet });
     }
 
-    for SentPacketEvent { client_entity: connection, packet } in write_events.iter() {
+    for SentPacketEvent { client_entity: connection, packet } in write_events.read() {
         match connection {
             Some(entity) => {
                 if let Ok(client) = clients.get(*entity) {
@@ -288,7 +287,7 @@ pub fn handle_login_packets(
     mut delete_character_events: EventWriter<DeleteCharacterEvent>,
     mut commands: Commands,
 ) {
-    for ReceivedPacketEvent { client_entity: connection, packet } in events.iter() {
+    for ReceivedPacketEvent { client_entity: connection, packet } in events.read() {
         let connection = *connection;
         let (client, sent_character_list) = match clients.get(connection) {
             Ok(x) => x,
@@ -358,7 +357,7 @@ pub fn handle_input_packets(
     mut profile_events: EventWriter<ProfileEvent>,
     mut skills_events: EventWriter<RequestSkillsEvent>,
 ) {
-    for ReceivedPacketEvent { client_entity: connection, packet } in events.iter() {
+    for ReceivedPacketEvent { client_entity: connection, packet } in events.read() {
         let client_entity = *connection;
 
         if let Some(request) = packet.downcast::<Move>().cloned() {
@@ -433,7 +432,7 @@ pub fn handle_input_packets(
             };
 
             match request.kind {
-                EntityRequestKind::Skills => skills_events.send(RequestSkillsEvent { client_entity, target }),
+                EntityRequestKind::Skills => { skills_events.send(RequestSkillsEvent { client_entity, target }); }
                 _ => {}
             }
         }
@@ -448,7 +447,7 @@ pub fn send_tooltips(
 ) {
     let mut scratch = Vec::new();
 
-    for ReceivedPacketEvent { client_entity: connection, packet } in events.iter() {
+    for ReceivedPacketEvent { client_entity: connection, packet } in events.read() {
         let connection = *connection;
         let client = match clients.get(connection) {
             Ok(x) => x,

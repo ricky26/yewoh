@@ -1,11 +1,10 @@
-use bevy_app::{App, CoreSet, Plugin};
-use bevy_ecs::schedule::IntoSystemConfigs;
+use bevy_app::{App, Plugin, Update};
 pub use registration::{
-    TextCommands,
     TextCommand,
     TextCommandExecutor,
     TextCommandQueue,
     TextCommandRegistrationExt,
+    TextCommands,
 };
 
 mod registration;
@@ -31,7 +30,7 @@ impl Plugin for CommandsPlugin {
             .add_text_command::<test::FryPan>()
             .add_text_command::<test::TestGump>()
             .add_text_command::<spawn::Spawn>()
-            .add_systems((
+            .add_systems(Update, (
                 info::info,
                 info::start_info,
                 go::go,
@@ -40,6 +39,6 @@ impl Plugin for CommandsPlugin {
                 test::test_gump,
                 spawn::start_spawn,
                 spawn::spawn,
-            ).in_base_set(CoreSet::Update));
+            ));
     }
 }

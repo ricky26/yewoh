@@ -7,8 +7,8 @@ use bevy_ecs::query::With;
 use bevy_ecs::system::{Query, Res};
 use bevy_reflect::Reflect;
 use bevy_time::{Time, Timer, TimerMode};
-use rand::{Rng, thread_rng};
-use serde_derive::Deserialize;
+use rand::{thread_rng, Rng};
+use serde::Deserialize;
 
 use yewoh::Direction;
 use yewoh_server::world::entity::Location;

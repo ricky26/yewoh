@@ -77,36 +77,39 @@ impl Plugin for ServerPlugin {
             .add_event::<ChatRequestEvent>()
             .add_event::<AttackRequestedEvent>()
             .add_event::<ContainerOpenedEvent>()
-            .configure_sets((
-                ServerSet::Receive.in_base_set(CoreSet::First),
-                ServerSet::HandlePackets.in_base_set(CoreSet::First).after(ServerSet::Receive),
-                ServerSet::UpdateVisibility
-                    .in_base_set(CoreSet::PostUpdate)
-                    .before(ServerSet::Send),
-                ServerSet::SendFirst.in_base_set(CoreSet::Last),
-                ServerSet::SendGhosts.in_base_set(CoreSet::Last).after(ServerSet::SendFirst),
-                ServerSet::Send.in_base_set(CoreSet::Last).after(ServerSet::SendGhosts),
-                ServerSet::SendLast.in_base_set(CoreSet::Last).after(ServerSet::Send),
+            .configure_sets(First, (
+                ServerSet::Receive,
+                ServerSet::HandlePackets.after(ServerSet::Receive),
             ))
-            .add_systems(
+            .configure_sets(PostUpdate, (
+                ServerSet::UpdateVisibility,
+            ))
+            .configure_sets(Last, (
+                ServerSet::SendFirst,
+                ServerSet::SendGhosts.after(ServerSet::SendFirst),
+                ServerSet::Send.after(ServerSet::SendGhosts),
+                ServerSet::SendLast.after(ServerSet::Send),
+            ))
+            .add_systems(First, (
                 (accept_new_clients, handle_new_packets)
                     .chain()
-                    .in_set(ServerSet::Receive))
-            .add_systems((
+                    .in_set(ServerSet::Receive),
+            ))
+            .add_systems(First, (
                 start_synchronizing,
                 handle_login_packets,
                 handle_input_packets,
                 handle_context_menu_packets,
                 handle_attack_packets,
             ).in_set(ServerSet::HandlePackets))
-            .add_systems((
+            .add_systems(Last, (
                 send_change_map,
                 add_new_entities_to_lookup,
             ).in_set(ServerSet::SendFirst))
-            .add_systems((
+            .add_systems(Last, (
                 observe_ghosts,
             ).in_set(ServerSet::SendGhosts))
-            .add_systems((
+            .add_systems(Last, (
                 send_context_menu,
                 send_tooltips,
                 send_ghost_updates.before(finish_synchronizing),
@@ -115,10 +118,10 @@ impl Plugin for ServerPlugin {
                 finish_synchronizing,
                 update_targets,
             ).in_set(ServerSet::Send))
-            .add_systems((
+            .add_systems(Last, (
                 remove_old_entities_from_lookup,
             ).in_set(ServerSet::SendLast))
-            .add_systems((
+            .add_systems(PostUpdate, (
                 update_entity_surfaces,
                 update_entity_positions,
                 update_client_positions,

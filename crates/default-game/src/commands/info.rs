@@ -1,4 +1,3 @@
-use bevy_app::AppTypeRegistry;
 use bevy_ecs::prelude::*;
 use bevy_reflect::prelude::*;
 use bevy_reflect::TypeRegistry;

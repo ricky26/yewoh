@@ -1,4 +1,4 @@
-use bevy_app::{App, Plugin};
+use bevy_app::{App, Plugin, Update};
 use bevy_ecs::component::Component;
 use bevy_ecs::system::{Query, Res};
 use bevy_time::{Time, Timer};
@@ -44,8 +44,10 @@ pub struct ActivitiesPlugin;
 impl Plugin for ActivitiesPlugin {
     fn build(&self, app: &mut App) {
         app
-            .add_plugin(CombatPlugin)
-            .add_systems((
+            .add_plugins((
+                CombatPlugin,
+            ))
+            .add_systems(Update, (
                 progress_current_activity,
             ));
     }

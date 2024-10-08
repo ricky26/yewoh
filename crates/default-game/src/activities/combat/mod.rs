@@ -1,8 +1,8 @@
-use bevy_app::{App, Plugin};
+use bevy_app::{App, Last, Plugin, Update};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::event::{EventReader, EventWriter};
 use bevy_ecs::query::{Changed, With};
-use bevy_ecs::schedule::{IntoSystemConfig, IntoSystemConfigs};
+use bevy_ecs::schedule::{IntoSystemConfigs};
 use bevy_ecs::system::{Commands, Query, Res};
 use bevy_time::{Timer, TimerMode};
 
@@ -30,7 +30,7 @@ pub fn handle_attack_requests(
     mut requests: EventReader<AttackRequestedEvent>,
     clients: Query<&Possessing>,
 ) {
-    for request in &mut requests {
+    for request in requests.read() {
         let possessing = match clients.get(request.client_entity) {
             Ok(x) => x,
             _ => continue,
@@ -115,7 +115,7 @@ pub fn apply_damage(
     mut died_events: EventWriter<CharacterDied>,
     mut characters: Query<&mut Stats, With<Alive>>,
 ) {
-    for event in &mut damage_events {
+    for event in damage_events.read() {
         let mut stats = match characters.get_mut(event.target) {
             Ok(x) => x,
             _ => continue,
@@ -134,7 +134,7 @@ pub fn apply_damage(
 }
 
 pub fn remove_dead_characters(mut commands: Commands, mut events: EventReader<CharacterDied>) {
-    for event in &mut events {
+    for event in events.read() {
         commands.entity(event.character).despawn_recursive();
     }
 }
@@ -146,7 +146,7 @@ pub fn spawn_corpses(
     entity_allocator: Res<NetEntityAllocator>,
     characters: Query<(&Character, &Location)>,
 ) {
-    for event in &mut died_events {
+    for event in died_events.read() {
         let (character, map_position) = match characters.get(event.character) {
             Ok(x) => x,
             _ => continue,
@@ -182,7 +182,7 @@ pub fn send_damage_notices(
     mut damage_events: EventReader<DamageDealt>,
     clients: Query<&NetClient>,
 ) {
-    for event in &mut damage_events {
+    for event in damage_events.read() {
         let target_id = match entity_lookup.ecs_to_net(event.target) {
             Some(x) => x,
             None => continue,
@@ -222,7 +222,7 @@ impl Plugin for CombatPlugin {
             .add_event::<DamageDealt>()
             .init_prefab_bundle::<prefabs::MeleeWeaponPrefab>("melee_weapon")
             .init_prefab_bundle::<prefabs::UnarmedPrefab>("unarmed")
-            .add_systems((
+            .add_systems(Update, (
                 handle_attack_requests,
                 update_weapon_stats,
                 attack_current_target
@@ -232,7 +232,7 @@ impl Plugin for CombatPlugin {
                 remove_dead_characters.after(apply_damage),
                 spawn_corpses.after(apply_damage).before(remove_dead_characters),
             ))
-            .add_systems((
+            .add_systems(Last, (
                 send_damage_notices,
             ).in_set(ServerSet::Send));
     }

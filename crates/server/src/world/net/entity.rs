@@ -3,8 +3,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::*;
-use bevy_ecs::system::{Command, EntityCommands};
-use bevy_ecs::world::{EntityMut, World};
+use bevy_ecs::system::{EntityCommands};
+use bevy_ecs::world::{Command, World};
 use bevy_reflect::Reflect;
 
 use yewoh::EntityId;
@@ -94,7 +94,7 @@ pub fn remove_old_entities_from_lookup(
     mut lookup: ResMut<NetEntityLookup>,
     mut removals: RemovedComponents<NetEntity>,
 ) {
-    for entity in removals.iter() {
+    for entity in removals.read() {
         lookup.remove(entity);
     }
 }
@@ -104,7 +104,7 @@ pub struct AssignNetId {
 }
 
 impl Command for AssignNetId {
-    fn write(self, world: &mut World) {
+    fn apply(self, world: &mut World) {
         assign_network_id(world, self.entity);
     }
 }
@@ -137,7 +137,7 @@ pub trait NetCommandsExt {
     fn assign_network_id(&mut self) -> &mut Self;
 }
 
-impl<'w, 's, 'a> NetCommandsExt for EntityCommands<'w, 's, 'a> {
+impl<'w> NetCommandsExt for EntityCommands<'w> {
     fn assign_network_id(&mut self) -> &mut Self {
         let entity = self.id();
         self.commands().add(AssignNetId { entity });
@@ -145,7 +145,7 @@ impl<'w, 's, 'a> NetCommandsExt for EntityCommands<'w, 's, 'a> {
     }
 }
 
-impl<'w> NetCommandsExt for EntityMut<'w> {
+impl<'w> NetCommandsExt for EntityWorldMut<'w> {
     fn assign_network_id(&mut self) -> &mut Self {
         let entity = self.id();
         self.world_scope(|world| assign_network_id(world, entity));

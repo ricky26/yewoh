@@ -38,7 +38,7 @@ impl WorldTime {
 
 impl<T: TimeZone> From<DateTime<T>> for WorldTime {
     fn from(real_time: DateTime<T>) -> Self {
-        let epoch = DateTime::from_utc(
+        let epoch = DateTime::from_naive_utc_and_offset(
             NaiveDateTime::new(
                 NaiveDate::from_ymd_opt(1997, 9, 24).unwrap(),
                 NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
