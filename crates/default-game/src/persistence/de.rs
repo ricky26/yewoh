@@ -64,10 +64,10 @@ impl<'a, 'w, 'de> Visitor<'de> for BundlesVisitor<'a, 'w> {
     }
 
     fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'de> {
-        while let Some(_) = seq.next_element_seed(BundleVisitor {
+        while seq.next_element_seed(BundleVisitor {
             ctx: self.ctx,
             deserializers: self.deserializers,
-        })? {}
+        })?.is_some() {}
 
         Ok(())
     }
@@ -186,10 +186,10 @@ impl<'a, 'w, 'de, T: BundleSerializer> Visitor<'de> for BundleValuesVisitor<'a, 
     }
 
     fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'de> {
-        while let Some(_) = seq.next_element_seed(BundleValuePairVisitor {
+        while seq.next_element_seed(BundleValuePairVisitor {
             ctx: self.ctx,
             _phantom: self._phantom,
-        })? {}
+        })?.is_some() {}
 
         Ok(())
     }

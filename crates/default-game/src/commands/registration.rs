@@ -160,7 +160,7 @@ impl<'w, 's> TextCommandExecutor<'w, 's> {
     }
 
     pub fn try_exec(&mut self, from: Entity, args: &[String]) -> bool {
-        if args.len() == 0 {
+        if args.is_empty() {
             return false;
         }
 
@@ -168,7 +168,7 @@ impl<'w, 's> TextCommandExecutor<'w, 's> {
             .zip(self.clients.get(from).ok()) {
             let registration = self.commands.commands.get_mut(&type_id).unwrap();
             let queue = unsafe { &mut *registration.queue.get() };
-            (registration.enqueue)(queue, client, from, &args);
+            (registration.enqueue)(queue, client, from, args);
             true
         } else {
             false

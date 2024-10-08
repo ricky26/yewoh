@@ -131,7 +131,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Load server data
     let mut prefabs = PrefabCollection::default();
-    prefabs.load_from_directory(&app.world_mut().resource(), &args.data_path.join("prefabs")).await?;
+    prefabs.load_from_directory(app.world_mut().resource(), &args.data_path.join("prefabs")).await?;
     info!("Loaded {} prefabs", prefabs.len());
     app.insert_resource(prefabs);
 

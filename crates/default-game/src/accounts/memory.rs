@@ -32,11 +32,11 @@ impl AccountRepository for MemoryAccountRepository {
     async fn list_characters(&self, username: &str) -> anyhow::Result<AccountCharacters> {
         let mut locked = self.locked.lock().await;
         let user = locked.users.entry(username.to_string())
-            .or_insert_with(|| Default::default());
+            .or_insert_with(Default::default);
         let padding = DEFAULT_CHARACTER_SLOTS - user.characters.len();
         let characters = user.characters.iter()
             .map(|id| AccountCharacter {
-                id: id.clone(),
+                id: *id,
             })
             .map(Some)
             .chain((0..padding).map(|_| None))
@@ -49,7 +49,7 @@ impl AccountRepository for MemoryAccountRepository {
         let info = CharacterInfo::from_request(&request);
         let mut locked = self.locked.lock().await;
         let user = locked.users.entry(username.to_string())
-            .or_insert_with(|| Default::default());
+            .or_insert_with(Default::default);
         let id = new_uuid();
         user.characters.push(id);
         Ok(CharacterToSpawn::NewCharacter(id, info))
@@ -62,7 +62,7 @@ impl AccountRepository for MemoryAccountRepository {
     async fn load_character(&self, username: &str, slot: i32) -> anyhow::Result<CharacterToSpawn> {
         let mut locked = self.locked.lock().await;
         let user = locked.users.entry(username.to_string())
-            .or_insert_with(|| Default::default());
+            .or_insert_with(Default::default);
         if user.characters.len() as i32 <= slot {
             return Err(anyhow::anyhow!("{username} has no character {slot}"));
         }

@@ -9,7 +9,7 @@ pub trait IVecExt : Copy + Sized + Sub<Self, Output=Self> {
     }
 
     fn in_range(&self, other: &Self, range: i32) -> bool {
-        self.manhattan_distance(other) as i32 <= range
+        self.manhattan_distance(other) <= range
     }
 }
 

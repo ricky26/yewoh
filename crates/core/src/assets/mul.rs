@@ -23,7 +23,7 @@ impl Read for MulReader {
         match &mut self.0 {
             MulReaderImpl::Uop(uop) => {
                 let position = uop.current_block.position() as usize;
-                let mut inner = uop.current_block.get_mut();
+                let inner = uop.current_block.get_mut();
 
                 if position >= inner.len() {
                     // Read a new block
@@ -32,7 +32,7 @@ impl Read for MulReader {
                     let path = format!("build/{}legacymul/{:08}.dat", &uop.filename, uop.next_block_index);
                     if let Some(mut entry) = uop.uop.get(&path) {
                         uop.next_block_index += 1;
-                        entry.read_to_end(&mut inner).unwrap();
+                        entry.read_to_end(inner).unwrap();
                         uop.current_block.set_position(0);
                     }
                 }

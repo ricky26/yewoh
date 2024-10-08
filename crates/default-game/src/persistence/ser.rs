@@ -15,7 +15,7 @@ impl<'a> Serialize for BufferBundleSerializer<'a> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
         let mut tuple = serializer.serialize_tuple(2)?;
         tuple.serialize_element(&self.buffer.serializer_id)?;
-        tuple.serialize_element(&BufferValuesSerializer { ctx: self.ctx, buffer: &self.buffer })?;
+        tuple.serialize_element(&BufferValuesSerializer { ctx: self.ctx, buffer: self.buffer })?;
         tuple.end()
     }
 }
@@ -109,7 +109,7 @@ impl<'a, T: BundleSerializer> Serialize for BufferSerializer<'a, T> {
         for (entity, bundle) in self.bundles {
             seq.serialize_element(&BufferValuePairSerializer::<T> {
                 ctx: self.ctx,
-                entity: entity.clone(),
+                entity: *entity,
                 bundle,
             })?;
         }

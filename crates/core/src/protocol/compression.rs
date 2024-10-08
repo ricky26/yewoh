@@ -126,7 +126,7 @@ impl<'a> BitReader<'a> {
 
     #[inline]
     pub fn pop(&mut self) -> Option<bool> {
-        if self.src.len() > 0 {
+        if !self.src.is_empty() {
             let value = (self.src[0] & (1 << (7 - self.bit_offset))) != 0;
 
             if self.bit_offset >= 7 {

@@ -431,7 +431,7 @@ impl Writer {
 
         let mut addr_bytes = [0u8; 4];
         Endian::write_u32(&mut addr_bytes, seed);
-        self.writer.write_all(&mut addr_bytes).await?;
+        self.writer.write_all(&addr_bytes).await?;
         self.writer.flush().await?;
         Ok(())
     }
@@ -453,7 +453,7 @@ impl Writer {
             }
         }
 
-        let result = self.writer.write_all(&mut self.buffer).await;
+        let result = self.writer.write_all(&self.buffer).await;
         self.buffer.clear();
         result?;
         self.writer.flush().await?;

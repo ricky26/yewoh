@@ -98,7 +98,7 @@ pub async fn create_map_entities(world: &mut World, map_infos: &MapInfos, uo_dat
     drop(tx);
 
     let mut queue = CommandQueue::default();
-    let mut commands = Commands::new(&mut queue, &world);
+    let mut commands = Commands::new(&mut queue, world);
 
     while let Some((map_id, x, y, chunk)) = rx.recv().await {
         spawn_chunk(&mut commands, map_id, x, y, chunk);
@@ -135,7 +135,7 @@ pub async fn create_statics(
     drop(tx);
 
     let mut queue = CommandQueue::default();
-    let mut commands = Commands::new(&mut queue, &world);
+    let mut commands = Commands::new(&mut queue, world);
 
     while let Some((map_id, s)) = rx.recv().await {
         let mut entity = commands.spawn((

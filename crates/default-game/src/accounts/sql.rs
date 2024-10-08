@@ -122,8 +122,8 @@ impl AccountRepository for SqlAccountRepository {
             .bind(username)
             .fetch_all(&mut *tx)
             .await?;
-        let slot = match (0..account.character_slots).filter(|i| !used_slots.contains(&(*i,))).next() {
-            Some(x) => x as i32,
+        let slot = match (0..account.character_slots).find(|i| !used_slots.contains(&(*i,))) {
+            Some(x) => x,
             None => {
                 tx.rollback().await?;
                 return Err(anyhow!("no free slots"));
@@ -132,7 +132,7 @@ impl AccountRepository for SqlAccountRepository {
 
         let id = new_uuid();
         sqlx::query("INSERT INTO characters (id, username, slot) VALUES ($1, $2, $3)")
-            .bind(&id)
+            .bind(id)
             .bind(username)
             .bind(slot)
             .execute(&mut *tx)

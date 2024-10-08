@@ -103,7 +103,7 @@ pub async fn load_statics<C: FnMut(Static) -> F, F: Future<Output=anyhow::Result
 
             let mut bytes = &data[start..end];
 
-            while bytes.len() > 0 {
+            while !bytes.is_empty() {
                 let graphic_id = bytes.read_u16::<Endian>()?;
                 let x_off = bytes.read_i8()? as i32;
                 let y_off = bytes.read_i8()? as i32;

@@ -197,7 +197,7 @@ impl TryFrom<GumpLayout> for CompressedGumpLayout {
         let mut text = Vec::new();
         let mut z = ZlibEncoder::new(&mut text, Compression::fast());
         for line in source.text.iter() {
-            z.write_utf16_pascal(&line)?;
+            z.write_utf16_pascal(line)?;
         }
         let text_length = z.total_in() as usize;
         z.finish()?;

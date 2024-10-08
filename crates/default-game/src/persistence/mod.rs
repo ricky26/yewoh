@@ -116,7 +116,7 @@ impl Eq for SerializedBuffer {}
 
 impl PartialOrd for SerializedBuffer {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.priority.partial_cmp(&other.priority)
+        Some(self.cmp(other))
     }
 }
 
@@ -216,7 +216,7 @@ impl BundleSerializers {
         if let Some(deserialize) = self.deserializers.get(id) {
             let mut d = <dyn erased_serde::Deserializer>::erase(d);
             deserialize(ctx, &mut d)
-                .map_err(|e| D::Error::custom(e))
+                .map_err(D::Error::custom)
         } else {
             Err(D::Error::custom(format!("unknown bundle ID {id}")))
         }

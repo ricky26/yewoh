@@ -137,7 +137,7 @@ pub fn handle_list_characters_callback(
                         .map(|c|
                             c.and_then(|c| all_players.get(&c.id))
                                 .map(|(_, name)| CharacterFromList {
-                                    name: FixedString::from_str(&name),
+                                    name: FixedString::from_str(name),
                                     ..Default::default()
                                 }))
                         .collect(),
@@ -276,7 +276,7 @@ pub fn create_new_character(
             if let Some(mut c) = entity_ref.get_mut::<Character>() {
                 let mut c = std::mem::take(&mut *c);
                 c.hue = info.hue;
-                c.equipment.extend(equipment.into_iter());
+                c.equipment.extend(equipment);
 
                 entity_ref.world_scope(|world| {
                     for equipped in &c.equipment {

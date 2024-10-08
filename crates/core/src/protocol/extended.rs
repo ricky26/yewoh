@@ -166,7 +166,7 @@ impl Packet for ExtendedCommand {
             ExtendedCommand::ChangeMap(map) =>
                 writer.write_u8(*map)?,
             ExtendedCommand::Language(language) =>
-                writer.write_str_nul(&language)?,
+                writer.write_str_nul(language)?,
             ExtendedCommand::CloseStatusGump(id) =>
                 writer.write_u32::<Endian>(*id)?,
             ExtendedCommand::ClientType(client_type) =>

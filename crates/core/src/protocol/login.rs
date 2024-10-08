@@ -118,7 +118,7 @@ impl Packet for LoginError {
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
-        Ok(LoginError::from_repr(payload.read_u8()?).ok_or_else(|| anyhow!("invalid login error"))?)
+        LoginError::from_repr(payload.read_u8()?).ok_or_else(|| anyhow!("invalid login error"))
     }
 
     fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {

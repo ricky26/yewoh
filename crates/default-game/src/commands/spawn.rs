@@ -137,7 +137,7 @@ pub fn spawn(
         let mut container = match containers.get_mut(target) {
             Ok(x) => x,
             _ => {
-                client.send_system_message_hue(format!("Item is not a container"), hues::RED);
+                client.send_system_message_hue("Item is not a container".to_string(), hues::RED);
                 continue;
             }
         };

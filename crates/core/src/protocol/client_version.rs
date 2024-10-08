@@ -71,17 +71,17 @@ impl FromStr for ExtendedClientVersion {
 
         let (patch, build, suffix) = if let Some((patch_str, rest)) = rest.split_once('.') {
             let patch = u8::from_str(patch_str)?;
-            let (build_str, rest) = rest.split_once(|c: char| !c.is_digit(10))
-                .unwrap_or_else(|| (rest, ""));
+            let (build_str, rest) = rest.split_once(|c: char| !c.is_ascii_digit())
+                .unwrap_or((rest, ""));
             let build = u8::from_str(build_str)?;
             (patch, build, rest)
         } else {
-            let (patch_str, rest) = rest.split_once(|c: char| !c.is_digit(10))
+            let (patch_str, rest) = rest.split_once(|c: char| !c.is_ascii_digit())
                 .ok_or_else(|| anyhow!("Missing patch number"))?;
             let patch = u8::from_str(patch_str)?;
             let first_char = rest.chars().next().unwrap_or('\0');
-            if rest.len() == 1 && first_char >= 'a' && first_char <= 'z' {
-                let build = (first_char as u8 - b'a') as u8;
+            if rest.len() == 1 && ('a'..='z').contains(&first_char) {
+                let build = first_char as u8 - b'a';
                 (patch, build, "")
             } else {
                 (patch, 0, rest)

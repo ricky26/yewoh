@@ -247,8 +247,8 @@ impl Packet for MoveEntityReject {
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
-        Ok(MoveEntityReject::from_repr(payload.read_u8()?)
-            .ok_or_else(|| anyhow!("Invalid rejection reason"))?)
+        MoveEntityReject::from_repr(payload.read_u8()?)
+            .ok_or_else(|| anyhow!("Invalid rejection reason"))
     }
 
     fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {

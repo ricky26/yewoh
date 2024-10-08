@@ -45,7 +45,7 @@ fn show_go_gump(client: &NetClient) {
         .add_page(0)
         .add_image_sliced(0xdac, IVec2::ZERO, size)
         .add_html(
-            text.intern(format!("<center>Go to Location</center>")),
+            text.intern("<center>Go to Location</center>".to_string()),
             false,
             false,
             padding,
@@ -57,7 +57,7 @@ fn show_go_gump(client: &NetClient) {
         .add_page(1)
         .add_button(0x15e1, 0x15e5, 0, 2, false, IVec2::new(padding.x, y))
         .add_html(
-            text.intern(format!("<center>Place 1</center>")),
+            text.intern("<center>Place 1</center>".to_string()),
             false,
             false,
             IVec2::new(padding.x + 10, y),
@@ -68,7 +68,7 @@ fn show_go_gump(client: &NetClient) {
         .add_page(2)
         .add_button(0x15e1, 0x15e5, 0, 1, false, IVec2::new(padding.x, y))
         .add_html(
-            text.intern(format!("<center>Place 2</center>")),
+            text.intern("<center>Place 2</center>".to_string()),
             false,
             false,
             IVec2::new(padding.x + 10, y),

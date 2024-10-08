@@ -59,7 +59,7 @@ pub fn hash(mut src: &[u8]) -> u64 {
         src = &src[12..];
     }
 
-    if src.len() > 0 {
+    if !src.is_empty() {
         a += partial_read_u32(src);
         b += partial_read_u32(&src[4..]);
         c += partial_read_u32(&src[8..]);

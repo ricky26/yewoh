@@ -164,7 +164,7 @@ impl PacketReadExt for &[u8] {
         if let Some(idx) = self.windows(2).position(|window| window == [0, 0]) {
             let result = self[..idx]
                 .chunks_exact(2)
-                .map(|c| Endian::read_u16(c))
+                .map(Endian::read_u16)
                 .to_utf16chars()
                 .map(|r| r.unwrap_or(Utf16Char::from('\u{fffd}')))
                 .collect();
@@ -187,7 +187,7 @@ impl PacketReadExt for &[u8] {
         if let Some(idx) = self.windows(2).position(|window| window == [0, 0]) {
             let result = self[..idx]
                 .chunks_exact(2)
-                .map(|c| LE::read_u16(c))
+                .map(LE::read_u16)
                 .to_utf16chars()
                 .map(|r| r.unwrap_or(Utf16Char::from('\u{fffd}')))
                 .collect();
@@ -211,13 +211,13 @@ impl PacketReadExt for &[u8] {
     }
 
     fn read_direction(&mut self) -> anyhow::Result<Direction> {
-        Ok(Direction::from_repr(self.read_u8()?).ok_or_else(|| anyhow!("invalid direction"))?)
+        Direction::from_repr(self.read_u8()?).ok_or_else(|| anyhow!("invalid direction"))
     }
 }
 
 pub fn utf16_slice_to_string(bytes: &[u8]) -> String {
     bytes.chunks_exact(2)
-        .map(|c| Endian::read_u16(c))
+        .map(Endian::read_u16)
         .to_utf16chars()
         .map(|r| r.unwrap_or(Utf16Char::from('\u{fffd}')))
         .collect()
@@ -225,7 +225,7 @@ pub fn utf16_slice_to_string(bytes: &[u8]) -> String {
 
 pub fn utf16le_slice_to_string(bytes: &[u8]) -> String {
     bytes.chunks_exact(2)
-        .map(|c| LE::read_u16(c))
+        .map(LE::read_u16)
         .to_utf16chars()
         .map(|r| r.unwrap_or(Utf16Char::from('\u{fffd}')))
         .collect()

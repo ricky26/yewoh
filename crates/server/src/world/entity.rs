@@ -307,7 +307,7 @@ impl Stats {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TooltipLine {
     pub text_id: u32,
     pub arguments: String,
@@ -329,6 +329,12 @@ impl TooltipLine {
             arguments: text,
             priority,
         }
+    }
+}
+
+impl PartialOrd for TooltipLine {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.text_id.cmp(&other.text_id))
     }
 }
 

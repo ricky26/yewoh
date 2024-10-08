@@ -289,7 +289,7 @@ impl Packet for UnicodeTextMessageRequest {
     }
 
     fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
-        let has_keywords = self.keywords.len() > 0;
+        let has_keywords = !self.keywords.is_empty();
         let mut raw_kind = self.kind as u8;
         if has_keywords {
             raw_kind |= Self::HAS_KEYWORDS;

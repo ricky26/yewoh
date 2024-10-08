@@ -73,7 +73,7 @@ impl Packet for CharacterProfile {
 
                 if let Some(new_profile) = request.new_profile.as_ref() {
                     writer.write_u16::<Endian>(1)?;
-                    writer.write_utf16_pascal(&new_profile)?;
+                    writer.write_utf16_pascal(new_profile)?;
                 }
             }
             CharacterProfile::Response(response) => {

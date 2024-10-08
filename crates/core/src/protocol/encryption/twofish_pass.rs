@@ -25,7 +25,7 @@ impl TwofishPass {
 
         Self::rotate_block(&mut twofish, &mut block);
 
-        let response_block = md5::compute(&block).0;
+        let response_block = md5::compute(block).0;
         Self {
             twofish,
             block,

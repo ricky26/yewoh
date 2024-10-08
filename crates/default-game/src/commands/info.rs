@@ -72,7 +72,7 @@ fn send_entity_info(world: &World, type_registry: &TypeRegistry, client: &NetCli
             if let Some(reflected) = reflected {
                 add_line(format!("{:?}", reflected));
             } else {
-                add_line(format!("{}", info.name()));
+                add_line(info.name().to_string());
             }
         } else {
             add_line(format!("C={:?}", component));

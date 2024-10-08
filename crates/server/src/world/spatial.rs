@@ -158,7 +158,7 @@ impl<T> RTreeObject for Entry<T> {
     type Envelope = BoundingBox;
 
     fn envelope(&self) -> Self::Envelope {
-        self.aabb.clone()
+        self.aabb
     }
 }
 
@@ -260,7 +260,7 @@ impl<T> Default for SpatialEntityTree<T> {
 impl<T> SpatialEntityTree<T> {
     fn ensure_tree(&mut self, map: u8) -> &mut RTree<Entry<T>> {
         self.trees.entry(map)
-            .or_insert_with(|| RTree::new())
+            .or_insert_with(RTree::new)
     }
 
     fn insert(&mut self, entity: Entity, metadata: T, map: u8, aabb: BoundingBox) {
@@ -331,12 +331,9 @@ impl<T> SpatialEntityTree<T> {
     }
 
     pub fn iter_at_point(&self, map: u8, position: IVec2) -> impl Iterator<Item=(Entity, &T)> + '_ {
-        MaybeIter(if let Some(tree) = self.trees.get(&map) {
-            Some(tree.locate_all_at_point(&SpatialPoint(position))
-                .map(|e| (e.entity, &e.metadata)))
-        } else {
-            None
-        })
+        MaybeIter(self.trees.get(&map)
+            .map(|tree| tree.locate_all_at_point(&SpatialPoint(position))
+                .map(|e| (e.entity, &e.metadata))))
     }
 }
 

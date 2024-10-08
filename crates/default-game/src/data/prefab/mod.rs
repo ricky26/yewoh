@@ -30,7 +30,7 @@ pub trait FromPrefabTemplate: PrefabBundle + 'static {
 }
 
 thread_local! {
-    static CURRENT_FACTORY: Cell<*const PrefabFactory> = Cell::new(std::ptr::null());
+    static CURRENT_FACTORY: Cell<*const PrefabFactory> = const { Cell::new(std::ptr::null()) };
 }
 
 struct EnterFactoryGuard {
@@ -136,7 +136,7 @@ impl<'de> DeserializeSeed<'de> for Implementation {
 
     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error> where D: Deserializer<'de> {
         let mut deserializer = <dyn erased_serde::Deserializer>::erase(deserializer);
-        (self.deserialize)(&mut deserializer).map_err(|e| D::Error::custom(e))
+        (self.deserialize)(&mut deserializer).map_err(D::Error::custom)
     }
 }
 
@@ -180,6 +180,10 @@ impl PrefabCollection {
 
     pub fn len(&self) -> usize {
         self.prefabs.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn prefabs(&self) -> &HashMap<Arc<str>, Arc<Prefab>> {

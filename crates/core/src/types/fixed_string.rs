@@ -20,6 +20,10 @@ pub struct FixedString<const I: usize> {
 }
 
 impl<const I: usize> FixedString<I> {
+    pub const fn is_empty(&self) -> bool {
+        self.length == 0
+    }
+
     pub const fn len(&self) -> usize {
         self.length as usize
     }
@@ -71,8 +75,10 @@ impl<const I: usize> TryFrom<&str> for FixedString<I> {
         if bytes.len() > I {
             Err(StringTooLong)
         } else {
-            let mut result = FixedString::default();
-            result.length = bytes.len() as u16;
+            let mut result = FixedString {
+                length: bytes.len() as u16,
+                ..Default::default()
+            };
             result.contents[..bytes.len()].copy_from_slice(bytes);
             Ok(result)
         }

@@ -233,7 +233,7 @@ impl SessionAllocator {
             None => return Err(anyhow!("no such session token")),
         };
 
-        if login.username.as_str() != &test_session.username {
+        if login.username.as_str() != test_session.username.as_str() {
             return Err(anyhow!("wrong user for session"));
         }
 
