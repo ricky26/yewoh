@@ -37,7 +37,7 @@ pub trait DespawnRecursiveExt {
 impl<'w> DespawnRecursiveExt for EntityCommands<'w> {
     fn despawn_recursive(mut self) {
         let entity = self.id();
-        self.commands().add(DespawnRecursive { entity });
+        self.commands().queue(DespawnRecursive { entity });
     }
 }
 

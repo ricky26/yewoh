@@ -251,7 +251,7 @@ pub fn create_new_character(
 
     commands.spawn_empty()
         .insert_prefab(prefab)
-        .add(move |entity, world: &mut World| {
+        .queue(move |entity: Entity, world: &mut World| {
             let mut equipment = Vec::new();
 
             if info.hair != 0 {

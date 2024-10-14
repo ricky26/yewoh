@@ -140,7 +140,7 @@ pub trait NetCommandsExt {
 impl<'w> NetCommandsExt for EntityCommands<'w> {
     fn assign_network_id(&mut self) -> &mut Self {
         let entity = self.id();
-        self.commands().add(AssignNetId { entity });
+        self.commands().queue(AssignNetId { entity });
         self
     }
 }

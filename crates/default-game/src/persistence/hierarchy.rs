@@ -52,7 +52,7 @@ pub trait PersistenceCommandsExt {
 impl<'w> PersistenceCommandsExt for EntityCommands<'w> {
     fn change_persistence(&mut self, persistent: bool) -> &mut Self {
         let entity = self.id();
-        self.commands().add(ChangePersistence { entity, persistent });
+        self.commands().queue(ChangePersistence { entity, persistent });
         self
     }
 }

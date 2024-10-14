@@ -253,7 +253,7 @@ impl<'w> PrefabCommandsExt for EntityWorldMut<'w> {
 impl<'w> PrefabCommandsExt for EntityCommands<'w> {
     fn insert_prefab(&mut self, prefab: Arc<Prefab>) -> &mut Self {
         let entity = self.id();
-        self.commands().add(InsertPrefab { prefab, entity });
+        self.commands().queue(InsertPrefab { prefab, entity });
         self
     }
 }
