@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display, Formatter};
 
-pub trait SourcePosition : Display + Debug {
+pub trait SourcePosition: Display + Debug {
     fn address(&self, f: &mut Formatter<'_>) -> std::fmt::Result;
 }
 
@@ -25,5 +25,19 @@ pub struct DisplayAddress<P>(pub P);
 impl<P: SourcePosition> Display for DisplayAddress<P> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.0.address(f)
+    }
+}
+
+pub struct FormatterFn<F: Fn(&mut Formatter<'_>) -> std::fmt::Result>(pub F);
+
+impl<F: Fn(&mut Formatter<'_>) -> std::fmt::Result> Display for FormatterFn<F> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.0(f)
+    }
+}
+
+impl<F: Fn(&mut Formatter<'_>) -> std::fmt::Result> Debug for FormatterFn<F> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.0(f)
     }
 }

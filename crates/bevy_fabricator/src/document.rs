@@ -4,8 +4,12 @@ use bevy::prelude::*;
 use derive_more::{Display, Error, From};
 use smallvec::SmallVec;
 
-use crate::parser::{SourcePosition, DisplayAddress};
-use crate::string::recognize_string;
+use crate::parser::{SourcePosition, DisplayAddress, FormatterFn};
+use crate::string::{escape_string, recognize_string};
+
+fn dot_register_name(index: usize) -> impl Display {
+    FormatterFn(move |f| write!(f, "v{index}"))
+}
 
 #[derive(Clone, Debug, Error, Display, From)]
 pub enum ParseError<P: SourcePosition> {
@@ -126,6 +130,27 @@ pub enum Expression<'a> {
     Import(Import<'a>),
 }
 
+impl<'a> Expression<'a> {
+    fn fmt_dot(&self, index: usize, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let name = dot_register_name(index);
+        match self {
+            Expression::Tuple(_, body) => {
+                for other in body.iter().copied() {
+                    writeln!(f, "  {} -> {name};", dot_register_name(other))?;
+                }
+            }
+            Expression::Struct(_, body) => {
+                for (_, other) in body.iter().copied() {
+                    writeln!(f, "  {} -> {name};", dot_register_name(other))?;
+                }
+            }
+            _ => {},
+        }
+
+        Ok(())
+    }
+}
+
 impl<'a> Debug for Expression<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -223,6 +248,19 @@ impl<'a> Register<'a> {
 
         Ok(())
     }
+
+    fn fmt_dot(&self, index: usize, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let name = dot_register_name(index);
+        let self_debug = FormatterFn(|f| self.fmt_with_index(index, f)).to_string();
+        let label = escape_string(&self_debug);
+        writeln!(f, "  {name} [shape=box,label={label}];")?;
+
+        if let Some(expr) = &self.value {
+            expr.fmt_dot(index, f)?;
+        }
+
+        Ok(())
+    }
 }
 
 impl<'a> Debug for Register<'a> {
@@ -270,6 +308,26 @@ impl<'a> Document<'a> {
 
     pub fn parse(input: &'a str) -> Result<Document<'a>, ParseError<&'a str>> {
         parse_document(input)
+    }
+
+    fn fmt_dot(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "digraph Document {{")?;
+
+        for (index, register) in self.registers.iter().enumerate() {
+            register.fmt_dot(index, f)?;
+        }
+
+        for (index, a) in self.applications.iter().enumerate() {
+            writeln!(f, "  a{index} [label=apply]")?;
+            writeln!(f, "  a{index} -> {}", dot_register_name(a.entity))?;
+            writeln!(f, "  {} -> a{index}", dot_register_name(a.expression))?;
+        }
+
+        writeln!(f, "}}")
+    }
+
+    pub fn to_dot(&self) -> String {
+        FormatterFn(|f| self.fmt_dot(f)).to_string()
     }
 }
 
@@ -826,7 +884,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_test() {
+    fn test_build() {
         let doc = Document {
             registers: vec![
                 Register {

@@ -1,5 +1,6 @@
+use crate::parser::{DisplayAddress, FormatterFn, SourcePosition};
 use derive_more::{Display, Error};
-use crate::parser::{SourcePosition, DisplayAddress};
+use std::fmt::Write;
 
 #[derive(Clone, Debug, Error, Display)]
 pub enum ParseError<P: SourcePosition> {
@@ -35,13 +36,13 @@ struct StringIterator<'a> {
 
 impl<'a> StringIterator<'a> {
     pub fn try_new(src: &'a str) -> Option<StringIterator<'a>> {
-       if !src.starts_with('"') {
-           None
-       } else {
-           Some(StringIterator {
-               string: &src[1..],
-           })
-       }
+        if !src.starts_with('"') {
+            None
+        } else {
+            Some(StringIterator {
+                string: &src[1..],
+            })
+        }
     }
 
     pub fn as_str(&self) -> &'a str {
@@ -144,6 +145,41 @@ pub fn parse_string(src: &str) -> Result<Option<(&str, String)>, ParseError<&str
     }
 
     Err(ParseError::MissingEndQuote(src))
+}
+
+pub fn fmt_escape_string(src: &str, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_char('"')?;
+
+    let mut rest = src;
+    loop {
+        let offset = match rest.find(&['"', '\r', '\n', '\t', '\\']) {
+            Some(offset) => offset,
+            None => {
+                f.write_str(rest)?;
+                return f.write_char('"');
+            }
+        };
+
+        let (left, right) = rest.split_at(offset);
+        f.write_str(left)?;
+
+        let mut chars = right.chars();
+        let c = chars.next().unwrap();
+        rest = chars.as_str();
+
+        match c {
+            '"' => f.write_str("\\\"")?,
+            '\\' => f.write_str("\\\\")?,
+            '\r' => f.write_str("\\r")?,
+            '\n' => f.write_str("\\n")?,
+            '\t' => f.write_str("\\t")?,
+            _ => unreachable!(),
+        }
+    }
+}
+
+pub fn escape_string(src: &str) -> impl Display + '_ {
+    FormatterFn(|f| fmt_escape_string(src, f))
 }
 
 #[cfg(test)]
