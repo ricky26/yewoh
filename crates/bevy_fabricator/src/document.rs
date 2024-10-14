@@ -1,22 +1,74 @@
-use crate::string::recognize_string;
-use bevy::prelude::*;
-use nom::branch::alt;
-use nom::bytes::complete::{tag, take_until, take_while1};
-use nom::character::complete::{alpha1, alphanumeric1, char, one_of};
-use nom::combinator::{map, opt, recognize};
-use nom::error::{ErrorKind, ParseError};
-use nom::multi::{many0, many0_count, many1};
-use nom::sequence::{delimited, pair, tuple};
-use nom::{Finish, IResult, InputLength, Parser};
-use smallvec::SmallVec;
-use std::cell::RefCell;
 use std::fmt::{Debug, Formatter, Write};
-use anyhow::anyhow;
+
+use bevy::prelude::*;
+use derive_more::{Display, Error, From};
+use smallvec::SmallVec;
+
+use crate::parser::{SourcePosition, DisplayAddress};
+use crate::string::recognize_string;
+
+#[derive(Clone, Debug, Error, Display, From)]
+pub enum ParseError<P: SourcePosition> {
+    #[from]
+    StringError(super::string::ParseError<P>),
+    #[display("expected expression")]
+    ExpectedExpression(P),
+    #[display("unclosed tuple")]
+    UnclosedTuple,
+    #[display("expected identifier")]
+    ExpectedIdentifier,
+    #[display("expected colon")]
+    ExpectedColon,
+    #[display("expected struct")]
+    UnclosedStruct,
+    #[display("{}: expected {keyword} keyword", DisplayAddress(at))]
+    ExpectedKeyword { at: P, #[error(not(source))] keyword: &'static str },
+    #[display("{}: expected path", DisplayAddress(_0))]
+    ExpectedPath(P),
+    #[display("{}: expected semi-colon", DisplayAddress(_0))]
+    ExpectedSemiColon(P),
+    #[display("{}: expected open brace", DisplayAddress(_0))]
+    ExpectedOpenBrace(P),
+    #[display("{}: expected import path", DisplayAddress(_0))]
+    ExpectedImportPath(P),
+}
+
+impl<P: SourcePosition> ParseError<P> {
+    pub fn map_position<P2: SourcePosition>(self, mut f: impl FnMut(P) -> P2) -> ParseError<P2> {
+        match self {
+            ParseError::StringError(e) =>
+                ParseError::StringError(e.map_position(&mut f)),
+            ParseError::ExpectedExpression(p) => ParseError::ExpectedExpression(f(p)),
+            ParseError::UnclosedTuple => ParseError::UnclosedTuple,
+            ParseError::ExpectedIdentifier => ParseError::ExpectedIdentifier,
+            ParseError::ExpectedColon => ParseError::ExpectedColon,
+            ParseError::UnclosedStruct => ParseError::UnclosedStruct,
+            ParseError::ExpectedKeyword { at, keyword } =>
+                ParseError::ExpectedKeyword { at: f(at), keyword },
+            ParseError::ExpectedPath(p) => ParseError::ExpectedPath(f(p)),
+            ParseError::ExpectedSemiColon(p) => ParseError::ExpectedSemiColon(f(p)),
+            ParseError::ExpectedOpenBrace(p) => ParseError::ExpectedOpenBrace(f(p)),
+            ParseError::ExpectedImportPath(p) => ParseError::ExpectedImportPath(f(p)),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct Path<'a>(pub SmallVec<[&'a str; 8]>);
 
 impl<'a> Path<'a> {
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn empty() -> Path<'a> {
+        Path(SmallVec::new())
+    }
+
     pub fn single(segment: &'a str) -> Path<'a> {
         let mut segments = SmallVec::new();
         segments.push(segment);
@@ -25,6 +77,13 @@ impl<'a> Path<'a> {
 
     pub fn from_iter(parts: impl IntoIterator<Item=&'a str>) -> Path<'a> {
         Path(SmallVec::from_iter(parts))
+    }
+
+    pub fn join(&self, other: &Path<'a>) -> Path<'a> {
+        let mut segments = SmallVec::with_capacity(self.len() + other.len());
+        segments.extend_from_slice(&self.0);
+        segments.extend_from_slice(&other.0);
+        Path(segments)
     }
 }
 
@@ -52,7 +111,7 @@ impl<'a> Debug for Import<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Import::Path(path) => path.fmt(f),
-            Import::File(path) => write!(f, "import \"{path}\""),
+            Import::File(path) => write!(f, "import {path}"),
         }
     }
 }
@@ -209,18 +268,8 @@ impl<'a> Document<'a> {
         index
     }
 
-    pub fn parse(input: &'a str) -> anyhow::Result<Document<'a>> {
-        parse_document::<nom::error::Error<&'a str>>(input)
-            .map_err(|e| e.to_owned())
-            .finish()
-            .map_err(|e| e.into())
-            .and_then(|(rest, doc)| {
-                if rest.is_empty() {
-                    Ok(doc)
-                } else {
-                    Err(anyhow!("unexpected data after document: {rest}"))
-                }
-            })
+    pub fn parse(input: &'a str) -> Result<Document<'a>, ParseError<&'a str>> {
+        parse_document(input)
     }
 }
 
@@ -242,241 +291,534 @@ impl<'a> Debug for Document<'a> {
     }
 }
 
-fn fold_separated0<I, O1, O2, O3, E, F1, F2, F3, F4>(
-    mut f: F1,
-    mut sep: F2,
-    mut init: F3,
-    mut fold: F4,
-) -> impl FnMut(I) -> IResult<I, O3, E>
-where
-    I: Clone + InputLength,
-    E: ParseError<I>,
-    F1: Parser<I, O1, E>,
-    F2: Parser<I, O2, E>,
-    F3: FnMut() -> O3,
-    F4: FnMut(O3, O1) -> O3,
-{
-    move |mut i: I| {
-        let mut res = init();
-
-        match f.parse(i.clone()) {
-            Err(nom::Err::Error(_)) => return Ok((i, res)),
-            Err(e) => return Err(e),
-            Ok((i1, o)) => {
-                res = fold(res, o);
-                i = i1;
-            }
+fn take_while(src: &str, mut f: impl FnMut(char) -> bool) -> (&str, &str) {
+    let mut chars = src.chars();
+    let mut rest = chars.as_str();
+    while let Some(c) = chars.next() {
+        if f(c) {
+            rest = chars.as_str();
+        } else {
+            let used = &src[..(src.len() - rest.len())];
+            return (rest, used);
         }
+    }
 
-        loop {
-            let len = i.input_len();
-            match sep.parse(i.clone()) {
-                Err(nom::Err::Error(_)) => return Ok((i, res)),
-                Err(e) => return Err(e),
-                Ok((i1, _)) => {
-                    if i1.input_len() == len {
-                        return Err(nom::Err::Error(E::from_error_kind(i1, ErrorKind::SeparatedList)));
-                    }
+    ("", src)
+}
 
-                    match f.parse(i1.clone()) {
-                        Err(nom::Err::Error(_)) => return Ok((i, res)),
-                        Err(e) => return Err(e),
-                        Ok((i2, o)) => {
-                            res = fold(res, o);
-                            i = i2;
+fn take_if(src: &str, mut f: impl FnMut(char) -> bool) -> (&str, &str) {
+    let mut chars = src.chars();
+
+    if let Some(c) = chars.next() {
+        if f(c) {
+            let rest = chars.as_str();
+            let used = &src[..(src.len() - rest.len())];
+            return (rest, used);
+        }
+    }
+
+    (src, "")
+}
+
+fn take_next_if(src: &str, f: impl FnOnce(char) -> bool) -> (&str, bool) {
+    let mut chars = src.chars();
+    if let Some(c) = chars.next() {
+        if f(c) {
+            return (chars.as_str(), true);
+        }
+    }
+    (src, false)
+}
+
+fn skip_whitespace(mut src: &str) -> &str {
+    while !src.is_empty() {
+        let mut chars = src.chars();
+        match chars.next().unwrap() {
+            ' ' | '\t' | '\r' | '\n' => {
+                src = chars.as_str();
+                continue;
+            }
+            '/' if src.len() >= 2 => {
+                match chars.next().unwrap() {
+                    '/' => {
+                        src = chars.as_str();
+                        match src.split_once('\n') {
+                            Some((_, right)) => {
+                                src = &right[1..];
+                                continue;
+                            }
+                            None => return "",
                         }
                     }
+                    '*' => {
+                        src = chars.as_str();
+                        match src.split_once("*/") {
+                            Some((_, right)) => {
+                                src = &right[2..];
+                                continue;
+                            }
+                            None => return "",
+                        }
+                    }
+                    _ => return src,
                 }
             }
+            _ => return src,
         }
     }
+    src
 }
 
-fn comment_line<'a, E: ParseError<&'a str>>(src: &'a str) -> IResult<&'a str, &'a str, E> {
-    recognize(tuple((
-        tag("//"),
-        take_until("\n"),
-        tag("\n"),
-    )))(src)
-}
+fn parse_number(src: &str) -> Option<(&str, &str)> {
+    let src = skip_whitespace(src);
 
-fn comment_multiline<'a, E: ParseError<&'a str>>(src: &'a str) -> IResult<&'a str, &'a str, E> {
-    recognize(tuple((
-        tag("/*"),
-        take_until("*/"),
-        tag("*/"),
-    )))(src)
-}
-
-fn whitespace<'a, E: ParseError<&'a str>>(src: &'a str) -> IResult<&'a str, &'a str, E> {
-    alt((
-        take_while1(|b: char| b.is_ascii_whitespace()),
-        comment_line,
-        comment_multiline,
-    ))(src)
-}
-
-fn whitespace0<'a, E: ParseError<&'a str>>(src: &'a str) -> IResult<&'a str, &'a str, E> {
-    recognize(many0_count(whitespace))(src)
-}
-
-fn parse_number<'a, E: ParseError<&'a str>>(src: &'a str) -> IResult<&'a str, &'a str, E> {
-    fn decimal<'a, E: ParseError<&'a str>>(src: &'a str) -> IResult<&'a str, &'a str, E> {
-        recognize(one_of("0123456789_"))(src)
+    fn parse_decimal(src: &str) -> (&str, &str) {
+        take_while(src, |c| c.is_ascii_digit() || c == '_')
     }
 
-    recognize(tuple((
-        alt((
-            recognize(tuple((
-                char('.'),
-                many1(decimal),
-            ))),
-            recognize(tuple((
-                many1(decimal),
-                char('.'),
-                many0(decimal),
-            ))),
-        )),
-        opt(tuple((
-            one_of("eE"),
-            opt(one_of("+-")),
-            many1(decimal),
-        ))),
-    )))(src)
+    let (rest, integer_digits) = parse_decimal(src);
+    let needs_digits = !integer_digits.chars().any(|c| c.is_ascii_digit());
+    let (rest, has_dot) = take_next_if(rest, |c| c == '.');
+    if !has_dot && needs_digits {
+        return None;
+    }
+
+    let mut rest = rest;
+    if has_dot {
+        let (next, digits) = parse_decimal(rest);
+        rest = next;
+        if needs_digits && digits.is_empty() {
+            return None;
+        }
+    }
+
+    let (rest, has_exp) = take_next_if(rest, |c| c == 'e' || c == 'E');
+    let mut rest = rest;
+    if has_exp {
+        let (next, _) = take_if(rest, |c| c == '+' || c == '-');
+        let (next, exp_digits) = parse_decimal(next);
+        if exp_digits.is_empty() {
+            return None;
+        }
+        rest = next;
+    }
+
+    let used = &src[..(src.len() - rest.len())];
+    Some((rest, used))
 }
 
-fn parse_identifier<'a, E: ParseError<&'a str>>(src: &'a str) -> IResult<&'a str, &'a str, E> {
-    recognize(
-        pair(
-            alt((alpha1, tag("_"), tag("$"))),
-            many0_count(alt((alphanumeric1, tag("_"), tag("$")))),
-        ),
-    )(src)
+fn parse_identifier(src: &str) -> Option<(&str, &str)> {
+    let mut chars = src.chars();
+    let Some(first) = chars.next() else { return None };
+    if !first.is_alphabetic() && first != '$' && first != '_' {
+        return None;
+    }
+
+    let mut rest = chars.as_str();
+    while let Some(c) = chars.next() {
+        if !c.is_alphanumeric() && c != '$' && c != '_' {
+            break;
+        }
+
+        rest = chars.as_str();
+    }
+
+    let used = &src[..(src.len() - rest.len())];
+    Some((rest, used))
 }
 
-fn parse_tuple_body<'a, 'd: 'a, E: ParseError<&'d str> + 'a>(
-    document: &'a RefCell<Document<'d>>,
-) -> impl FnMut(&'d str) -> IResult<&'d str, SmallVec<[usize; 8]>, E> + 'a {
-    delimited(
-        tag("("),
-        fold_separated0(
-            parse_expression(document),
-            delimited(whitespace0, tag(","), whitespace0),
-            || SmallVec::new(),
-            |mut acc, v| {
-                acc.push(v);
-                acc
-            },
-        ),
-        tag(")"),
-    )
+fn expect_identifier(src: &str) -> Result<(&str, &str), ParseError<&str>> {
+    parse_identifier(src).ok_or_else(|| ParseError::ExpectedIdentifier)
 }
 
-fn parse_struct_body<'a, 'd: 'a, E: ParseError<&'d str>>(
-    _document: &'a RefCell<Document<'d>>,
-) -> impl FnMut(&'d str) -> IResult<&'d str, SmallVec<[(&'d str, usize); 8]>, E> + 'a {
-    |_| todo!()
+fn parse_keyword<'a>(src: &'a str, keyword: &str) -> Option<&'a str> {
+    let (rest, kw) = parse_identifier(src)?;
+    if kw != keyword {
+        None
+    } else {
+        Some(rest)
+    }
 }
 
-fn parse_path<'a, E: ParseError<&'a str>>(src: &'a str) -> IResult<&'a str, Path, E> {
+fn expect_keyword<'a>(src: &'a str, keyword: &'static str) -> Result<&'a str, ParseError<&'a str>> {
+    parse_keyword(src, keyword)
+        .ok_or_else(|| ParseError::ExpectedKeyword { at: src, keyword })
+}
+
+fn parse_tuple_body<'a>(
+    document: &mut Document<'a>,
+    input: &'a str,
+) -> Result<Option<(&'a str, SmallVec<[usize; 8]>)>, ParseError<&'a str>> {
+    if !input.starts_with('(') {
+        return Ok(None);
+    }
+
+    let mut body = SmallVec::new();
+    let mut rest = &input[1..];
+    while !rest.is_empty() {
+        rest = skip_whitespace(rest);
+        if rest.starts_with(')') {
+            break;
+        }
+
+        let (next, expr) = expect_expression_index(document, rest)?;
+        body.push(expr);
+        rest = skip_whitespace(next);
+
+        if !rest.starts_with(',') {
+            break;
+        }
+
+        rest = skip_whitespace(&rest[1..]);
+    }
+
+    if !rest.starts_with(')') {
+        return Err(ParseError::UnclosedTuple);
+    }
+
+    Ok(Some((&rest[1..], body)))
+}
+
+fn parse_struct_body<'a>(
+    document: &mut Document<'a>,
+    input: &'a str,
+) -> Result<Option<(&'a str, SmallVec<[(&'a str, usize); 8]>)>, ParseError<&'a str>> {
+    if !input.starts_with('{') {
+        return Ok(None);
+    }
+
+    let mut body = SmallVec::new();
+    let mut rest = &input[1..];
+    while !rest.is_empty() {
+        rest = skip_whitespace(rest);
+        if rest.starts_with('}') {
+            break;
+        }
+
+        let (next, key) = expect_identifier(rest)?;
+        rest = skip_whitespace(next);
+
+        if !rest.starts_with(':') {
+            return Err(ParseError::ExpectedColon);
+        }
+
+        rest = skip_whitespace(&rest[1..]);
+
+        let (next, expr) = expect_expression_index(document, rest)?;
+        body.push((key, expr));
+        rest = skip_whitespace(next);
+
+        if !rest.starts_with(',') {
+            break;
+        }
+
+        rest = skip_whitespace(&rest[1..]);
+    }
+
+    if !rest.starts_with('}') {
+        return Err(ParseError::UnclosedStruct);
+    }
+
+    Ok(Some((&rest[1..], body)))
+}
+
+fn parse_path(src: &str) -> Option<(&str, Path)> {
     let (mut rest, start) = parse_identifier(src)?;
     let mut result = SmallVec::new();
     result.push(start);
 
-    let mut delimiter = delimited(whitespace0, tag("::"), whitespace0);
     loop {
-        let next = match delimiter(rest) {
-            Ok((next, _)) => next,
-            Err(nom::Err::Error(_)) => return Ok((rest, Path(result))),
-            Err(e) => return Err(e),
-        };
+        rest = skip_whitespace(rest);
+        if !rest.starts_with("::") {
+            return Some((rest, Path(result)));
+        }
 
+        let next = skip_whitespace(&rest[2..]);
         match parse_identifier(next) {
-            Ok((next, ident)) => {
-                rest = next;
+            Some((next, ident)) => {
                 result.push(ident);
+                rest = next;
             }
-            Err(nom::Err::Error(_)) => return Ok((rest, Path(result))),
-            Err(e) => return Err(e),
+            None => {
+                return Some((rest, Path(result)));
+            }
         }
     }
 }
 
-fn parse_path_import<'a, 'd: 'a, E: ParseError<&'d str>>(
-    _document: &'a RefCell<Document<'d>>,
-) -> impl FnMut(&'d str) -> IResult<&'d str, usize, E> + 'a {
-    |_| todo!()
+fn expect_path(src: &str) -> Result<(&str, Path), ParseError<&str>> {
+    parse_path(src).ok_or_else(|| ParseError::ExpectedPath(src))
 }
 
-fn parse_file_import<'a, 'd: 'a, E: ParseError<&'d str> + 'a>(
-    document: &'a RefCell<Document<'d>>,
-) -> impl FnMut(&'d str) -> IResult<&'d str, usize, E> + 'a {
-    map(
-        tuple((
-            recognize_string,
-            delimited(whitespace0, tag("as"), whitespace0),
-            parse_identifier,
-        )),
-        |(path, _, ident)| {
-            document.borrow_mut().push_register(Register {
-                name: ident.into(),
-                value: Some(Expression::Import(Import::File(path))),
-                ..default()
-            })
-        },
-    )
+fn parse_path_import<'a>(
+    document: &mut Document<'a>,
+    input: &'a str,
+    root: &Path<'a>,
+) -> Result<Option<&'a str>, ParseError<&'a str>> {
+    let Some((rest, path)) = parse_path(input) else { return Ok(None) };
+    let rest = skip_whitespace(rest);
+    let path = root.join(&path);
+
+    if rest.starts_with("::") {
+        let rest = skip_whitespace(&rest[2..]);
+        if !rest.starts_with('{') {
+            return Err(ParseError::ExpectedOpenBrace(rest));
+        }
+        let mut rest = skip_whitespace(&rest[1..]);
+
+        loop {
+            if rest.starts_with('}') {
+                rest = skip_whitespace(&rest[1..]);
+                return Ok(Some(rest));
+            }
+
+            rest = parse_path_import(document, rest, &path)?
+                .ok_or_else(|| ParseError::ExpectedImportPath(rest))?;
+            rest = skip_whitespace(rest);
+
+            if !rest.starts_with(&['}', ',']) {
+                return Err(ParseError::ExpectedImportPath(rest));
+            }
+
+            if rest.starts_with(',') {
+                rest = skip_whitespace(&rest[1..]);
+            }
+        }
+    } else {
+        let (rest, name) = if let Some(next) = parse_keyword(rest, "as") {
+            let rest = skip_whitespace(next);
+            expect_identifier(rest)?
+        } else {
+            (rest, *path.0.last().unwrap())
+        };
+
+        document.push_register(Register {
+            name: Some(name),
+            value: Some(Expression::Import(Import::Path(path))),
+            ..default()
+        });
+        Ok(Some(rest))
+    }
 }
 
-fn parse_import<'a, 'd: 'a, E: ParseError<&'d str> + 'a>(
-    document: &'a RefCell<Document<'d>>,
-) -> impl FnMut(&'d str) -> IResult<&'d str, usize, E> + 'a {
-    map(
-        tuple((
-            tag("import"),
-            whitespace0,
-            alt((
-                parse_path_import(document),
-                parse_file_import(document),
-            )),
-        )),
-        |(_, _, x)| x,
-    )
+fn parse_file_import(input: &str) -> Result<Option<(&str, Register)>, ParseError<&str>> {
+    let Some((rest, file_path)) = recognize_string(input)? else { return Ok(None) };
+    let rest = skip_whitespace(rest);
+    let rest = expect_keyword(rest, "as")?;
+    let rest = skip_whitespace(rest);
+    let (rest, ident) = expect_identifier(rest)?;
+
+    let expr = Expression::Import(Import::File(file_path));
+    let register = Register {
+        name: Some(ident),
+        value: Some(expr),
+        ..default()
+    };
+
+    Ok(Some((rest, register)))
 }
 
-fn parse_expression<'a, 'd: 'a, E: ParseError<&'d str> + 'a>(
-    document: &'a RefCell<Document<'d>>,
-) -> impl FnMut(&'d str) -> IResult<&'d str, usize, E> + 'a {
-    alt((
-        map(parse_number, |src| document.borrow_mut().push_register(Expression::Number(src))),
-        map(recognize_string, |src| document.borrow_mut().push_register(Expression::String(src))),
-        parse_import(document),
-        map(
-            pair(
-                parse_path,
-                alt((
-                    map(parse_tuple_body(document), |v| Expression::Tuple(None, v)),
-                    map(parse_struct_body(document), |v| Expression::Struct(None, v)),
-                )),
-            ),
-            |(ident, expr)| {
-                let expr = match expr {
-                    Expression::Tuple(_, body) => Expression::Tuple(Some(ident), body),
-                    Expression::Struct(_, body) => Expression::Struct(Some(ident), body),
-                    _ => unreachable!(),
-                };
-                document.borrow_mut().push_register(expr)
-            },
-        ),
-    ))
+fn parse_import<'a>(
+    document: &mut Document<'a>,
+    input: &'a str,
+) -> Result<Option<&'a str>, ParseError<&'a str>> {
+    let Some(rest) = parse_keyword(input, "import") else { return Ok(None) };
+    let rest = skip_whitespace(rest);
+    match rest.chars().next() {
+        Some('"') => {
+            let (rest, register) = parse_file_import(rest)?.unwrap();
+            document.push_register(register);
+            Ok(Some(rest))
+        }
+        _ => parse_path_import(document, rest, &Path::empty()),
+    }
 }
 
-fn parse_document<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Document<'a>, E> {
-    let document: RefCell<Document<'a>> = RefCell::new(Document::default());
-    let (rest, _) = many0(alt((
-        delimited(whitespace0, parse_expression(&document), whitespace0),
-    )))(input)?;
-    let document: Document<'a> = document.into_inner();
-    Ok((rest, document))
+fn parse_visibility(input: &str) -> Option<(&str, Visibility)> {
+    let (rest, ident) = parse_identifier(input)?;
+    let visibility = match ident {
+        "in" => Visibility::In,
+        "out" => Visibility::Out,
+        "local" => Visibility::Local,
+        _ => return None,
+    };
+    Some((rest, visibility))
+}
+
+fn parse_variable<'a>(
+    document: &mut Document<'a>,
+    input: &'a str,
+) -> Result<Option<(&'a str, Register<'a>)>, ParseError<&'a str>> {
+    let Some((rest, visibility)) = parse_visibility(input) else { return Ok(None) };
+    let rest = skip_whitespace(rest);
+    let (rest, name) = expect_identifier(rest)?;
+    let rest = skip_whitespace(rest);
+    let (rest, has_type) = take_next_if(rest, |c| c == ':');
+    let mut rest = skip_whitespace(rest);
+    let mut variable_type = None;
+    let mut optional = false;
+    if has_type {
+        let (next, path) = expect_path(rest)?;
+        variable_type = Some(path);
+        rest = skip_whitespace(next);
+        if rest.starts_with('?') {
+            optional = true;
+            rest = skip_whitespace(&rest[1..]);
+        }
+    }
+
+    let (rest, has_value) = take_next_if(rest, |c| c == '=');
+    let mut rest = skip_whitespace(rest);
+    let mut value = None;
+    if has_value {
+        let (next, expr) = expect_expression(document, rest)?;
+        value = Some(expr);
+        rest = skip_whitespace(next);
+    }
+
+    let register = Register {
+        name: Some(name),
+        visibility,
+        variable_type,
+        optional,
+        value,
+        ..default()
+    };
+    Ok(Some((rest, register)))
+}
+
+fn parse_expression<'a>(
+    document: &mut Document<'a>,
+    input: &'a str,
+) -> Result<Option<(&'a str, Expression<'a>)>, ParseError<&'a str>> {
+    if let Some((rest, v)) = parse_number(input) {
+        let expr = Expression::Number(v);
+        return Ok(Some((rest, expr)));
+    }
+
+    if let Some((rest, v)) = recognize_string(input)? {
+        let expr = Expression::String(v);
+        return Ok(Some((rest, expr)));
+    }
+
+    match input.chars().next() {
+        Some('(') => {
+            let (rest, expr) = parse_tuple_body(document, input)?.unwrap();
+            let expr = Expression::Tuple(None, expr);
+            return Ok(Some((rest, expr)));
+        }
+        Some('{') => {
+            let (rest, expr) = parse_struct_body(document, input)?.unwrap();
+            let expr = Expression::Struct(None, expr);
+            return Ok(Some((rest, expr)));
+        }
+        _ => {}
+    }
+
+    if let Some((rest, path)) = parse_path(input) {
+        let rest = skip_whitespace(rest);
+        match rest.chars().next() {
+            Some('(') => {
+                let (rest, expr) = parse_tuple_body(document, rest)?.unwrap();
+                let expr = Expression::Tuple(Some(path), expr);
+                return Ok(Some((rest, expr)));
+            }
+            Some('{') => {
+                let (rest, expr) = parse_struct_body(document, rest)?.unwrap();
+                let expr = Expression::Struct(Some(path), expr);
+                return Ok(Some((rest, expr)));
+            }
+            _ => {}
+        }
+
+        let expr = Expression::Path(path);
+        return Ok(Some((rest, expr)));
+    }
+
+    Ok(None)
+}
+
+fn expect_expression<'a>(
+    document: &mut Document<'a>,
+    input: &'a str,
+) -> Result<(&'a str, Expression<'a>), ParseError<&'a str>> {
+    parse_expression(document, input)?.ok_or_else(|| ParseError::ExpectedExpression(input))
+}
+
+fn expect_expression_index<'a>(
+    document: &mut Document<'a>,
+    input: &'a str,
+) -> Result<(&'a str, usize), ParseError<&'a str>> {
+    let (rest, expr) = expect_expression(document, input)?;
+    let index = document.push_register(expr);
+    Ok((rest, index))
+}
+
+fn parse_statement<'a>(
+    document: &mut Document<'a>,
+    input: &'a str,
+) -> Result<Option<&'a str>, ParseError<&'a str>> {
+    if let Some(rest) = parse_import(document, input)? {
+        return Ok(Some(rest));
+    }
+
+    if let Some((rest, register)) = parse_variable(document, input)? {
+        document.push_register(register);
+        return Ok(Some(rest));
+    }
+
+    if let Some((rest, expr)) = parse_expression(document, input)? {
+        let rest = skip_whitespace(rest);
+        if rest.starts_with("<-") {
+            let rest = skip_whitespace(&rest[2..]);
+            let expr = document.push_register(expr);
+            let (rest, source_expr) = expect_expression_index(document, rest)?;
+            document.applications.push(Application {
+                entity: expr,
+                expression: source_expr,
+            });
+            return Ok(Some(rest));
+        }
+
+        document.push_register(expr);
+        return Ok(Some(rest));
+    }
+
+    Ok(None)
+}
+
+
+fn parse_document(input: &str) -> Result<Document, ParseError<&str>> {
+    let mut document = Document::default();
+
+    let mut rest = input;
+    while !rest.is_empty() {
+        rest = skip_whitespace(rest);
+        if rest.is_empty() {
+            break;
+        }
+
+        if rest.starts_with(';') {
+            rest = skip_whitespace(&rest[1..]);
+            continue;
+        }
+
+        let Some(next) = parse_statement(&mut document, rest)? else {
+            return Err(ParseError::ExpectedExpression(rest));
+        };
+
+        rest = skip_whitespace(next);
+        if rest.is_empty() {
+            break;
+        }
+
+        if !rest.starts_with(';') {
+            return Err(ParseError::ExpectedSemiColon(rest));
+        }
+        rest = skip_whitespace(&rest[1..]);
+    }
+
+    Ok(document)
 }
 
 #[cfg(test)]
@@ -512,16 +854,40 @@ mod tests {
     #[test]
     fn test_parse() {
         let doc = Document::parse("
+            import foo::{baz::bar, boo::{ham, green as white}};
+            import \"jeff.fab\" as mellow;
             in param1: f32 = 5.0;
             in param2: f32? = 0.4;
             out result0: f32;
             local myLocal_: Entity?;
             local test = MyTuple(1, 2, 3.4);
+            ;
             $ <- MyComponent {
                 field1: 1.0,
                 field2: myLocal_,
             };
         ").unwrap();
-        println!("{doc:?}");
+        let formatted = format!("{doc:?}");
+        assert_eq!(formatted,concat!(
+        "Document {\n",
+        "  %0 local bar = foo::baz::bar;\n",
+        "  %1 local ham = foo::boo::ham;\n",
+        "  %2 local white = foo::boo::green;\n",
+        "  %3 local mellow = import \"jeff.fab\";\n",
+        "  %4 in param1: f32 = 5.0;\n",
+        "  %5 in param2: f32? = 0.4;\n",
+        "  %6 out result0: f32;\n",
+        "  %7 local myLocal_: Entity?;\n",
+        "  %8 = 1;\n",
+        "  %9 = 2;\n",
+        "  %10 = 3.4;\n",
+        "  %11 local test = MyTuple(%8, %9, %10);\n",
+        "  %12 = $;\n",
+        "  %13 = 1.0;\n",
+        "  %14 = myLocal_;\n",
+        "  %15 = MyComponent{field1: %13, field2: %14};\n",
+        "  %12 <- %15;\n",
+        "}",
+        ));
     }
 }

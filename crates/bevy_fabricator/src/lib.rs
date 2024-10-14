@@ -3,8 +3,9 @@ use bevy::prelude::*;
 use std::any::TypeId;
 use std::sync::Arc;
 
-pub mod document;
+mod parser;
 mod string;
+pub mod document;
 
 #[derive(Clone, Reflect, Component)]
 #[reflect(from_reflect = false, Component)]

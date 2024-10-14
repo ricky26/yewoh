@@ -24,6 +24,7 @@ yewoh-default-server = { opt-level = 1 }
 yewoh-server = { opt-level = 1 }
 
 [workspace.dependencies]
+derive_more = "1.0.0"
 tokio = { version = "1.40.0", default-features = false }
 futures = "0.3.31"
 anyhow = "1.0.89"
