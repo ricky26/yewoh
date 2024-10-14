@@ -1,0 +1,14 @@
+[package]
+name = "bevy_fabricator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+smallvec = { workspace = true }
+nom = { workspace = true }
+
+[dependencies.bevy]
+workspace = true
+default-features = false
+features = []

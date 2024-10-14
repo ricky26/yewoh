@@ -7,6 +7,7 @@ members = [
     "crates/default-game",
     "crates/default-server",
     "crates/bevy-client",
+    "crates/bevy_fabricator",
 ]
 
 [profile.dev]
@@ -57,3 +58,4 @@ strum = "0.26.3"
 strum_macros = "0.26.4"
 encode_unicode = "1.0.0"
 md5 = "0.7.0"
+smallvec = "1.13.2"

@@ -4,14 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy_egui = { workspace = true }
-bevy-inspector-egui = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 futures = { workspace = true }
 rand = { workspace = true }
-egui = { workspace = true }
 
 [dependencies.bevy]
 workspace = true
