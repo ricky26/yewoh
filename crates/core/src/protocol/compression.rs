@@ -168,7 +168,7 @@ pub struct HuffmanVecWriter<'a> {
 }
 
 impl<'a> HuffmanVecWriter<'a> {
-    pub fn new(storage: &'a mut Vec<u8>) -> HuffmanVecWriter {
+    pub fn new(storage: &'a mut Vec<u8>) -> HuffmanVecWriter<'a> {
         Self {
             storage: BitWriter::new(storage),
         }
