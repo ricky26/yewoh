@@ -411,7 +411,7 @@ fn skip_whitespace(mut src: &str) -> &str {
                         src = chars.as_str();
                         match src.split_once('\n') {
                             Some((_, right)) => {
-                                src = &right[1..];
+                                src = right;
                                 continue;
                             }
                             None => return "",
@@ -421,7 +421,7 @@ fn skip_whitespace(mut src: &str) -> &str {
                         src = chars.as_str();
                         match src.split_once("*/") {
                             Some((_, right)) => {
-                                src = &right[2..];
+                                src = right;
                                 continue;
                             }
                             None => return "",
