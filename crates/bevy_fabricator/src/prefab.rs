@@ -3,9 +3,10 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail};
+use bevy::log::Level;
 use bevy::prelude::*;
-use bevy::reflect::{ReflectMut, TypeInfo, TypeRegistration, TypeRegistry, TypeRegistryArc};
-use bevy::utils::HashMap;
+use bevy::reflect::{ReflectMut, TypeInfo, TypeRegistration, TypeRegistry};
+use bevy::utils::{tracing, HashMap};
 use smallvec::SmallVec;
 
 use crate::document::{Document, Expression, Import, Path, Visibility};
@@ -174,7 +175,6 @@ pub fn convert(
                 .ok_or_else(|| anyhow!("no such type {path:?}")))
             .transpose()?;
         register_types[index] = register_type.map(|r| r.type_id());
-        println!("register {index} ({:?}): {:?}", register.name, register_type.map(|ty| ty.type_info().ty().path()));
     }
 
     // Third pass: propagate types
@@ -199,8 +199,6 @@ pub fn convert(
                                 let field_info = struct_info.field_at(field_index).unwrap();
                                 let field_ty = field_info.type_info().unwrap().ty();
                                 *src_ty = Some(field_ty.id());
-
-                                println!("typrop {register_index} = {}", field_ty.path());
                             }
                         }
                         TypeInfo::TupleStruct(struct_info) => {
@@ -217,8 +215,6 @@ pub fn convert(
                                 let field_info = struct_info.field_at(field_index).unwrap();
                                 let field_ty = field_info.type_info().unwrap().ty();
                                 *src_ty = Some(field_ty.id());
-
-                                println!("typrop {register_index} = {}", field_ty.path());
                             }
                         }
                         TypeInfo::Tuple(struct_info) => {
@@ -235,8 +231,6 @@ pub fn convert(
                                 let field_info = struct_info.field_at(field_index).unwrap();
                                 let field_ty = field_info.type_info().unwrap().ty();
                                 *src_ty = Some(field_ty.id());
-
-                                println!("typrop {register_index} = {}", field_ty.path());
                             }
                         }
                         _ => {}
@@ -257,8 +251,6 @@ pub fn convert(
 
                                 let field_ty = field_info.type_info().unwrap().ty();
                                 *src_ty = Some(field_ty.id());
-
-                                println!("typrop {register_index} = {}", field_ty.path());
                             }
                         }
                         _ => {}
@@ -285,11 +277,13 @@ pub fn convert(
         }
     }
 
-    for (index, register) in doc.registers.iter().enumerate() {
-        let type_id = register_types[index];
-        let register_type = type_id.and_then(|id| type_registry.get(id));
-        let type_path = register_type.map(|ty| ty.type_info().ty().path());
-        println!("register {index} ({}): {}", register.name.unwrap_or("anonymous"), type_path.unwrap_or("any"));
+    if tracing::enabled!(Level::TRACE) {
+        for (index, register) in doc.registers.iter().enumerate() {
+            let type_id = register_types[index];
+            let register_type = type_id.and_then(|id| type_registry.get(id));
+            let type_path = register_type.map(|ty| ty.type_info().ty().path());
+            trace!("register {index} ({}): {}", register.name.unwrap_or("anonymous"), type_path.unwrap_or("any"));
+        }
     }
 
     // Fourth pass: create steps
@@ -311,7 +305,6 @@ pub fn convert(
             match value {
                 Expression::Number(s) => {
                     let value = Arc::new(f32::from_str(s)?);
-                    println!("NUM {s} -> {value:?}");
                     steps.push(Box::new(move |registers, _, _| {
                         registers[index] = Some(value.clone());
                         Ok(())
@@ -320,7 +313,6 @@ pub fn convert(
                 Expression::String(s) => {
                     let (_, value) = parse_string(s).unwrap().unwrap();
                     let value = Arc::new(value);
-                    println!("STR {s} -> {value:?}");
                     steps.push(Box::new(move |registers, _, _| {
                         registers[index] = Some(value.clone());
                         Ok(())
@@ -395,7 +387,6 @@ pub fn convert(
                             let source = *source_index;
                             steps.push(Box::new(move |registers, _, _| {
                                 let value = registers[source].clone();
-                                println!("copy %{source} -> %{index} = {value:?}");
                                 registers[index] = value;
                                 Ok(())
                             }));
@@ -430,7 +421,6 @@ pub fn convert(
                 bail!("apply target was not entity");
             };
 
-            println!("APPLY {target_value:?} <- {source_value:?}");
             apply(&reflect_apply, &reflect_component, source_value, world, entity)
         }));
     }
@@ -459,8 +449,10 @@ pub fn convert(
         }
 
         // Debug print registers
-        for (index, v) in registers.iter().enumerate() {
-            println!("%{index} = {v:?}");
+        if tracing::enabled!(Level::TRACE) {
+            for (index, v) in registers.iter().enumerate() {
+                trace!("%{index} = {v:?}");
+            }
         }
 
         Ok(())
@@ -472,11 +464,15 @@ pub fn convert(
     })
 }
 
-#[test]
-fn testy_test_test() {
-    use crate::operations::Spawn;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let doc = Document::parse("
+    #[test]
+    fn test_apply() {
+        use crate::operations::Spawn;
+
+        let doc = Document::parse("
             import bevy_hierarchy::components::parent::Parent;
             import bevy_transform::components::transform::Transform;
             import bevy_ecs::entity::Entity;
@@ -490,41 +486,42 @@ fn testy_test_test() {
             child <- Parent($);
             child <- test;
         ").unwrap();
-    println!("doc = {doc:?}");
-    let mut app_type_registry = AppTypeRegistry::default();
-    let mut type_registry = app_type_registry.write();
-    type_registry.register::<Parent>();
-    type_registry.register::<Transform>();
-    type_registry.register::<Spawn>();
-    let fabricable = convert(&type_registry, &NullDocumentSource, &doc).unwrap();
-    drop(type_registry);
+        println!("doc = {doc:?}");
+        let app_type_registry = AppTypeRegistry::default();
+        let mut type_registry = app_type_registry.write();
+        type_registry.register::<Parent>();
+        type_registry.register::<Transform>();
+        type_registry.register::<Spawn>();
+        let fabricable = convert(&type_registry, &NullDocumentSource, &doc).unwrap();
+        drop(type_registry);
 
-    let mut world = World::new();
-    world.insert_resource(app_type_registry);
-    let target = world.spawn_empty().id();
+        let mut world = World::new();
+        world.insert_resource(app_type_registry);
+        let target = world.spawn_empty().id();
 
-    #[derive(Reflect)]
-    struct Params {
-        pub param1: f32,
+        #[derive(Reflect)]
+        struct Params {
+            pub param1: f32,
+        }
+
+        let params = Params {
+            param1: 42.,
+        };
+
+        (fabricable.fabricate)(target, &params, &mut world).unwrap();
+
+
+        let mut found_child = false;
+        for entity in world.iter_entities() {
+            let Some(parent) = entity.get::<Parent>() else { continue };
+            assert_eq!(parent.get(), target);
+
+            let transform = entity.get::<Transform>().expect("should have transform");
+            assert_eq!(transform.translation.x, 3.);
+
+            assert!(!found_child);
+            found_child = true;
+        }
+        assert!(found_child);
     }
-
-    let params = Params{
-        param1: 42.,
-    };
-
-    (fabricable.fabricate)(target, &params, &mut world).unwrap();
-
-
-    let mut found_child = false;
-    for entity in world.iter_entities() {
-        let Some(parent) = entity.get::<Parent>() else { continue };
-        assert_eq!(parent.get(), target);
-
-        let transform = entity.get::<Transform>().expect("should have transform");
-        assert_eq!(transform.translation.x, 3.);
-
-        assert!(!found_child);
-        found_child = true;
-    }
-    assert!(found_child);
 }

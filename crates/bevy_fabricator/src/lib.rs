@@ -5,6 +5,8 @@ use bevy::ecs::entity::MapEntities;
 use bevy::prelude::*;
 use bevy::utils::HashMap;
 
+pub use prefab::convert;
+
 mod parser;
 mod string;
 mod prefab;
