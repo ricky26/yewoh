@@ -1,26 +1,42 @@
+use std::any::TypeId;
+use std::sync::{Arc, LazyLock};
+
 use bevy::ecs::entity::MapEntities;
 use bevy::prelude::*;
-use std::any::TypeId;
-use std::sync::Arc;
+use bevy::utils::HashMap;
 
 mod parser;
 mod string;
+mod prefab;
 pub mod document;
+pub mod traits;
+pub mod operations;
+
+pub type Factory = Arc<dyn Fn(Entity, &dyn PartialReflect, &mut World) -> anyhow::Result<()> + Send + Sync>;
+
+#[derive(Clone, Reflect)]
+pub struct FabricationParameter {
+    pub parameter_type: TypeId,
+    pub optional: bool,
+}
 
 #[derive(Clone, Reflect, Component)]
 #[reflect(from_reflect = false, Component)]
 pub struct Fabricable {
-    parameters: Vec<(String, TypeId)>,
+    parameters: HashMap<String, FabricationParameter>,
     #[reflect(ignore)]
-    fabricate: Arc<dyn Fn(Entity, &dyn Reflect, &mut Commands) + Send + Sync>,
+    fabricate: Factory,
 }
+
+static EMPTY_FABRICATE: LazyLock<Arc<dyn Fn(Entity, &dyn PartialReflect, &mut World) -> anyhow::Result<()> + Send + Sync>> =
+    LazyLock::new(|| Arc::new(|_, _, _| Ok(())));
+static EMPTY_REFLECT: LazyLock<Arc<dyn PartialReflect>> = LazyLock::new(|| Arc::new(()));
 
 impl FromWorld for Fabricable {
     fn from_world(_world: &mut World) -> Self {
-        // TODO: put default fabricate into lazy static.
         Fabricable {
-            parameters: Vec::default(),
-            fabricate: Arc::new(|_, _, _| {}),
+            parameters: HashMap::default(),
+            fabricate: EMPTY_FABRICATE.clone(),
         }
     }
 }
@@ -28,15 +44,15 @@ impl FromWorld for Fabricable {
 #[derive(Clone, Debug, Reflect, Component)]
 #[reflect(Component)]
 pub struct Fabricate {
-    template: Entity,
-    parameters: Vec<i32>,
+    pub template: Entity,
+    pub parameters: Arc<dyn PartialReflect>,
 }
 
 impl FromWorld for Fabricate {
     fn from_world(_world: &mut World) -> Self {
         Fabricate {
             template: Entity::PLACEHOLDER,
-            parameters: Vec::default(),
+            parameters: EMPTY_REFLECT.clone(),
         }
     }
 }
@@ -51,6 +67,24 @@ impl MapEntities for Fabricate {
 #[reflect(Component)]
 pub struct Fabricated;
 
+pub fn fabricate(
+    mut commands: Commands,
+    to_fabricate: Query<(Entity, &Fabricate), Without<Fabricated>>,
+    templates: Query<&Fabricable>,
+) {
+    for (entity, request) in &to_fabricate {
+        let Ok(template) = templates.get(request.template) else { continue };
+        let fabricate = template.fabricate.clone();
+        let parameters = request.parameters.clone();
+        commands.queue(move |world: &mut World| {
+            if let Err(err) = fabricate(entity, &parameters, world) {
+                warn!("fabrication failed: {err}");
+            }
+            world.entity_mut(entity).insert(Fabricated);
+        });
+    }
+}
+
 #[derive(Default)]
 pub struct FabricatorPlugin;
 
@@ -59,6 +93,9 @@ impl Plugin for FabricatorPlugin {
         app
             .register_type::<Fabricable>()
             .register_type::<Fabricate>()
-            .register_type::<Fabricated>();
+            .register_type::<Fabricated>()
+            .add_systems(Update, (
+                fabricate,
+            ));
     }
 }

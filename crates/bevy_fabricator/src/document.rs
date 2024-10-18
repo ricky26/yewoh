@@ -149,6 +149,14 @@ impl<'a> Expression<'a> {
 
         Ok(())
     }
+
+    pub fn type_path(&self) -> Option<Path<'a>> {
+        match self {
+            Expression::Tuple(ty, _) => ty.clone(),
+            Expression::Struct(ty, _) => ty.clone(),
+            _ => None,
+        }
+    }
 }
 
 impl<'a> Debug for Expression<'a> {
@@ -226,7 +234,7 @@ pub struct Register<'a> {
     pub visibility: Visibility,
     pub variable_type: Option<Path<'a>>,
     pub optional: bool,
-    pub value: Option<Expression<'a>>,
+    pub expression: Option<Expression<'a>>,
 }
 
 impl<'a> Register<'a> {
@@ -242,7 +250,7 @@ impl<'a> Register<'a> {
             write!(f, ": {ty:?}{opt}")?;
         }
 
-        if let Some(expr) = &self.value {
+        if let Some(expr) = &self.expression {
             write!(f, " = {expr:?}")?;
         }
 
@@ -255,7 +263,7 @@ impl<'a> Register<'a> {
         let label = escape_string(&self_debug);
         writeln!(f, "  {name} [shape=box,label={label}];")?;
 
-        if let Some(expr) = &self.value {
+        if let Some(expr) = &self.expression {
             expr.fmt_dot(index, f)?;
         }
 
@@ -271,12 +279,13 @@ impl<'a> Debug for Register<'a> {
 
 impl<'a> From<Expression<'a>> for Register<'a> {
     fn from(value: Expression<'a>) -> Self {
+        let variable_type = value.type_path();
         Register {
             name: None,
             visibility: Visibility::Local,
-            variable_type: None,
+            variable_type,
             optional: false,
-            value: Some(value),
+            expression: Some(value),
         }
     }
 }
@@ -652,7 +661,7 @@ fn parse_path_import<'a>(
 
         document.push_register(Register {
             name: Some(name),
-            value: Some(Expression::Import(Import::Path(path))),
+            expression: Some(Expression::Import(Import::Path(path))),
             ..default()
         });
         Ok(Some(rest))
@@ -669,7 +678,7 @@ fn parse_file_import(input: &str) -> Result<Option<(&str, Register)>, ParseError
     let expr = Expression::Import(Import::File(file_path));
     let register = Register {
         name: Some(ident),
-        value: Some(expr),
+        expression: Some(expr),
         ..default()
     };
 
@@ -730,6 +739,7 @@ fn parse_variable<'a>(
     let mut value = None;
     if has_value {
         let (next, expr) = expect_expression(document, rest)?;
+        variable_type = variable_type.or(expr.type_path());
         value = Some(expr);
         rest = skip_whitespace(next);
     }
@@ -739,7 +749,7 @@ fn parse_variable<'a>(
         visibility,
         variable_type,
         optional,
-        value,
+        expression: value,
         ..default()
     };
     Ok(Some((rest, register)))
@@ -892,7 +902,7 @@ mod tests {
                     visibility: Visibility::In,
                     variable_type: Some(Path::from_iter(["bevy", "Transform"])),
                     optional: true,
-                    value: Some(Expression::Import(Import::Path(Path::single("test2")))),
+                    expression: Some(Expression::Import(Import::Path(Path::single("test2")))),
                 },
                 Expression::Import(Import::Path(Path::single("test"))).into(),
                 Expression::Import(Import::File("myfile.fab")).into(),
@@ -939,11 +949,11 @@ mod tests {
         "  %8 = 1;\n",
         "  %9 = 2;\n",
         "  %10 = 3.4;\n",
-        "  %11 local test = MyTuple(%8, %9, %10);\n",
+        "  %11 local test: MyTuple = MyTuple(%8, %9, %10);\n",
         "  %12 = $;\n",
         "  %13 = 1.0;\n",
         "  %14 = myLocal_;\n",
-        "  %15 = MyComponent{field1: %13, field2: %14};\n",
+        "  %15: MyComponent = MyComponent{field1: %13, field2: %14};\n",
         "  %12 <- %15;\n",
         "}",
         ));
