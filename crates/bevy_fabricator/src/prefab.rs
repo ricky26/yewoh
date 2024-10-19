@@ -1,5 +1,4 @@
 use std::any::TypeId;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail};
@@ -9,7 +8,7 @@ use bevy::reflect::{DynamicStruct, DynamicTuple, DynamicTupleStruct, ReflectKind
 use bevy::utils::{tracing, HashMap};
 use smallvec::SmallVec;
 
-use crate::document::{Document, Expression, Import, Path, Visibility};
+use crate::document::{Document, Expression, Import, Number, Path, Visibility};
 use crate::string::parse_string;
 use crate::traits::{ReflectEvaluate, ReflectApply};
 use crate::{Fabricable, FabricationParameter, Factory};
@@ -95,9 +94,13 @@ impl DocumentSource for DocumentMap {
 }
 
 macro_rules! impl_load_number {
-    ($steps:expr, $index:expr, $type_id:expr, $s:expr, $ty:ty) => {
+    ($steps:expr, $index:expr, $type_id:expr, $n:expr, $ty:ty) => {
         if $type_id == Some(TypeId::of::<$ty>()) {
-            let value = Arc::new(<$ty>::from_str($s)?);
+            let value = Arc::new(match $n {
+                Number::I64(v) => *v as $ty,
+                Number::U64(v) => *v as $ty,
+                Number::F64(v) => *v as $ty,
+            });
             let index = $index;
             $steps.push(Box::new(move |registers, _, _| {
                 registers[index] = Some(value.clone());
@@ -299,16 +302,20 @@ pub fn convert(
 
         if let Some(value) = &register.expression {
             match value {
-                Expression::Number(s) => {
-                    impl_load_number!(steps, index, register_type_id, s, u8);
-                    impl_load_number!(steps, index, register_type_id, s, i8);
-                    impl_load_number!(steps, index, register_type_id, s, u16);
-                    impl_load_number!(steps, index, register_type_id, s, i16);
-                    impl_load_number!(steps, index, register_type_id, s, u32);
-                    impl_load_number!(steps, index, register_type_id, s, i32);
-                    impl_load_number!(steps, index, register_type_id, s, f64);
+                Expression::Number(n) => {
+                    impl_load_number!(steps, index, register_type_id, n, u8);
+                    impl_load_number!(steps, index, register_type_id, n, i8);
+                    impl_load_number!(steps, index, register_type_id, n, u16);
+                    impl_load_number!(steps, index, register_type_id, n, i16);
+                    impl_load_number!(steps, index, register_type_id, n, u32);
+                    impl_load_number!(steps, index, register_type_id, n, i32);
+                    impl_load_number!(steps, index, register_type_id, n, f32);
 
-                    let value = Arc::new(f32::from_str(s)?);
+                    let value = Arc::new(match n {
+                        Number::I64(v) => *v as f64,
+                        Number::U64(v) => *v as f64,
+                        Number::F64(v) => *v,
+                    });
                     steps.push(Box::new(move |registers, _, _| {
                         registers[index] = Some(value.clone());
                         Ok(())

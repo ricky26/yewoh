@@ -1,5 +1,5 @@
 use std::fmt::{Debug, Formatter, Write};
-
+use std::str::FromStr;
 use bevy::prelude::*;
 use derive_more::{Display, Error, From};
 use smallvec::SmallVec;
@@ -45,6 +45,9 @@ pub enum ParseError<P: SourcePosition> {
     #[error(ignore)]
     #[display("{}: expected import path", DisplayAddress(_0))]
     ExpectedImportPath(P),
+    #[error(ignore)]
+    #[display("{}: expected integer (with radix {})", DisplayAddress(_0), _1)]
+    ExpectedIntRadix(P, u32),
 }
 
 impl<P: SourcePosition> ParseError<P> {
@@ -63,6 +66,7 @@ impl<P: SourcePosition> ParseError<P> {
             ParseError::ExpectedSemiColon(p) => ParseError::ExpectedSemiColon(f(p)),
             ParseError::ExpectedOpenBrace(p) => ParseError::ExpectedOpenBrace(f(p)),
             ParseError::ExpectedImportPath(p) => ParseError::ExpectedImportPath(f(p)),
+            ParseError::ExpectedIntRadix(p, r) => ParseError::ExpectedIntRadix(f(p), r),
         }
     }
 }
@@ -131,8 +135,25 @@ impl<'a> Debug for Import<'a> {
 }
 
 #[derive(Clone)]
+pub enum Number {
+    I64(i64),
+    U64(u64),
+    F64(f64),
+}
+
+impl Debug for Number {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Number::I64(v) => write!(f, "{}", v),
+            Number::U64(v) => write!(f, "{}", v),
+            Number::F64(v) => write!(f, "{}", v),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub enum Expression<'a> {
-    Number(&'a str),
+    Number(Number),
     String(&'a str),
     Tuple(Option<Path<'a>>, SmallVec<[usize; 8]>),
     Struct(Option<Path<'a>>, SmallVec<[(&'a str, usize); 8]>),
@@ -172,7 +193,7 @@ impl<'a> Expression<'a> {
 impl<'a> Debug for Expression<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Expression::Number(s) => write!(f, "{s}"),
+            Expression::Number(s) => write!(f, "{s:?}"),
             Expression::String(s) => write!(f, "{s}"),
             Expression::Tuple(name, parts) => {
                 if let Some(name) = name {
@@ -466,9 +487,71 @@ fn skip_whitespace(mut src: &str) -> &str {
     src
 }
 
-fn parse_number(src: &str) -> Option<(&str, &str)> {
-    let src = skip_whitespace(src);
+fn int_char_value(c: char) -> Option<u32> {
+    let v = match c {
+        '0' => 0,
+        '1' => 1,
+        '2' => 2,
+        '3' => 3,
+        '4' => 4,
+        '5' => 5,
+        '6' => 6,
+        '7' => 7,
+        '8' => 8,
+        '9' => 9,
+        'A' => 0xa,
+        'a' => 0xa,
+        'B' => 0xb,
+        'b' => 0xb,
+        'C' => 0xc,
+        'c' => 0xc,
+        'D' => 0xd,
+        'd' => 0xd,
+        'E' => 0xe,
+        'e' => 0xe,
+        'F' => 0xf,
+        'f' => 0xf,
+        _ => return None,
+    };
+    Some(v)
+}
 
+fn parse_int_radix(
+    src: &str,
+    radix: u32,
+    negative: bool
+) -> Result<(&str, Number), ParseError<&str>> {
+    let mut chars = src.chars();
+    let mut rest = chars.as_str();
+    let mut value: i128 = 0;
+
+    while let Some(next) = chars.next() {
+        if next == '_' {
+            continue;
+        }
+
+        let Some(char_value) = int_char_value(next) else { break };
+        if char_value >= radix { break };
+        rest = chars.as_str();
+        value *= radix as i128;
+        value += char_value as i128;
+    }
+
+    if rest.len() == src.len() {
+        return Err(ParseError::ExpectedIntRadix(src, radix));
+    }
+
+    println!("eagle '{rest}' '{src}'");
+
+    if negative || value == (value as i64 as i128) {
+        let mul = if negative { -1 } else { 1 };
+        Ok((rest, Number::I64((value as i64) * mul)))
+    } else {
+        Ok((rest, Number::U64(value as u64)))
+    }
+}
+
+fn parse_float(src: &str) -> Option<(&str, Number)> {
     fn parse_decimal(src: &str) -> (&str, &str) {
         take_while(src, |c| c.is_ascii_digit() || c == '_')
     }
@@ -501,7 +584,40 @@ fn parse_number(src: &str) -> Option<(&str, &str)> {
     }
 
     let used = &src[..(src.len() - rest.len())];
-    Some((rest, used))
+    let value = f64::from_str(used).unwrap();
+    Some((rest, Number::F64(value)))
+}
+
+fn parse_number(src: &str) -> Result<Option<(&str, Number)>, ParseError<&str>> {
+    let mut negative = false;
+    let mut chars = src.chars();
+
+    let mut peek = chars.clone();
+    match peek.next() {
+        Some('+') => {
+            chars = peek;
+        },
+        Some('-') => {
+            negative = true;
+            chars = peek;
+        }
+        _ => {}
+    }
+
+    if chars.next() == Some('0') {
+        match chars.next() {
+            Some('x') => return Ok(Some(parse_int_radix(chars.as_str(), 16, negative)?)),
+            Some('o') => return Ok(Some(parse_int_radix(chars.as_str(), 8, negative)?)),
+            Some('b') => return Ok(Some(parse_int_radix(chars.as_str(), 2, negative)?)),
+            _ => {}
+        }
+    }
+
+    if let Some(result) = parse_float(src) {
+        return Ok(Some(result));
+    }
+
+    Ok(None)
 }
 
 fn parse_identifier(src: &str) -> Option<(&str, &str)> {
@@ -789,7 +905,7 @@ fn parse_expression<'a>(
     document: &mut Document<'a>,
     input: &'a str,
 ) -> Result<Option<(&'a str, Expression<'a>)>, ParseError<&'a str>> {
-    if let Some((rest, v)) = parse_number(input) {
+    if let Some((rest, v)) = parse_number(input)? {
         let expr = Expression::Number(v);
         return Ok(Some((rest, expr)));
     }
