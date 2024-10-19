@@ -5,7 +5,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail};
 use bevy::log::Level;
 use bevy::prelude::*;
-use bevy::reflect::{ReflectMut, TypeInfo, TypeRegistration, TypeRegistry};
+use bevy::reflect::{DynamicStruct, DynamicTuple, DynamicTupleStruct, ReflectKind, TypeInfo, TypeRegistration, TypeRegistry};
 use bevy::utils::{tracing, HashMap};
 use smallvec::SmallVec;
 
@@ -28,7 +28,7 @@ fn evaluate(
             bail!("src does not implement Evaluate");
         };
 
-        Ok(evaluate.evaluate(world).into())
+        Ok(evaluate.evaluate(world)?.into())
     } else {
         Ok(src.into())
     }
@@ -42,15 +42,15 @@ fn apply(
     entity: Entity,
 ) -> anyhow::Result<()> {
     if let Some(reflect_apply) = reflect_apply {
-        let Some(src) = src.try_as_reflect() else {
-            bail!("src was not a concrete type");
+        let Some(src) = src.as_ref().try_as_reflect() else {
+            bail!("{src:?} is not a concrete type");
         };
 
         let Some(apply) = reflect_apply.get(src) else {
-            bail!("src does not implement Command");
+            bail!("{src:?} does not implement Command");
         };
 
-        apply.apply(world, entity);
+        apply.apply(world, entity)?;
     } else if let Some(reflect_component) = reflect_component {
         let type_registry = world.resource::<AppTypeRegistry>().clone();
         let type_registry = type_registry.read();
@@ -85,31 +85,27 @@ pub trait DocumentSource {
     fn get(&self, path: &str) -> Option<Factory>;
 }
 
-pub struct NullDocumentSource;
+#[derive(Default)]
+pub struct DocumentMap(pub HashMap<String, Factory>);
 
-impl DocumentSource for NullDocumentSource {
-    fn get(&self, _path: &str) -> Option<Factory> {
-        None
+impl DocumentSource for DocumentMap {
+    fn get(&self, path: &str) -> Option<Factory> {
+        self.0.get(path).cloned()
     }
 }
 
-fn new_type_factory(registration: &TypeRegistration) -> impl Fn(&mut World) -> Box<dyn Reflect> {
-    let reflect_default = registration.data::<ReflectDefault>().cloned();
-    let reflect_from_world = registration.data::<ReflectFromWorld>().cloned();
-
-    if reflect_default.is_none() && reflect_from_world.is_none() {
-        panic!("No way to instantiate {}", registration.type_info().ty().path());
-    }
-
-    move |world: &mut World| {
-        if let Some(reflect_default) = &reflect_default {
-            reflect_default.default()
-        } else if let Some(reflect_from_world) = &reflect_from_world {
-            reflect_from_world.from_world(world)
-        } else {
-            unreachable!()
+macro_rules! impl_load_number {
+    ($steps:expr, $index:expr, $type_id:expr, $s:expr, $ty:ty) => {
+        if $type_id == Some(TypeId::of::<$ty>()) {
+            let value = Arc::new(<$ty>::from_str($s)?);
+            let index = $index;
+            $steps.push(Box::new(move |registers, _, _| {
+                registers[index] = Some(value.clone());
+                Ok(())
+            }));
+            continue;
         }
-    }
+    };
 }
 
 pub fn convert(
@@ -304,6 +300,14 @@ pub fn convert(
         if let Some(value) = &register.expression {
             match value {
                 Expression::Number(s) => {
+                    impl_load_number!(steps, index, register_type_id, s, u8);
+                    impl_load_number!(steps, index, register_type_id, s, i8);
+                    impl_load_number!(steps, index, register_type_id, s, u16);
+                    impl_load_number!(steps, index, register_type_id, s, i16);
+                    impl_load_number!(steps, index, register_type_id, s, u32);
+                    impl_load_number!(steps, index, register_type_id, s, i32);
+                    impl_load_number!(steps, index, register_type_id, s, f64);
+
                     let value = Arc::new(f32::from_str(s)?);
                     steps.push(Box::new(move |registers, _, _| {
                         registers[index] = Some(value.clone());
@@ -321,63 +325,81 @@ pub fn convert(
                 Expression::Tuple(_, body) => {
                     let type_info = register_type_info
                         .ok_or_else(|| anyhow!("missing tuple type info"))?;
-                    let factory = new_type_factory(type_info);
+                    let type_name = type_info.type_info().ty().path();
+                    let from_reflect = type_info.data::<ReflectFromReflect>().cloned()
+                        .ok_or_else(|| anyhow!("FromReflect not implemented by '{}'",
+                            type_info.type_info().ty().path()))?;
                     let reflect_evaluate = type_info.data::<ReflectEvaluate>().cloned();
                     let body = body.clone();
+                    let (reflect_kind, field_names) = match type_info.type_info() {
+                        TypeInfo::Struct(r) => (ReflectKind::Struct, r.field_names().iter()
+                            .map(|s| s.to_string())
+                            .collect::<Vec<_>>()),
+                        TypeInfo::TupleStruct(_) => (ReflectKind::TupleStruct, Vec::new()),
+                        TypeInfo::Tuple(_) => (ReflectKind::Tuple, Vec::new()),
+                        _ => unreachable!(),
+                    };
 
                     steps.push(Box::new(move |registers, _, world| {
-                        let mut value = factory(world).into_partial_reflect();
-
-                        match value.reflect_mut() {
-                            ReflectMut::Struct(r) => {
+                        let value = match reflect_kind {
+                            ReflectKind::Struct => {
+                                let mut value = DynamicStruct::default();
                                 for (index, src) in body.iter().enumerate() {
                                     let Some(field_value) = &registers[*src] else { continue };
-                                    r.field_at_mut(index).unwrap().apply(field_value.as_ref());
+                                    let name = &field_names[index];
+                                    value.insert_boxed(name, field_value.as_ref().clone_value());
                                 }
+                                Box::new(value) as Box<dyn PartialReflect>
                             }
-                            ReflectMut::TupleStruct(r) => {
-                                for (index, src) in body.iter().enumerate() {
+                            ReflectKind::TupleStruct => {
+                                let mut value = DynamicTupleStruct::default();
+                                for src in body.iter() {
                                     let Some(field_value) = &registers[*src] else { continue };
-                                    r.field_mut(index).unwrap().apply(field_value.as_ref());
+                                    value.insert_boxed(field_value.as_ref().clone_value());
                                 }
+                                Box::new(value)
                             }
-                            ReflectMut::Tuple(r) => {
-                                for (index, src) in body.iter().enumerate() {
+                            ReflectKind::Tuple => {
+                                let mut value = DynamicTuple::default();
+                                for src in body.iter() {
                                     let Some(field_value) = &registers[*src] else { continue };
-                                    r.field_mut(index).unwrap().apply(field_value.as_ref());
+                                    value.insert_boxed(field_value.as_ref().clone_value());
                                 }
+                                Box::new(value)
                             }
                             _ => {
                                 bail!("unable to write tuple fields");
                             }
-                        }
+                        };
 
-                        registers[index] = Some(evaluate(&reflect_evaluate, value.into(), world)?);
+                        let value = from_reflect.from_reflect(value.as_ref())
+                            .ok_or_else(|| anyhow!("FromReflect tuple failed for {type_name}"))?;
+                        registers[index] = Some(evaluate(&reflect_evaluate, value.into_partial_reflect(), world)?);
                         Ok(())
                     }));
                 }
                 Expression::Struct(_, body) => {
                     let type_info = register_type_info
                         .ok_or_else(|| anyhow!("missing struct type info"))?;
-                    let factory = new_type_factory(type_info);
+                    let type_name = type_info.type_info().ty().path();
+                    let from_reflect = type_info.data::<ReflectFromReflect>().cloned()
+                        .ok_or_else(|| anyhow!("FromReflect not implemented by '{}'",
+                            type_info.type_info().ty().path()))?;
                     let reflect_evaluate = type_info.data::<ReflectEvaluate>().cloned();
                     let body = body.iter()
                         .map(|(k, v)| (k.to_string(), *v))
                         .collect::<SmallVec<[_; 8]>>();
 
                     steps.push(Box::new(move |registers, _, world| {
-                        let mut value = factory(world).into_partial_reflect();
-
-                        if let Ok(dyn_struct) = value.reflect_mut().as_struct() {
-                            for (field_name, src) in body.iter() {
-                                let Some(field_value) = &registers[*src] else { continue };
-                                dyn_struct.field_mut(field_name).unwrap().apply(field_value.as_ref());
-                            }
-                        } else if !body.is_empty() {
-                            bail!("unable to write struct fields");
+                        let mut value = DynamicStruct::default();
+                        for (key, src) in body.iter() {
+                            let Some(field_value) = &registers[*src] else { continue };
+                            value.insert_boxed(key, field_value.as_ref().clone_value());
                         }
 
-                        registers[index] = Some(evaluate(&reflect_evaluate, value.into(), world)?);
+                        let value = from_reflect.from_reflect(&value)
+                            .ok_or_else(|| anyhow!("FromReflect struct failed for {type_name}"))?;
+                        registers[index] = Some(evaluate(&reflect_evaluate, value.into_partial_reflect(), world)?);
                         Ok(())
                     }));
                 }
@@ -492,7 +514,7 @@ mod tests {
         type_registry.register::<Parent>();
         type_registry.register::<Transform>();
         type_registry.register::<Spawn>();
-        let fabricable = convert(&type_registry, &NullDocumentSource, &doc).unwrap();
+        let fabricable = convert(&type_registry, &DocumentMap::default(), &doc).unwrap();
         drop(type_registry);
 
         let mut world = World::new();

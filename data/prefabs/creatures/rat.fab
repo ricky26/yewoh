@@ -1,0 +1,19 @@
+import yewoh_default_game::ai::behaviours::wander::WanderPrefab;
+import yewoh_default_game::characters::prefabs::CharacterPrefab;
+import bevy_fabricator::humantime::HumanDuration;
+
+$ <- CharacterPrefab {
+    name: "Rat",
+    body_type: 238, /0xee,
+/*
+    hit_animation: {
+        kind: 4,
+        action: 0,
+        variant: 0,
+    },
+*/
+};
+
+$ <- WanderPrefab {
+    interval: HumanDuration("2s"),
+};

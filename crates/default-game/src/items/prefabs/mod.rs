@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use bevy::ecs::entity::Entity;
 use bevy::ecs::world::World;
+use bevy::reflect::Reflect;
 use serde::{Deserialize, Serialize};
 
 use yewoh_server::world::entity::{Flags, Graphic, Tooltip, TooltipLine};
@@ -10,7 +11,7 @@ use crate::data::prefab::{FromPrefabTemplate, PrefabBundle};
 
 pub mod container;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Reflect, Serialize, Deserialize)]
 pub struct ItemPrefab {
     graphic: u16,
     #[serde(default)]
@@ -36,14 +37,20 @@ impl PrefabBundle for ItemPrefab {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Reflect, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum TooltipConstructor {
     Localised { text_id: u32, #[serde(default)] arguments: String },
     Literal { text: String },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl Default for TooltipConstructor {
+    fn default() -> Self {
+        TooltipConstructor::Literal { text: Default::default() }
+    }
+}
+
+#[derive(Debug, Clone, Default, Reflect, Serialize, Deserialize)]
 pub struct TooltipLinePrefab {
     #[serde(flatten)]
     pub constructor: TooltipConstructor,
@@ -51,7 +58,7 @@ pub struct TooltipLinePrefab {
     pub priority: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Reflect, Serialize, Deserialize)]
 pub struct TooltipPrefab {
     #[serde(flatten)]
     pub entries: HashMap<String, TooltipLinePrefab>,

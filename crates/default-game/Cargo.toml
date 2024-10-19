@@ -10,7 +10,7 @@ edition = "2021"
 [dependencies]
 yewoh = { path = "../core" }
 yewoh-server = { path = "../server" }
-bevy_fabricator = { path = "../bevy_fabricator" }
+bevy_fabricator = { path = "../bevy_fabricator", features = ["humantime"] }
 tokio = { workspace = true, default_features = false, features = ["fs", "net", "macros"] }
 futures = { workspace = true }
 anyhow = { workspace = true }

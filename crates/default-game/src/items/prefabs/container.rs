@@ -1,5 +1,6 @@
 use bevy::ecs::entity::Entity;
 use bevy::ecs::world::World;
+use bevy::reflect::Reflect;
 use glam::IVec2;
 use serde::Deserialize;
 
@@ -7,7 +8,7 @@ use yewoh_server::world::entity::{Container, Flags, ParentContainer};
 
 use crate::data::prefab::{FromPrefabTemplate, Prefab, PrefabBundle};
 
-#[derive(Deserialize)]
+#[derive(Clone, Default, Reflect, Deserialize)]
 pub struct ContainedItemPrefab {
     pub position: IVec2,
     pub grid_index: u8,
@@ -15,7 +16,7 @@ pub struct ContainedItemPrefab {
     pub prefab: Prefab,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Default, Reflect, Deserialize)]
 pub struct ContainerPrefab {
     gump: u16,
     #[serde(default)]

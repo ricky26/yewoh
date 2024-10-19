@@ -6,24 +6,68 @@ use bevy::ecs::entity::Entity;
 use bevy::ecs::prelude::World;
 use bevy::ecs::system::{Commands, Query, Res};
 use bevy::prelude::*;
+use bevy::reflect::{DynamicList, DynamicStruct};
 use bevy::time::{Time, Timer, TimerMode};
+use bevy::utils::HashMap;
 use serde::Deserialize;
+use serde_yaml::Value;
+use bevy_fabricator::{FabricateExt, Factory};
+use bevy_fabricator::loader::Fabricator;
 use yewoh_server::world::entity::Location;
 use yewoh_server::world::net::NetCommandsExt;
 
-use crate::data::prefab::PrefabCommandsExt;
-use crate::data::prefab::{FromPrefabTemplate, Prefab, PrefabAppExt, PrefabBundle, PrefabCollection};
+use crate::data::prefab::{FromPrefabTemplate, PrefabAppExt, PrefabBundle};
+
+fn to_reflect(value: &Value) -> anyhow::Result<Box<dyn PartialReflect>> {
+    let v = match value {
+        Value::Null => Box::new(()) as Box<dyn PartialReflect>,
+        Value::Bool(v) => Box::new(*v),
+        Value::Number(n) => {
+            if let Some(v) = n.as_i64() {
+                Box::new(v) as _
+            } else if let Some(v) = n.as_u64() {
+                Box::new(v) as _
+            } else if let Some(v) = n.as_f64() {
+                Box::new(v) as _
+            } else {
+                unreachable!()
+            }
+        }
+        Value::String(s) => Box::new(s.clone()) as _,
+        Value::Sequence(seq) => {
+            let mut list = DynamicList::default();
+            for v in seq.iter() {
+                list.push_box(to_reflect(v)?);
+            }
+            Box::new(list) as _
+        }
+        Value::Mapping(m) => {
+            let mut map = DynamicStruct::default();
+            for (k, v) in m.iter() {
+                let k = k.as_str().expect("struct keys must be strings");
+                map.insert_boxed(k, to_reflect(v)?);
+            }
+            Box::new(map)
+        }
+        Value::Tagged(_) => anyhow::bail!("tagged values cannot appear in structs"),
+    };
+    Ok(v)
+}
 
 #[derive(Component)]
 struct HookupSpawner {
-    prefab: String,
+    prefab: Handle<Fabricator>,
+    parameters: Arc<dyn PartialReflect>,
     next_spawn: Timer,
     limit: usize,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Default, Reflect, Deserialize)]
 pub struct SpawnerPrefab {
     prefab: String,
+    #[serde(default)]
+    #[reflect(ignore)]
+    parameters: HashMap<String, Value>,
     #[serde(with = "humantime_serde")]
     interval: Duration,
     limit: usize,
@@ -31,9 +75,23 @@ pub struct SpawnerPrefab {
 
 impl PrefabBundle for SpawnerPrefab {
     fn write(&self, world: &mut World, entity: Entity) {
+        let asset_server = world.resource::<AssetServer>();
+        let prefab = asset_server.load(&self.prefab);
+
+        let mut parameters = DynamicStruct::default();
+
+        for (k, v) in &self.parameters {
+            parameters.insert_boxed(k, to_reflect(v).unwrap());
+        }
+
+        let parameters = Arc::new(parameters) as Arc<dyn PartialReflect>;
+
+        debug!("load spawner {prefab:?} {parameters:?}");
+
         world.entity_mut(entity)
             .insert(HookupSpawner {
-                prefab: self.prefab.clone(),
+                prefab,
+                parameters,
                 next_spawn: Timer::new(self.interval, TimerMode::Repeating),
                 limit: self.limit,
             })
@@ -49,27 +107,33 @@ impl FromPrefabTemplate for SpawnerPrefab {
     }
 }
 
-fn setup_spawner_prefabs(prefabs: Res<PrefabCollection>, mut commands: Commands, query: Query<(Entity, &HookupSpawner)>) {
+fn setup_spawner_prefabs(
+    asset_server: Res<AssetServer>,
+    prefabs: Res<Assets<Fabricator>>,
+    mut commands: Commands, query: Query<(Entity, &HookupSpawner)>,
+) {
     for (entity, hookup) in &query {
-        let prefab = match prefabs.get(&hookup.prefab) {
-            Some(x) => x.clone(),
-            _ => continue,
-        };
+        debug!("try setup spawner {:?} ({:?})", hookup.prefab, asset_server.get_load_state(&hookup.prefab));
+        let Some(prefab) = prefabs.get(&hookup.prefab) else { continue };
+
+        debug!("setup spawner {:?}", hookup.prefab);
 
         commands
             .entity(entity)
             .remove::<HookupSpawner>()
             .insert(Spawner {
-                prefab,
+                prefab: prefab.fabricable.fabricate.clone(),
+                parameters: hookup.parameters.clone(),
                 next_spawn: hookup.next_spawn.clone(),
                 limit: hookup.limit,
             });
     }
 }
 
-#[derive(Debug, Clone, Component)]
+#[derive(Clone, Component)]
 pub struct Spawner {
-    pub prefab: Arc<Prefab>,
+    pub prefab: Factory,
+    pub parameters: Arc<dyn PartialReflect>,
     pub next_spawn: Timer,
     pub limit: usize,
 }
@@ -94,12 +158,15 @@ pub fn spawn_from_spawners(
             continue;
         }
 
+        debug!("spawn spawner");
+
         let spawned_entity = commands.spawn_empty()
-            .insert_prefab(spawner.prefab.clone())
+            .fabricate(spawner.prefab.clone(), spawner.parameters.clone())
             .insert(Spawned)
             .insert(*position)
             .assign_network_id()
             .id();
+
         spawned.entities.push(spawned_entity);
     }
 }

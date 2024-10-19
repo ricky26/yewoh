@@ -9,6 +9,7 @@ use bevy::app::{App, Plugin};
 use bevy::ecs::entity::Entity;
 use bevy::ecs::system::{EntityCommands, Resource};
 use bevy::ecs::world::{Command, EntityWorldMut, World};
+use bevy::reflect::{GetTypeRegistration, Reflect};
 use serde::{Deserialize, Deserializer};
 use serde::de::{DeserializeSeed, Error, MapAccess, Visitor};
 use tokio::fs;
@@ -51,8 +52,9 @@ impl Drop for EnterFactoryGuard {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Reflect)]
 pub struct Prefab {
+    #[reflect(ignore)]
     bundles: Vec<Arc<dyn PrefabBundle>>,
 }
 
@@ -227,11 +229,12 @@ impl PrefabCollection {
 }
 
 pub trait PrefabAppExt {
-    fn init_prefab_bundle<P: FromPrefabTemplate>(&mut self, name: &str) -> &mut Self;
+    fn init_prefab_bundle<P: FromPrefabTemplate + GetTypeRegistration>(&mut self, name: &str) -> &mut Self;
 }
 
 impl PrefabAppExt for App {
-    fn init_prefab_bundle<P: FromPrefabTemplate>(&mut self, name: &str) -> &mut Self {
+    fn init_prefab_bundle<P: FromPrefabTemplate + GetTypeRegistration>(&mut self, name: &str) -> &mut Self {
+        self.register_type::<P>();
         self.world_mut().resource_mut::<PrefabFactory>()
             .register_template::<P>(name);
         self

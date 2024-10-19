@@ -1,11 +1,12 @@
 use bevy::ecs::entity::Entity;
 use bevy::ecs::world::World;
+use bevy::reflect::Reflect;
 use serde::Deserialize;
 
 use crate::characters::{MeleeWeapon, Unarmed};
 use crate::data::prefab::{FromPrefabTemplate, PrefabBundle};
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Default, Reflect, Deserialize)]
 pub struct MeleeWeaponPrefab {
     #[serde(flatten)]
     weapon: MeleeWeapon,
@@ -26,7 +27,7 @@ impl PrefabBundle for MeleeWeaponPrefab {
     }
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Reflect, Deserialize)]
 pub struct UnarmedPrefab {
     #[serde(flatten)]
     weapon: MeleeWeapon,

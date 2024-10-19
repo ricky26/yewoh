@@ -5,7 +5,7 @@ use derive_more::{Display, Error, From};
 use smallvec::SmallVec;
 
 use crate::parser::{SourcePosition, DisplayAddress, FormatterFn};
-use crate::string::{escape_string, recognize_string};
+use crate::string::{escape_string, parse_string, recognize_string};
 
 fn dot_register_name(index: usize) -> impl Display {
     FormatterFn(move |f| write!(f, "v{index}"))
@@ -15,24 +15,34 @@ fn dot_register_name(index: usize) -> impl Display {
 pub enum ParseError<P: SourcePosition> {
     #[from]
     StringError(super::string::ParseError<P>),
-    #[display("expected expression")]
+    #[error(ignore)]
+    #[display("{}: expected expression", DisplayAddress(_0))]
     ExpectedExpression(P),
-    #[display("unclosed tuple")]
-    UnclosedTuple,
-    #[display("expected identifier")]
-    ExpectedIdentifier,
-    #[display("expected colon")]
-    ExpectedColon,
-    #[display("expected struct")]
-    UnclosedStruct,
+    #[error(ignore)]
+    #[display("{}: unclosed tuple", DisplayAddress(_0))]
+    UnclosedTuple(P),
+    #[error(ignore)]
+    #[display("{}: expected identifier", DisplayAddress(_0))]
+    ExpectedIdentifier(P),
+    #[error(ignore)]
+    #[display("{}: expected colon", DisplayAddress(_0))]
+    ExpectedColon(P),
+    #[error(ignore)]
+    #[display("{}: expected struct", DisplayAddress(_0))]
+    UnclosedStruct(P),
+    #[error(ignore)]
     #[display("{}: expected {keyword} keyword", DisplayAddress(at))]
-    ExpectedKeyword { at: P, #[error(not(source))] keyword: &'static str },
+    ExpectedKeyword { at: P, keyword: &'static str },
+    #[error(ignore)]
     #[display("{}: expected path", DisplayAddress(_0))]
     ExpectedPath(P),
+    #[error(ignore)]
     #[display("{}: expected semi-colon", DisplayAddress(_0))]
     ExpectedSemiColon(P),
+    #[error(ignore)]
     #[display("{}: expected open brace", DisplayAddress(_0))]
     ExpectedOpenBrace(P),
+    #[error(ignore)]
     #[display("{}: expected import path", DisplayAddress(_0))]
     ExpectedImportPath(P),
 }
@@ -43,10 +53,10 @@ impl<P: SourcePosition> ParseError<P> {
             ParseError::StringError(e) =>
                 ParseError::StringError(e.map_position(&mut f)),
             ParseError::ExpectedExpression(p) => ParseError::ExpectedExpression(f(p)),
-            ParseError::UnclosedTuple => ParseError::UnclosedTuple,
-            ParseError::ExpectedIdentifier => ParseError::ExpectedIdentifier,
-            ParseError::ExpectedColon => ParseError::ExpectedColon,
-            ParseError::UnclosedStruct => ParseError::UnclosedStruct,
+            ParseError::UnclosedTuple(p) => ParseError::UnclosedTuple(f(p)),
+            ParseError::ExpectedIdentifier(p) => ParseError::ExpectedIdentifier(f(p)),
+            ParseError::ExpectedColon(p) => ParseError::ExpectedColon(f(p)),
+            ParseError::UnclosedStruct(p) => ParseError::UnclosedStruct(f(p)),
             ParseError::ExpectedKeyword { at, keyword } =>
                 ParseError::ExpectedKeyword { at: f(at), keyword },
             ParseError::ExpectedPath(p) => ParseError::ExpectedPath(f(p)),
@@ -338,6 +348,26 @@ impl<'a> Document<'a> {
     pub fn to_dot(&self) -> String {
         FormatterFn(|f| self.fmt_dot(f)).to_string()
     }
+
+    pub fn dependencies(&self) -> Vec<String> {
+        let mut deps = Vec::new();
+        for expr in self.registers.iter().filter_map(|r| r.expression.as_ref()) {
+            match expr {
+                Expression::Import(import) => {
+                    match import {
+                        Import::Path(_) => {}
+                        Import::File(file_path) => {
+                            let (_, file_path) = parse_string(*file_path).unwrap().unwrap();
+                            deps.push(file_path);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        deps
+    }
 }
 
 impl<'a> Debug for Document<'a> {
@@ -495,7 +525,7 @@ fn parse_identifier(src: &str) -> Option<(&str, &str)> {
 }
 
 fn expect_identifier(src: &str) -> Result<(&str, &str), ParseError<&str>> {
-    parse_identifier(src).ok_or_else(|| ParseError::ExpectedIdentifier)
+    parse_identifier(src).ok_or_else(|| ParseError::ExpectedIdentifier(src))
 }
 
 fn parse_keyword<'a>(src: &'a str, keyword: &str) -> Option<&'a str> {
@@ -540,7 +570,7 @@ fn parse_tuple_body<'a>(
     }
 
     if !rest.starts_with(')') {
-        return Err(ParseError::UnclosedTuple);
+        return Err(ParseError::UnclosedTuple(rest));
     }
 
     Ok(Some((&rest[1..], body)))
@@ -566,7 +596,7 @@ fn parse_struct_body<'a>(
         rest = skip_whitespace(next);
 
         if !rest.starts_with(':') {
-            return Err(ParseError::ExpectedColon);
+            return Err(ParseError::ExpectedColon(rest));
         }
 
         rest = skip_whitespace(&rest[1..]);
@@ -583,7 +613,7 @@ fn parse_struct_body<'a>(
     }
 
     if !rest.starts_with('}') {
-        return Err(ParseError::UnclosedStruct);
+        return Err(ParseError::UnclosedStruct(rest));
     }
 
     Ok(Some((&rest[1..], body)))

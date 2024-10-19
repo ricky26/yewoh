@@ -4,10 +4,13 @@ use std::fmt::Write;
 
 #[derive(Clone, Debug, Error, Display)]
 pub enum ParseError<P: SourcePosition> {
+    #[error(ignore)]
     #[display("{}: missing end quote", DisplayAddress(_0))]
     MissingEndQuote(P),
+    #[error(ignore)]
     #[display("{}: invalid escape '\\{_1}'", DisplayAddress(_0))]
     InvalidEscape(P, char),
+    #[error(ignore)]
     #[display("{}: unexpected end of file in escape sequence", DisplayAddress(_0))]
     EofDuringEscape(P),
 }

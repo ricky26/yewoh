@@ -109,13 +109,19 @@ async fn main() -> anyhow::Result<()> {
     }, pool.clone());
     let world_repo = WorldRepository::new(pool.clone(), args.shard_id.clone());
 
+    let abs_data_path = std::fs::canonicalize(&args.data_path)?;
+
     let mut app = App::new();
     app
         .add_plugins((
             MinimalPlugins,
             LogPlugin::default(),
-            ServerPlugin,
+            AssetPlugin {
+                file_path: abs_data_path.to_string_lossy().to_string(),
+                ..default()
+            },
             DefaultGamePlugins,
+            ServerPlugin,
         ));
 
     let static_data = static_data::load_from_directory(&args.data_path).await?;

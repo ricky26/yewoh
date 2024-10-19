@@ -5,12 +5,13 @@ use bevy::ecs::component::Component;
 use bevy::ecs::entity::Entity;
 use bevy::ecs::event::Event;
 use bevy::ecs::schedule::IntoSystemConfigs;
+use bevy::reflect::Reflect;
 use serde::Deserialize;
 
-use crate::characters::animation::AnimationStartedEvent;
 use yewoh_server::world::entity::Location;
 use yewoh_server::world::ServerSet;
 
+use crate::characters::animation::AnimationStartedEvent;
 use crate::characters::prefabs::CharacterPrefab;
 use crate::data::prefab::PrefabAppExt;
 use crate::persistence::SerializationSetupExt;
@@ -46,7 +47,7 @@ pub struct CorpseSpawned {
     pub corpse: Entity,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Reflect, Deserialize)]
 pub struct AnimationDefinition {
     pub animation_id: u16,
     pub frame_count: u16,
@@ -58,7 +59,7 @@ pub struct AnimationDefinition {
     pub speed: u8,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Reflect, Deserialize)]
 pub struct PredefinedAnimation {
     pub kind: u16,
     pub action: u16,
@@ -66,11 +67,17 @@ pub struct PredefinedAnimation {
     pub variant: u8,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Reflect, Deserialize)]
 #[serde(untagged)]
 pub enum Animation {
     Inline(AnimationDefinition),
     Predefined(PredefinedAnimation),
+}
+
+impl Default for Animation {
+    fn default() -> Self {
+        Animation::Inline(Default::default())
+    }
 }
 
 #[derive(Debug, Clone, Component)]
@@ -78,7 +85,7 @@ pub struct HitAnimation {
     pub hit_animation: Animation,
 }
 
-#[derive(Debug, Clone, Component, Deserialize)]
+#[derive(Debug, Clone, Default, Reflect, Component, Deserialize)]
 pub struct MeleeWeapon {
     pub damage: u16,
     #[serde(with = "humantime_serde")]

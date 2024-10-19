@@ -1,10 +1,12 @@
-use crate::data::prefab::{FromPrefabTemplate, PrefabBundle};
 use bevy::ecs::entity::Entity;
 use bevy::ecs::world::World;
+use bevy::reflect::Reflect;
 use serde::Deserialize;
 use yewoh_server::world::entity::Location;
 
-#[derive(Deserialize)]
+use crate::data::prefab::{FromPrefabTemplate, PrefabBundle};
+
+#[derive(Clone, Default, Reflect, Deserialize)]
 pub struct LocationPrefab {
     #[serde(flatten)]
     pub location: Location,

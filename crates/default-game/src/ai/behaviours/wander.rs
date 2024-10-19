@@ -5,11 +5,11 @@ use bevy::ecs::entity::Entity;
 use bevy::ecs::prelude::World;
 use bevy::ecs::query::With;
 use bevy::ecs::system::{Query, Res};
-use bevy::reflect::Reflect;
+use bevy::reflect::{Reflect, std_traits::ReflectDefault};
 use bevy::time::{Time, Timer, TimerMode};
 use rand::{thread_rng, Rng};
 use serde::Deserialize;
-
+use bevy_fabricator::traits::{Apply, ReflectApply};
 use yewoh::Direction;
 use yewoh_server::world::entity::Location;
 use yewoh_server::world::map::TileDataResource;
@@ -44,7 +44,8 @@ pub fn wander(
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Default, Reflect, Deserialize)]
+#[reflect(Default, Apply)]
 pub struct WanderPrefab {
     #[serde(with = "humantime_serde")]
     pub interval: Duration,
@@ -65,5 +66,12 @@ impl PrefabBundle for WanderPrefab {
             .insert(MoveTimer {
                 next_move: Timer::new(self.interval, TimerMode::Repeating),
             });
+    }
+}
+
+impl Apply for WanderPrefab {
+    fn apply(&self, world: &mut World, entity: Entity) -> anyhow::Result<()> {
+        self.write(world, entity);
+        Ok(())
     }
 }

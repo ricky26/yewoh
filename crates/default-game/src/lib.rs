@@ -1,6 +1,6 @@
 use bevy::app::PluginGroupBuilder;
 use bevy::prelude::*;
-
+use bevy_fabricator::FabricatorPlugin;
 use yewoh_server::world::ServerSet;
 
 use crate::accounts::AccountsPlugin;
@@ -53,6 +53,7 @@ pub struct DefaultGamePlugins;
 impl PluginGroup for DefaultGamePlugins {
     fn build(self) -> PluginGroupBuilder {
         PluginGroupBuilder::start::<Self>()
+            .add(FabricatorPlugin)
             .add(PrefabPlugin)
             .add(PersistencePlugin)
             .add(CommandsPlugin)

@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display, Formatter};
 
-pub trait SourcePosition: Display + Debug {
+pub trait SourcePosition {
     fn address(&self, f: &mut Formatter<'_>) -> std::fmt::Result;
 }
 
@@ -17,6 +17,59 @@ impl<'a> SourcePosition for &'a str {
         let slice = &self[..n];
         let trunc = if trunc { "..." } else { "" };
         write!(f, "near '{slice}{trunc}'")
+    }
+}
+
+impl SourcePosition for String {
+    fn address(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        <&str as SourcePosition>::address(&self.as_str(), f)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct FilePosition {
+    pub file: String,
+    pub line: usize,
+    pub offset: usize,
+}
+
+impl FilePosition {
+    pub fn from_file_and_str(
+        file: impl Into<String>,
+        contents: &str,
+        remaining: &str,
+    ) -> FilePosition {
+        let file = file.into();
+        let rlen = remaining.len();
+        let clen = contents.len();
+        if clen < rlen {
+            panic!("FilePosition created with invalid remaining string");
+        }
+
+        let used = &contents[..(clen - rlen)];
+        let mut line = 1;
+        let mut offset = 0;
+
+        for c in used.chars() {
+            if c == '\n' {
+                line += 1;
+                offset = 0;
+            } else {
+                offset += 1;
+            }
+        }
+
+        FilePosition {
+            file,
+            line,
+            offset,
+        }
+    }
+}
+
+impl SourcePosition for FilePosition {
+    fn address(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}:{}", &self.file, self.line, self.offset)
     }
 }
 

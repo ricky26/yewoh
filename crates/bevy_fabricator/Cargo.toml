@@ -8,8 +8,11 @@ derive_more = { workspace = true }
 anyhow = { workspace = true }
 smallvec = { workspace = true }
 nom = { workspace = true }
+humantime = { workspace = true, optional = true }
 
 [dependencies.bevy]
 workspace = true
 default-features = false
-features = []
+features = [
+    "bevy_asset",
+]

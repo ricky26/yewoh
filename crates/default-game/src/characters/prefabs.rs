@@ -1,28 +1,32 @@
 use bevy::ecs::entity::Entity;
 use bevy::ecs::world::World;
+use bevy::reflect::{Reflect, std_traits::ReflectDefault};
 use serde::Deserialize;
-
+use bevy_fabricator::traits::{Apply, ReflectApply};
 use yewoh::Notoriety;
 use yewoh::protocol::EquipmentSlot;
 use yewoh_server::world::entity::{Character, CharacterEquipped, EquippedBy, Flags, Location, Notorious, Stats};
-use crate::activities::CurrentActivity;
 
+use crate::activities::CurrentActivity;
 use crate::characters::{Alive, Animation, HitAnimation};
 use crate::data::prefab::{FromPrefabTemplate, Prefab, PrefabBundle};
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Reflect, Deserialize)]
 pub struct EquipmentPrefab {
+    #[reflect(ignore)]
     pub slot: EquipmentSlot,
     #[serde(flatten)]
     pub prefab: Prefab,
 }
 
-#[derive(Default, Clone, Deserialize)]
+#[derive(Default, Clone, Reflect, Deserialize)]
+#[reflect(Default, Apply)]
 #[serde(default)]
 pub struct CharacterPrefab {
     pub name: String,
     pub body_type: u16,
     pub hue: u16,
+    #[reflect(ignore)]
     pub notoriety: Notoriety,
     pub equipment: Vec<EquipmentPrefab>,
     pub hit_animation: Option<Animation>,
@@ -80,5 +84,13 @@ impl PrefabBundle for CharacterPrefab {
         if let Some(hit_animation) = self.hit_animation.clone() {
             commands.insert(HitAnimation { hit_animation });
         }
+    }
+}
+
+impl Apply for CharacterPrefab {
+    fn apply(&self, world: &mut World, entity: Entity) -> anyhow::Result<()> {
+        tracing::debug!("charprefab {:?}", self.name);
+        self.write(world, entity);
+        Ok(())
     }
 }

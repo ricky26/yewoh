@@ -1,10 +1,14 @@
 use std::fmt::Formatter;
+
 use bevy::ecs::entity::Entity;
 use bevy::ecs::world::World;
-use serde::{Deserialize, Deserializer};
+use bevy::reflect::Reflect;
 use serde::de::{Error, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer};
+
 use crate::data::prefab::{FromPrefabTemplate, PrefabBundle, PrefabCollection};
 
+#[derive(Reflect)]
 pub struct InheritancePrefab {
     pub prefabs: Vec<String>,
 }
