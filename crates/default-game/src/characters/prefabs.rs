@@ -89,7 +89,6 @@ impl PrefabBundle for CharacterPrefab {
 
 impl Apply for CharacterPrefab {
     fn apply(&self, world: &mut World, entity: Entity) -> anyhow::Result<()> {
-        tracing::debug!("charprefab {:?}", self.name);
         self.write(world, entity);
         Ok(())
     }

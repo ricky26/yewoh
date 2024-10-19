@@ -16,6 +16,8 @@ pub mod document;
 pub mod traits;
 pub mod operations;
 pub mod loader;
+pub mod any;
+pub mod values;
 
 #[cfg(feature = "humantime")]
 pub mod humantime;
@@ -155,6 +157,9 @@ impl Plugin for FabricatorPlugin {
             .register_type::<Fabricable>()
             .register_type::<Fabricate>()
             .register_type::<Fabricated>()
+            .register_type::<any::Any>()
+            .register_type::<values::Some>()
+            .register_type::<values::None>()
             .init_asset::<Fabricator>()
             .register_asset_loader(FabricatorLoader::new(type_registry))
             .add_systems(Update, (

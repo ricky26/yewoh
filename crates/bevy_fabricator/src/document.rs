@@ -269,7 +269,7 @@ pub struct Register<'a> {
 }
 
 impl<'a> Register<'a> {
-    fn fmt_with_index(&self, index: usize, f: &mut Formatter<'_>) -> std::fmt::Result {
+    pub(crate) fn fmt_with_index(&self, index: usize, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "%{index}")?;
 
         if let Some(name) = &self.name {
@@ -310,11 +310,10 @@ impl<'a> Debug for Register<'a> {
 
 impl<'a> From<Expression<'a>> for Register<'a> {
     fn from(value: Expression<'a>) -> Self {
-        let variable_type = value.type_path();
         Register {
             name: None,
             visibility: Visibility::Local,
-            variable_type,
+            variable_type: None,
             optional: false,
             expression: Some(value),
         }
@@ -540,8 +539,6 @@ fn parse_int_radix(
     if rest.len() == src.len() {
         return Err(ParseError::ExpectedIntRadix(src, radix));
     }
-
-    println!("eagle '{rest}' '{src}'");
 
     if negative || value == (value as i64 as i128) {
         let mul = if negative { -1 } else { 1 };
@@ -885,7 +882,6 @@ fn parse_variable<'a>(
     let mut value = None;
     if has_value {
         let (next, expr) = expect_expression(document, rest)?;
-        variable_type = variable_type.or(expr.type_path());
         value = Some(expr);
         rest = skip_whitespace(next);
     }

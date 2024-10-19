@@ -86,8 +86,6 @@ impl PrefabBundle for SpawnerPrefab {
 
         let parameters = Arc::new(parameters) as Arc<dyn PartialReflect>;
 
-        debug!("load spawner {prefab:?} {parameters:?}");
-
         world.entity_mut(entity)
             .insert(HookupSpawner {
                 prefab,
@@ -115,8 +113,6 @@ fn setup_spawner_prefabs(
     for (entity, hookup) in &query {
         debug!("try setup spawner {:?} ({:?})", hookup.prefab, asset_server.get_load_state(&hookup.prefab));
         let Some(prefab) = prefabs.get(&hookup.prefab) else { continue };
-
-        debug!("setup spawner {:?}", hookup.prefab);
 
         commands
             .entity(entity)
@@ -157,8 +153,6 @@ pub fn spawn_from_spawners(
         if !spawner.next_spawn.tick(time.delta()).just_finished() || spawner.limit <= spawned.entities.len() {
             continue;
         }
-
-        debug!("spawn spawner");
 
         let spawned_entity = commands.spawn_empty()
             .fabricate(spawner.prefab.clone(), spawner.parameters.clone())
