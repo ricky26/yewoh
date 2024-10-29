@@ -17,7 +17,7 @@ use crate::math::IVecExt;
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Reflect, Component)]
 #[reflect(Component, Serialize, Deserialize)]
 pub struct Flags {
-    #[reflect(ignore)]
+    #[reflect(remote = crate::remote_reflect::EntityFlagsRemote)]
     pub flags: EntityFlags,
 }
 
@@ -37,7 +37,7 @@ impl<'de> Deserialize<'de> for Flags {
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Reflect, Component, Serialize, Deserialize)]
 #[reflect(Component, Serialize, Deserialize)]
-pub struct Notorious(#[reflect(ignore)] pub Notoriety);
+pub struct Notorious(#[reflect(remote = crate::remote_reflect::NotorietyRemote)] pub Notoriety);
 
 impl Deref for Notorious {
     type Target = Notoriety;
@@ -52,7 +52,7 @@ impl DerefMut for Notorious {
 #[derive(Debug, Clone, Eq, PartialEq, Reflect)]
 pub struct CharacterEquipped {
     pub entity: Entity,
-    #[reflect(ignore)]
+    #[reflect(remote = crate::remote_reflect::EquipmentSlotRemote)]
     pub slot: EquipmentSlot,
 }
 
@@ -85,7 +85,7 @@ impl MapEntities for Character {
 #[reflect(Component, MapEntities)]
 pub struct EquippedBy {
     pub parent: Entity,
-    #[reflect(ignore)]
+    #[reflect(remote = crate::remote_reflect::EquipmentSlotRemote)]
     pub slot: EquipmentSlot,
 }
 
@@ -132,7 +132,7 @@ pub struct Location {
     pub position: IVec3,
     pub map_id: u8,
     #[serde(default)]
-    #[reflect(ignore)]
+    #[reflect(remote = crate::remote_reflect::DirectionRemote)]
     pub direction: Direction,
 }
 
@@ -306,7 +306,7 @@ impl Stats {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Reflect)]
 pub struct TooltipLine {
     pub text_id: u32,
     pub arguments: String,
@@ -346,7 +346,6 @@ impl Ord for TooltipLine {
 #[derive(Debug, Clone, Default, Component, Eq, PartialEq, Reflect)]
 #[reflect(Component)]
 pub struct Tooltip {
-    #[reflect(ignore)]
     pub entries: HashMap<String, TooltipLine>,
 }
 

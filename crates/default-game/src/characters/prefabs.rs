@@ -14,7 +14,7 @@ use crate::data::prefab::{FromPrefabTemplate, Prefab, PrefabBundle};
 
 #[derive(Clone, Reflect, Deserialize)]
 pub struct EquipmentPrefab {
-    #[reflect(ignore)]
+    #[reflect(remote = yewoh_server::remote_reflect::EquipmentSlotRemote)]
     pub slot: EquipmentSlot,
     #[serde(flatten)]
     pub prefab: Prefab,
@@ -27,7 +27,7 @@ pub struct CharacterPrefab {
     pub name: String,
     pub body_type: u16,
     pub hue: u16,
-    #[reflect(ignore)]
+    #[reflect(remote = yewoh_server::remote_reflect::NotorietyRemote)]
     pub notoriety: Notoriety,
     pub equipment: Vec<EquipmentPrefab>,
     pub hit_animation: Option<Animation>,
