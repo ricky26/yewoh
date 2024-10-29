@@ -28,8 +28,11 @@ pub enum ParseError<P: SourcePosition> {
     #[display("{}: expected colon", DisplayAddress(_0))]
     ExpectedColon(P),
     #[error(ignore)]
-    #[display("{}: expected struct", DisplayAddress(_0))]
+    #[display("{}: unclosed struct", DisplayAddress(_0))]
     UnclosedStruct(P),
+    #[error(ignore)]
+    #[display("{}: unclosed list", DisplayAddress(_0))]
+    UnclosedList(P),
     #[error(ignore)]
     #[display("{}: expected {keyword} keyword", DisplayAddress(at))]
     ExpectedKeyword { at: P, keyword: &'static str },
@@ -60,6 +63,7 @@ impl<P: SourcePosition> ParseError<P> {
             ParseError::ExpectedIdentifier(p) => ParseError::ExpectedIdentifier(f(p)),
             ParseError::ExpectedColon(p) => ParseError::ExpectedColon(f(p)),
             ParseError::UnclosedStruct(p) => ParseError::UnclosedStruct(f(p)),
+            ParseError::UnclosedList(p) => ParseError::UnclosedList(f(p)),
             ParseError::ExpectedKeyword { at, keyword } =>
                 ParseError::ExpectedKeyword { at: f(at), keyword },
             ParseError::ExpectedPath(p) => ParseError::ExpectedPath(f(p)),
@@ -157,6 +161,7 @@ pub enum Expression<'a> {
     String(&'a str),
     Tuple(Option<Path<'a>>, SmallVec<[usize; 8]>),
     Struct(Option<Path<'a>>, SmallVec<[(&'a str, usize); 8]>),
+    List(Option<Path<'a>>, SmallVec<[usize; 8]>),
     Path(Path<'a>),
     Import(Import<'a>),
 }
@@ -228,6 +233,23 @@ impl<'a> Debug for Expression<'a> {
                 }
 
                 f.write_char('}')
+            }
+            Expression::List(name, parts) => {
+                if let Some(name) = name {
+                    write!(f, "{name:?}[")?;
+                } else {
+                    f.write_char('[')?;
+                }
+
+                let mut parts = parts.iter();
+                if let Some(part) = parts.next() {
+                    write!(f, "%{part}")?;
+                    for part in parts {
+                        write!(f, ", %{part}")?;
+                    }
+                }
+
+                f.write_char(']')
             }
             Expression::Path(path) => path.fmt(f),
             Expression::Import(import) => import.fmt(f),
@@ -689,6 +711,40 @@ fn parse_tuple_body<'a>(
     Ok(Some((&rest[1..], body)))
 }
 
+fn parse_list_body<'a>(
+    document: &mut Document<'a>,
+    input: &'a str,
+) -> Result<Option<(&'a str, SmallVec<[usize; 8]>)>, ParseError<&'a str>> {
+    if !input.starts_with('[') {
+        return Ok(None);
+    }
+
+    let mut body = SmallVec::new();
+    let mut rest = &input[1..];
+    while !rest.is_empty() {
+        rest = skip_whitespace(rest);
+        if rest.starts_with(']') {
+            break;
+        }
+
+        let (next, expr) = expect_expression_index(document, rest)?;
+        body.push(expr);
+        rest = skip_whitespace(next);
+
+        if !rest.starts_with(',') {
+            break;
+        }
+
+        rest = skip_whitespace(&rest[1..]);
+    }
+
+    if !rest.starts_with(']') {
+        return Err(ParseError::UnclosedList(rest));
+    }
+
+    Ok(Some((&rest[1..], body)))
+}
+
 fn parse_struct_body<'a>(
     document: &mut Document<'a>,
     input: &'a str,
@@ -922,6 +978,11 @@ fn parse_expression<'a>(
             let expr = Expression::Struct(None, expr);
             return Ok(Some((rest, expr)));
         }
+        Some('[') => {
+            let (rest, expr) = parse_list_body(document, input)?.unwrap();
+            let expr = Expression::List(None, expr);
+            return Ok(Some((rest, expr)));
+        }
         _ => {}
     }
 
@@ -936,6 +997,11 @@ fn parse_expression<'a>(
             Some('{') => {
                 let (rest, expr) = parse_struct_body(document, rest)?.unwrap();
                 let expr = Expression::Struct(Some(path), expr);
+                return Ok(Some((rest, expr)));
+            }
+            Some('[') => {
+                let (rest, expr) = parse_list_body(document, rest)?.unwrap();
+                let expr = Expression::List(Some(path), expr);
                 return Ok(Some((rest, expr)));
             }
             _ => {}

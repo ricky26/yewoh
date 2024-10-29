@@ -4,7 +4,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail};
 use bevy::log::Level;
 use bevy::prelude::*;
-use bevy::reflect::{DynamicEnum, DynamicStruct, DynamicTuple, DynamicTupleStruct, TypeInfo, TypeRegistration, TypeRegistry, VariantInfo};
+use bevy::reflect::{DynamicArray, DynamicEnum, DynamicList, DynamicStruct, DynamicTuple, DynamicTupleStruct, TypeInfo, TypeRegistration, TypeRegistry, VariantInfo};
 use bevy::utils::{tracing, HashMap};
 use smallvec::SmallVec;
 
@@ -437,6 +437,65 @@ fn build_enum_struct_from_tuple<'a>(
     })
 }
 
+fn build_list(
+    type_registry: &TypeRegistry,
+    type_id: TypeId,
+    body: &[usize],
+) -> anyhow::Result<impl Fn(&mut RegisterValues, &mut World, &mut Fabricated) -> anyhow::Result<Box<dyn PartialReflect>>> {
+    let type_reg = type_registry.get(type_id)
+        .ok_or_else(|| anyhow!("missing list type info"))?;
+    let list_info = type_reg.type_info().as_list()?;
+    let converter = ValueConverter::try_from_registration(type_reg)?;
+    let element_type_id = list_info.item_ty().id();
+    let element_reg = type_registry.get(element_type_id)
+        .ok_or_else(|| anyhow!("missing list element type info"))?;
+    let element_converter = ValueConverter::try_from_registration(element_reg)?;
+    let evaluator = Evaluator::from_type_registration(type_reg);
+    let body = body.to_vec();
+
+    Ok(move |registers: &mut RegisterValues, world: &mut World, fabricated: &mut Fabricated| {
+        let mut value = DynamicList::default();
+        for src in body.iter() {
+            let Some(field_value) = &registers[*src] else { continue };
+            let field_value = element_converter.convert(field_value.as_ref(), world)?;
+            value.push_box(field_value);
+        }
+
+        let value = converter.convert(&value, world)?;
+        Ok(evaluator.evaluate(value, world, fabricated)?)
+    })
+}
+
+fn build_array(
+    type_registry: &TypeRegistry,
+    type_id: TypeId,
+    body: &[usize],
+) -> anyhow::Result<impl Fn(&mut RegisterValues, &mut World, &mut Fabricated) -> anyhow::Result<Box<dyn PartialReflect>>> {
+    let type_reg = type_registry.get(type_id)
+        .ok_or_else(|| anyhow!("missing array type info"))?;
+    let array_info = type_reg.type_info().as_array()?;
+    let converter = ValueConverter::try_from_registration(type_reg)?;
+    let element_type_id = array_info.item_ty().id();
+    let element_reg = type_registry.get(element_type_id)
+        .ok_or_else(|| anyhow!("missing array element type info"))?;
+    let element_converter = ValueConverter::try_from_registration(element_reg)?;
+    let evaluator = Evaluator::from_type_registration(type_reg);
+    let body = body.to_vec();
+
+    Ok(move |registers: &mut RegisterValues, world: &mut World, fabricated: &mut Fabricated| {
+        let mut values = Vec::new();
+        for src in body.iter() {
+            let Some(field_value) = &registers[*src] else { continue };
+            let field_value = element_converter.convert(field_value.as_ref(), world)?;
+            values.push(field_value);
+        }
+
+        let value = DynamicArray::from_iter(values);
+        let value = converter.convert(&value, world)?;
+        Ok(evaluator.evaluate(value, world, fabricated)?)
+    })
+}
+
 pub fn convert(
     type_registry: &TypeRegistry,
     documents: &dyn DocumentSource,
@@ -671,6 +730,33 @@ pub fn convert(
                         _ => {}
                     }
                 }
+                Expression::List(_, body) => {
+                    match register_type.type_info() {
+                        TypeInfo::List(list_info) => {
+                            let element_ty = list_info.item_ty().id();
+                            for register_index in body.iter() {
+                                let src_ty = &mut register_types[*register_index];
+                                if src_ty.is_some() {
+                                    continue;
+                                }
+
+                                *src_ty = Some(element_ty);
+                            }
+                        }
+                        TypeInfo::Array(array_info) => {
+                            let element_ty = array_info.item_ty().id();
+                            for register_index in body.iter() {
+                                let src_ty = &mut register_types[*register_index];
+                                if src_ty.is_some() {
+                                    continue;
+                                }
+
+                                *src_ty = Some(element_ty);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
                 _ => {}
             }
         }
@@ -827,6 +913,29 @@ pub fn convert(
                             }));
                         }
                         _ => {}
+                    }
+                }
+                Expression::List(_, body) => {
+                    let type_reg = register_type_reg
+                        .ok_or_else(|| anyhow!("missing list type info"))?;
+                    let type_id = register_type_id.unwrap();
+
+                    match type_reg.type_info() {
+                        TypeInfo::List(_) => {
+                            let factory = build_list(type_registry, type_id, &body)?;
+                            steps.push(Box::new(move |registers, _, world, fabricated| {
+                                registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                Ok(())
+                            }));
+                        }
+                        TypeInfo::Array(_) => {
+                            let factory = build_array(type_registry, type_id, &body)?;
+                            steps.push(Box::new(move |registers, _, world, fabricated| {
+                                registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                Ok(())
+                            }));
+                        }
+                        _ => unreachable!(),
                     }
                 }
                 Expression::Path(path) => {
