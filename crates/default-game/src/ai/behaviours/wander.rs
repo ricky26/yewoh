@@ -9,6 +9,7 @@ use bevy::reflect::{Reflect, std_traits::ReflectDefault};
 use bevy::time::{Time, Timer, TimerMode};
 use rand::{thread_rng, Rng};
 use serde::Deserialize;
+use bevy_fabricator::Fabricated;
 use bevy_fabricator::traits::{Apply, ReflectApply};
 use yewoh::Direction;
 use yewoh_server::world::entity::Location;
@@ -70,7 +71,9 @@ impl PrefabBundle for WanderPrefab {
 }
 
 impl Apply for WanderPrefab {
-    fn apply(&self, world: &mut World, entity: Entity) -> anyhow::Result<()> {
+    fn apply(
+        &self, world: &mut World, entity: Entity, _fabricated: &mut Fabricated,
+    ) -> anyhow::Result<()> {
         self.write(world, entity);
         Ok(())
     }

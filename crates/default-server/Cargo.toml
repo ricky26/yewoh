@@ -11,6 +11,7 @@ edition = "2021"
 yewoh = { path = "../core" }
 yewoh-server = { path = "../server" }
 yewoh-default-game = { path = "../default-game" }
+bevy_fabricator = { path = "../bevy_fabricator", features = ["humantime"] }
 tokio = { workspace = true, default_features = false, features = ["net", "rt-multi-thread"] }
 clap = { workspace = true, features = ["derive", "env"] }
 serde = { workspace = true, features = ["derive"] }

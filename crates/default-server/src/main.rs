@@ -7,7 +7,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, bail, Context};
+use bevy::asset::{AssetPath, LoadState};
 use bevy::ecs::world::CommandQueue;
 use bevy::log::LogPlugin;
 use bevy::prelude::*;
@@ -36,8 +37,11 @@ use yewoh_server::world::net::{NetCommandsExt, NetServer};
 use yewoh_server::world::ServerPlugin;
 
 use sqlx::postgres::PgPool;
+use bevy_fabricator::{empty_reflect, Fabricate, FabricateExt, Fabricator};
+use bevy_fabricator::hot_reload::{FabricatorChanged, WatchForFabricatorChanges};
 use yewoh_default_game::accounts::sql::{SqlAccountRepository, SqlAccountRepositoryConfig};
 use yewoh_default_game::persistence::db::WorldRepository;
+use yewoh_server::world::hierarchy::DespawnRecursiveExt;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
@@ -146,7 +150,7 @@ async fn main() -> anyhow::Result<()> {
     info!("Spawned {} map chunks", query.iter(app.world()).count());
     let mut query = app.world_mut().query_filtered::<(), With<Static>>();
     info!("Spawned {} statics", query.iter(app.world()).count());
-    load_static_entities(app.world_mut(), &args.data_path.join("entities")).await?;
+    load_static_entities(&mut app, &args.data_path, "entities").await?;
 
     let (lobby_listener, game_listener) = join(
         TcpListener::bind(&args.lobby_bind),
@@ -179,6 +183,7 @@ async fn main() -> anyhow::Result<()> {
         .insert_resource(accounts_repo.clone())
         .add_systems(Last, (
             scheduled_save,
+            update_static_entities,
         ));
 
     // Load previous state
@@ -233,24 +238,35 @@ async fn main() -> anyhow::Result<()> {
     }
 }
 
-async fn load_static_entities(world: &mut World, path: &Path) -> anyhow::Result<()> {
+#[derive(Component)]
+struct StaticEntity(AssetPath<'static>);
+
+async fn load_static_entities(
+    app: &mut App,
+    root_path: &Path,
+    entities_path: impl Into<PathBuf>,
+) -> anyhow::Result<()> {
     let mut to_visit = VecDeque::new();
-    to_visit.push_back(path.to_path_buf());
+    to_visit.push_back(entities_path.into());
 
-    let factory = world.resource::<PrefabFactory>();
+    let factory = app.world().resource::<PrefabFactory>();
+    let asset_server = app.world().resource::<AssetServer>().clone();
     let mut queue = CommandQueue::default();
-    let mut commands = Commands::new_from_entities(&mut queue, world.entities());
+    let mut commands = Commands::new_from_entities(&mut queue, app.world().entities());
     let mut count = 0;
+    let mut fab_queue = Vec::new();
 
-    while let Some(next) = to_visit.pop_front() {
-        let mut entries = fs::read_dir(&next).await?;
+    while let Some(dir_path) = to_visit.pop_front() {
+        let abs_dir_path = root_path.join(&dir_path);
+
+        let mut entries = fs::read_dir(&abs_dir_path).await?;
         while let Some(entry) = entries.next_entry().await? {
             let metadata = entry.metadata().await?;
             if metadata.is_dir() {
-                to_visit.push_back(next.join(entry.file_name()));
+                to_visit.push_back(dir_path.join(entry.file_name()));
             } else if let Some(name) = entry.file_name().to_str() {
                 if name.ends_with(".yaml") {
-                    let full_path = next.join(entry.file_name());
+                    let full_path = abs_dir_path.join(entry.file_name());
                     let contents = fs::read_to_string(&full_path).await?;
                     let items = serde_yaml::from_str::<Vec<serde_yaml::Value>>(&contents)?;
                     for item in items {
@@ -262,13 +278,85 @@ async fn load_static_entities(world: &mut World, path: &Path) -> anyhow::Result<
                         count += 1;
                     }
                 }
+
+                if name.ends_with(".fab") {
+                    let full_path = dir_path.join(entry.file_name());
+                    let name = full_path.file_stem().unwrap().to_string_lossy().to_string();
+                    let asset_path = AssetPath::from(full_path);
+                    let template = asset_server.load(&asset_path);
+                    fab_queue.push((template, name, asset_path));
+                }
             }
         }
     }
 
-    queue.apply(world);
+    queue.apply(app.world_mut());
+
+    for (template, name, asset_path) in fab_queue {
+        loop {
+            match asset_server.get_load_state(&template).unwrap() {
+                LoadState::NotLoaded => unreachable!(),
+                LoadState::Loading => {
+                    app.update();
+                    continue;
+                },
+                LoadState::Loaded => break,
+                LoadState::Failed(err) => bail!("failed to load asset: {err}"),
+            }
+        }
+
+        let fabricators = app.world().resource::<Assets<Fabricator>>();
+        let fabricator = fabricators.get(&template).expect("invalid loaded fabricator");
+        let parameters = empty_reflect();
+        let fabricate = Fabricate {
+            template,
+            parameters: parameters.clone(),
+        };
+        let factory = fabricator.fabricate.clone();
+        app.world_mut()
+            .spawn((
+                Name::new(name),
+                StaticEntity(asset_path),
+                fabricate,
+                WatchForFabricatorChanges,
+            ))
+            .fabricate(factory, parameters)
+            .assign_network_id();
+        count += 1;
+    }
+
     info!("Spawned {count} entities");
     Ok(())
+}
+
+fn update_static_entities(
+    mut commands: Commands,
+    fabricators: Res<Assets<Fabricator>>,
+    old_entities: Query<(Entity, &Name, &Fabricate, &StaticEntity), With<FabricatorChanged>>,
+) {
+    for (entity, name, fabricate, path) in &old_entities {
+        let asset_path = path.0.clone();
+        let template = fabricate.template.clone();
+        let Some(fabricator) = fabricators.get(&template) else {
+            continue;
+        };
+
+        let parameters = empty_reflect();
+        info!("Reloaded {name}");
+        commands.entity(entity).despawn_recursive();
+        commands
+            .spawn((
+                name.clone(),
+                StaticEntity(asset_path),
+                Fabricate {
+                    template,
+                    parameters: parameters.clone(),
+                },
+                WatchForFabricatorChanges,
+            ))
+            .fabricate(fabricator.fabricate.clone(), parameters)
+            .assign_network_id();
+    }
 }
 
 struct SaveTimer {

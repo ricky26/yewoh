@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy::reflect::{DynamicEnum, DynamicTuple, DynamicVariant};
 use crate::any::Any;
+use crate::Fabricated;
 use crate::traits::{Evaluate, ReflectEvaluate};
 
 #[derive(Default, Reflect)]
@@ -8,7 +9,9 @@ use crate::traits::{Evaluate, ReflectEvaluate};
 pub struct None;
 
 impl Evaluate for None {
-    fn evaluate(&self, _world: &mut World) -> anyhow::Result<Box<dyn PartialReflect>> {
+    fn evaluate(
+        &self, _world: &mut World, _fabricated: &mut Fabricated,
+    ) -> anyhow::Result<Box<dyn PartialReflect>> {
         Ok(Box::new(DynamicEnum::new("None", DynamicVariant::Unit)))
     }
 }
@@ -18,7 +21,9 @@ impl Evaluate for None {
 pub struct Some(Any);
 
 impl Evaluate for Some {
-    fn evaluate(&self, _world: &mut World) -> anyhow::Result<Box<dyn PartialReflect>> {
+    fn evaluate(
+        &self, _world: &mut World, _fabricated: &mut Fabricated,
+    ) -> anyhow::Result<Box<dyn PartialReflect>> {
         let inner = self.0.0.clone_value();
         let mut tuple = DynamicTuple::default();
         tuple.insert_boxed(inner);

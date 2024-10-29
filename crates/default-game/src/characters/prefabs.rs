@@ -2,6 +2,7 @@ use bevy::ecs::entity::Entity;
 use bevy::ecs::world::World;
 use bevy::reflect::{Reflect, std_traits::ReflectDefault};
 use serde::Deserialize;
+use bevy_fabricator::Fabricated;
 use bevy_fabricator::traits::{Apply, ReflectApply};
 use yewoh::Notoriety;
 use yewoh::protocol::EquipmentSlot;
@@ -88,7 +89,9 @@ impl PrefabBundle for CharacterPrefab {
 }
 
 impl Apply for CharacterPrefab {
-    fn apply(&self, world: &mut World, entity: Entity) -> anyhow::Result<()> {
+    fn apply(
+        &self, world: &mut World, entity: Entity, _fabricated: &mut Fabricated,
+    ) -> anyhow::Result<()> {
         self.write(world, entity);
         Ok(())
     }

@@ -3,7 +3,6 @@ use bevy::ecs::world::World;
 use bevy::reflect::Reflect;
 use serde::Deserialize;
 use yewoh_server::world::entity::Location;
-
 use crate::data::prefab::{FromPrefabTemplate, PrefabBundle};
 
 #[derive(Clone, Default, Reflect, Deserialize)]

@@ -11,8 +11,7 @@ use bevy::time::{Time, Timer, TimerMode};
 use bevy::utils::HashMap;
 use serde::Deserialize;
 use serde_yaml::Value;
-use bevy_fabricator::{FabricateExt, Factory};
-use bevy_fabricator::loader::Fabricator;
+use bevy_fabricator::{Fabricator, FabricateExt};
 use yewoh_server::world::entity::Location;
 use yewoh_server::world::net::NetCommandsExt;
 
@@ -54,14 +53,6 @@ fn to_reflect(value: &Value) -> anyhow::Result<Box<dyn PartialReflect>> {
     Ok(v)
 }
 
-#[derive(Component)]
-struct HookupSpawner {
-    prefab: Handle<Fabricator>,
-    parameters: Arc<dyn PartialReflect>,
-    next_spawn: Timer,
-    limit: usize,
-}
-
 #[derive(Clone, Default, Reflect, Deserialize)]
 pub struct SpawnerPrefab {
     prefab: String,
@@ -87,7 +78,7 @@ impl PrefabBundle for SpawnerPrefab {
         let parameters = Arc::new(parameters) as Arc<dyn PartialReflect>;
 
         world.entity_mut(entity)
-            .insert(HookupSpawner {
+            .insert(Spawner {
                 prefab,
                 parameters,
                 next_spawn: Timer::new(self.interval, TimerMode::Repeating),
@@ -105,30 +96,9 @@ impl FromPrefabTemplate for SpawnerPrefab {
     }
 }
 
-fn setup_spawner_prefabs(
-    asset_server: Res<AssetServer>,
-    prefabs: Res<Assets<Fabricator>>,
-    mut commands: Commands, query: Query<(Entity, &HookupSpawner)>,
-) {
-    for (entity, hookup) in &query {
-        debug!("try setup spawner {:?} ({:?})", hookup.prefab, asset_server.get_load_state(&hookup.prefab));
-        let Some(prefab) = prefabs.get(&hookup.prefab) else { continue };
-
-        commands
-            .entity(entity)
-            .remove::<HookupSpawner>()
-            .insert(Spawner {
-                prefab: prefab.fabricable.fabricate.clone(),
-                parameters: hookup.parameters.clone(),
-                next_spawn: hookup.next_spawn.clone(),
-                limit: hookup.limit,
-            });
-    }
-}
-
 #[derive(Clone, Component)]
 pub struct Spawner {
-    pub prefab: Factory,
+    pub prefab: Handle<Fabricator>,
     pub parameters: Arc<dyn PartialReflect>,
     pub next_spawn: Timer,
     pub limit: usize,
@@ -144,6 +114,7 @@ pub struct SpawnedEntities {
 
 pub fn spawn_from_spawners(
     time: Res<Time>,
+    fabricators: Res<Assets<Fabricator>>,
     mut spawners: Query<(&mut Spawner, &mut SpawnedEntities, &Location)>,
     spawned_entities: Query<(), With<Spawned>>,
     mut commands: Commands,
@@ -154,8 +125,12 @@ pub fn spawn_from_spawners(
             continue;
         }
 
+        let Some(fabricator) = fabricators.get(&spawner.prefab) else {
+            continue;
+        };
+
         let spawned_entity = commands.spawn_empty()
-            .fabricate(spawner.prefab.clone(), spawner.parameters.clone())
+            .fabricate(fabricator.fabricate.clone(), spawner.parameters.clone())
             .insert(Spawned)
             .insert(*position)
             .assign_network_id()
@@ -172,7 +147,6 @@ impl Plugin for SpawnersPlugin {
     fn build(&self, app: &mut App) {
         app
             .add_systems(Update, (
-                setup_spawner_prefabs,
                 spawn_from_spawners,
             ))
             .init_prefab_bundle::<SpawnerPrefab>("spawner");
