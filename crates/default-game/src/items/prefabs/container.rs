@@ -1,13 +1,12 @@
 use bevy::ecs::entity::Entity;
 use bevy::ecs::world::World;
 use bevy::reflect::Reflect;
-use glam::IVec2;
 use serde::Deserialize;
+use bevy_fabricator::Fabricated;
+use bevy_fabricator::traits::Apply;
+use yewoh_server::world::entity::{Container, Flags};
 
-use yewoh_server::world::entity::{Container, Flags, ParentContainer};
-
-use crate::data::prefab::{FromPrefabTemplate, Prefab, PrefabBundle};
-
+/*
 #[derive(Clone, Default, Reflect, Deserialize)]
 pub struct ContainedItemPrefab {
     pub position: IVec2,
@@ -15,24 +14,20 @@ pub struct ContainedItemPrefab {
     #[serde(flatten)]
     pub prefab: Prefab,
 }
+ */
 
 #[derive(Clone, Default, Reflect, Deserialize)]
 pub struct ContainerPrefab {
     gump: u16,
-    #[serde(default)]
-    contents: Vec<ContainedItemPrefab>,
+    // #[serde(default)]
+    // contents: Vec<ContainedItemPrefab>,
 }
 
-impl FromPrefabTemplate for ContainerPrefab {
-    type Template = ContainerPrefab;
-
-    fn from_template(template: Self::Template) -> Self {
-        template
-    }
-}
-
-impl PrefabBundle for ContainerPrefab {
-    fn write(&self, world: &mut World, entity: Entity) {
+impl Apply for ContainerPrefab {
+    fn apply(
+        &self, world: &mut World, entity: Entity, _fabricated: &mut Fabricated,
+    ) -> anyhow::Result<()> {
+        /*
         let mut items = Vec::with_capacity(self.contents.len());
 
         for item_template in &self.contents {
@@ -46,12 +41,15 @@ impl PrefabBundle for ContainerPrefab {
             item_template.prefab.write(world, child_entity);
             items.push(child_entity);
         }
+         */
 
         world.entity_mut(entity)
             .insert(Container {
                 gump_id: self.gump,
-                items,
+                items: Vec::new(),
             })
             .insert(Flags::default());
+
+        Ok(())
     }
 }

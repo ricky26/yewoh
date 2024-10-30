@@ -6,24 +6,24 @@ use bevy::ecs::entity::Entity;
 use bevy::ecs::event::EventReader;
 use bevy::ecs::query::With;
 use bevy::ecs::system::{Commands, Local, Query, Res, ResMut, Resource};
-use bevy::ecs::world::World;
+use bevy::prelude::AssetServer;
+use bevy_fabricator::Fabricate;
 use glam::IVec3;
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 use yewoh::Direction;
 
-use yewoh::protocol::{CharacterFromList, CharacterList, CharacterListFlags, EquipmentSlot, Race};
+use yewoh::protocol::{CharacterFromList, CharacterList, CharacterListFlags, Race};
 use yewoh::types::FixedString;
 use yewoh_server::async_runtime::AsyncRuntime;
-use yewoh_server::world::entity::{Character, CharacterEquipped, Flags, Graphic, Location, Stats};
+use yewoh_server::world::entity::{Character, Location, Stats};
 use yewoh_server::world::events::{CharacterListEvent, CreateCharacterEvent, DeleteCharacterEvent, SelectCharacterEvent};
 use yewoh_server::world::net::{NetClient, NetCommandsExt, NetOwner, Possessing, User};
 
 use crate::accounts::repository::{AccountCharacters, AccountRepository, CharacterInfo, CharacterToSpawn};
-use crate::data::prefab::{PrefabCollection, PrefabCommandsExt};
 use crate::data::static_data::StaticData;
-use crate::entities::{PrefabInstance, UniqueId};
+use crate::entities::UniqueId;
 use crate::persistence::PersistenceCommandsExt;
 
 pub mod repository;
@@ -229,7 +229,9 @@ pub fn handle_delete_character<T: AccountRepository>(
 }
 
 pub fn create_new_character(
-    prefabs: &PrefabCollection, commands: &mut Commands, info: CharacterInfo,
+    commands: &mut Commands,
+    asset_server: &AssetServer,
+    info: CharacterInfo,
 ) -> Entity {
     let race_name = match info.race {
         Race::Human => "human",
@@ -242,16 +244,14 @@ pub fn create_new_character(
         true => "female",
     };
 
-    let prefab_name = format!("player_{race_name}_{gender_name}");
+    let prefab_path = format!("prefabs/players/player_{race_name}_{gender_name}.fab");
+    let fabricator = asset_server.load(prefab_path);
 
-    let prefab = match prefabs.get(&prefab_name) {
-        Some(x) => x.clone(),
-        None => panic!("missing prefab for {prefab_name}"),
-    };
-
-    commands.spawn_empty()
-        .insert_prefab(prefab)
-        .queue(move |entity: Entity, world: &mut World| {
+    commands
+        .spawn((
+            Fabricate::with_handle(fabricator),
+        ))
+        /*.queue(move |entity: Entity, world: &mut World| {
             let mut equipment = Vec::new();
 
             if info.hair != 0 {
@@ -300,7 +300,7 @@ pub fn create_new_character(
 
                 *entity_ref.get_mut().unwrap() = c;
             }
-        })
+        })*/
         .insert((
             Location {
                 map_id: 1,
@@ -316,7 +316,7 @@ pub fn create_new_character(
 
 pub fn handle_spawn_character<T: AccountRepository>(
     runtime: Res<AsyncRuntime>,
-    prefabs: Res<PrefabCollection>,
+    asset_server: Res<AssetServer>,
     mut pending: ResMut<PendingCharacterInfo>,
     pending_list: ResMut<PendingCharacterLists>,
     mut commands: Commands,
@@ -367,7 +367,7 @@ pub fn handle_spawn_character<T: AccountRepository>(
             }
             CharacterToSpawn::NewCharacter(id, info) => {
                 info!("Creating new character: {}", &id);
-                let primary_entity = create_new_character(&prefabs, &mut commands, info);
+                let primary_entity = create_new_character(&mut commands, &asset_server, info);
                 all_players.insert(id, primary_entity);
                 commands.entity(primary_entity)
                     .insert(UniqueId { id })

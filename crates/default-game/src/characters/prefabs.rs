@@ -1,24 +1,14 @@
 use bevy::ecs::entity::Entity;
 use bevy::ecs::world::World;
-use bevy::reflect::{Reflect, std_traits::ReflectDefault};
-use serde::Deserialize;
-use bevy_fabricator::Fabricated;
+use bevy::reflect::{std_traits::ReflectDefault, Reflect};
 use bevy_fabricator::traits::{Apply, ReflectApply};
+use bevy_fabricator::Fabricated;
+use serde::Deserialize;
 use yewoh::Notoriety;
-use yewoh::protocol::EquipmentSlot;
-use yewoh_server::world::entity::{Character, CharacterEquipped, EquippedBy, Flags, Location, Notorious, Stats};
+use yewoh_server::world::entity::{Character, Flags, Location, Notorious, Stats};
 
 use crate::activities::CurrentActivity;
 use crate::characters::{Alive, Animation, HitAnimation};
-use crate::data::prefab::{FromPrefabTemplate, Prefab, PrefabBundle};
-
-#[derive(Clone, Reflect, Deserialize)]
-pub struct EquipmentPrefab {
-    #[reflect(remote = yewoh_server::remote_reflect::EquipmentSlotRemote)]
-    pub slot: EquipmentSlot,
-    #[serde(flatten)]
-    pub prefab: Prefab,
-}
 
 #[derive(Default, Clone, Reflect, Deserialize)]
 #[reflect(Default, Apply)]
@@ -29,20 +19,14 @@ pub struct CharacterPrefab {
     pub hue: u16,
     #[reflect(remote = yewoh_server::remote_reflect::NotorietyRemote)]
     pub notoriety: Notoriety,
-    pub equipment: Vec<EquipmentPrefab>,
     pub hit_animation: Option<Animation>,
 }
 
-impl FromPrefabTemplate for CharacterPrefab {
-    type Template = CharacterPrefab;
-
-    fn from_template(template: Self::Template) -> Self {
-        template
-    }
-}
-
-impl PrefabBundle for CharacterPrefab {
-    fn write(&self, world: &mut World, entity: Entity) {
+impl Apply for CharacterPrefab {
+    fn apply(
+        &self, world: &mut World, entity: Entity, _fabricated: &mut Fabricated,
+    ) -> anyhow::Result<()> {
+        /*
         let mut equipment = Vec::with_capacity(self.equipment.len());
 
         for child in &self.equipment {
@@ -60,6 +44,7 @@ impl PrefabBundle for CharacterPrefab {
                 slot: child.slot,
             });
         }
+         */
 
         let mut commands = world.entity_mut(entity);
         commands
@@ -70,7 +55,7 @@ impl PrefabBundle for CharacterPrefab {
                 Character {
                     body_type: self.body_type,
                     hue: self.hue,
-                    equipment,
+                    equipment: Vec::new(),
                 },
                 Stats {
                     name: self.name.to_string(),
@@ -85,14 +70,7 @@ impl PrefabBundle for CharacterPrefab {
         if let Some(hit_animation) = self.hit_animation.clone() {
             commands.insert(HitAnimation { hit_animation });
         }
-    }
-}
 
-impl Apply for CharacterPrefab {
-    fn apply(
-        &self, world: &mut World, entity: Entity, _fabricated: &mut Fabricated,
-    ) -> anyhow::Result<()> {
-        self.write(world, entity);
         Ok(())
     }
 }

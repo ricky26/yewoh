@@ -11,11 +11,10 @@ use bevy::time::{Time, Timer, TimerMode};
 use bevy::utils::HashMap;
 use serde::Deserialize;
 use serde_yaml::Value;
-use bevy_fabricator::{Fabricator, FabricateExt};
+use bevy_fabricator::{Fabricator, FabricateExt, Fabricated, Fabricate};
+use bevy_fabricator::traits::Apply;
 use yewoh_server::world::entity::Location;
 use yewoh_server::world::net::NetCommandsExt;
-
-use crate::data::prefab::{FromPrefabTemplate, PrefabAppExt, PrefabBundle};
 
 fn to_reflect(value: &Value) -> anyhow::Result<Box<dyn PartialReflect>> {
     let v = match value {
@@ -64,8 +63,10 @@ pub struct SpawnerPrefab {
     limit: usize,
 }
 
-impl PrefabBundle for SpawnerPrefab {
-    fn write(&self, world: &mut World, entity: Entity) {
+impl Apply for SpawnerPrefab {
+    fn apply(
+        &self, world: &mut World, entity: Entity, _fabricated: &mut Fabricated,
+    ) -> anyhow::Result<()> {
         let asset_server = world.resource::<AssetServer>();
         let prefab = asset_server.load(&self.prefab);
 
@@ -85,14 +86,7 @@ impl PrefabBundle for SpawnerPrefab {
                 limit: self.limit,
             })
             .insert(SpawnedEntities::default());
-    }
-}
-
-impl FromPrefabTemplate for SpawnerPrefab {
-    type Template = SpawnerPrefab;
-
-    fn from_template(template: Self::Template) -> Self {
-        template
+        Ok(())
     }
 }
 
@@ -114,6 +108,7 @@ pub struct SpawnedEntities {
 
 pub fn spawn_from_spawners(
     time: Res<Time>,
+    asset_server: Res<AssetServer>,
     fabricators: Res<Assets<Fabricator>>,
     mut spawners: Query<(&mut Spawner, &mut SpawnedEntities, &Location)>,
     spawned_entities: Query<(), With<Spawned>>,
@@ -125,12 +120,21 @@ pub fn spawn_from_spawners(
             continue;
         }
 
-        let Some(fabricator) = fabricators.get(&spawner.prefab) else {
-            continue;
+        let maybe_request = Fabricate {
+            fabricator: spawner.prefab.clone(),
+            parameters: spawner.parameters.clone(),
+        }.to_request(&fabricators, Some(&asset_server));
+        let request = match maybe_request {
+            Ok(Some(r)) => r,
+            Ok(None) => continue,
+            Err(err) => {
+                warn!("failed to spawn: {err}");
+                continue;
+            }
         };
 
         let spawned_entity = commands.spawn_empty()
-            .fabricate(fabricator.fabricate.clone(), spawner.parameters.clone())
+            .fabricate(request)
             .insert(Spawned)
             .insert(*position)
             .assign_network_id()
@@ -148,7 +152,6 @@ impl Plugin for SpawnersPlugin {
         app
             .add_systems(Update, (
                 spawn_from_spawners,
-            ))
-            .init_prefab_bundle::<SpawnerPrefab>("spawner");
+            ));
     }
 }

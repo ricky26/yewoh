@@ -1,7 +1,6 @@
 use bevy::app::{App, Plugin, Update};
 
 use crate::ai::behaviours::wander::{wander, WanderPrefab};
-use crate::data::prefab::PrefabAppExt;
 
 pub mod behaviours;
 
@@ -11,7 +10,7 @@ pub struct AiPlugin;
 impl Plugin for AiPlugin {
     fn build(&self, app: &mut App) {
         app
-            .init_prefab_bundle::<WanderPrefab>("wander")
+            .register_type::<WanderPrefab>()
             .add_systems(Update, (
                 wander,
             ));

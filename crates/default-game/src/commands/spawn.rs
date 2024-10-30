@@ -1,18 +1,17 @@
-use std::sync::Arc;
-
+use bevy::asset::{Assets, Handle};
 use bevy::ecs::component::Component;
 use bevy::ecs::entity::Entity;
 use bevy::ecs::system::{Commands, Query, Res, Resource};
+use bevy::prelude::AssetServer;
 use clap::Parser;
 use glam::IVec2;
-
+use bevy_fabricator::{Fabricate, FabricateExt, Fabricator};
 use yewoh::protocol::TargetType;
 use yewoh_server::world::entity::{Container, Location, ParentContainer};
 use yewoh_server::world::input::{EntityTargetRequest, EntityTargetResponse, WorldTargetRequest, WorldTargetResponse};
 use yewoh_server::world::net::{NetClient, NetCommandsExt, ViewState};
 
 use crate::commands::{TextCommand, TextCommandQueue};
-use crate::data::prefab::{Prefab, PrefabCollection, PrefabCommandsExt};
 use crate::entities::PrefabInstance;
 use crate::hues;
 use crate::networking::NetClientExt;
@@ -34,31 +33,17 @@ impl TextCommand for Spawn {
 
 #[derive(Debug, Clone, Component)]
 pub struct SpawnRequest {
-    prefab_name: Arc<str>,
-    prefab: Arc<Prefab>,
+    fabricator: Handle<Fabricator>,
 }
 
 pub fn start_spawn(
     mut exec: TextCommandQueue<Spawn>,
-    clients: Query<&NetClient>,
-    prefabs: Res<PrefabCollection>,
+    asset_server: Res<AssetServer>,
     mut commands: Commands,
 ) {
     for (from, request) in exec.iter() {
-        let client = match clients.get(from) {
-            Ok(x) => x,
-            _ => continue,
-        };
-
-        let (prefab_name, prefab) = match prefabs.get_key_value(&request.prefab) {
-            Some((prefab_name, prefab)) => (prefab_name.clone(), prefab.clone()),
-            None => {
-                client.send_system_message_hue(format!("No such entity type '{}'", &request.prefab), hues::RED);
-                continue;
-            }
-        };
-
-        let spawn_request = SpawnRequest { prefab_name, prefab };
+        let fabricator = asset_server.load(&request.prefab);
+        let spawn_request = SpawnRequest { fabricator };
 
         if request.in_container {
             commands
@@ -86,12 +71,31 @@ pub fn spawn(
     completed_position: Query<(Entity, &SpawnRequest, &WorldTargetRequest, &WorldTargetResponse)>,
     completed_entity: Query<(Entity, &SpawnRequest, &EntityTargetRequest, &EntityTargetResponse)>,
     clients: Query<(&NetClient, &ViewState)>,
+    fabricators: Res<Assets<Fabricator>>,
+    asset_server: Res<AssetServer>,
     mut containers: Query<&mut Container>,
     mut commands: Commands,
 ) {
     for (entity, spawn, request, response) in completed_position.iter() {
-        commands.entity(entity).despawn();
+        let (client, view_state, ..) = match clients.get(request.client_entity) {
+            Ok(x) => x,
+            _ => continue,
+        };
 
+        let maybe_request = Fabricate::with_handle(spawn.fabricator.clone())
+            .to_request(&fabricators, Some(&asset_server));
+        let request = match maybe_request {
+            Ok(Some(r)) => r,
+            Ok(None) => continue,
+            Err(err) => {
+                commands.entity(entity).despawn();
+                let path = asset_server.get_path(&spawn.fabricator).unwrap();
+                client.send_system_message_hue(format!("Failed to load prefab '{path:?}': {err}"), hues::RED);
+                continue;
+            }
+        };
+
+        commands.entity(entity).despawn();
         let position = match response.position {
             Some(x) => x,
             None => continue,
@@ -99,16 +103,12 @@ pub fn spawn(
 
         // TODO: check whether location is obstructed.
 
-        let (_, view_state) = match clients.get(request.client_entity) {
-            Ok(x) => x,
-            _ => continue,
-        };
         let map_id = view_state.map_id();
-        let prefab_instance = PrefabInstance { prefab_name: spawn.prefab_name.clone() };
+        let prefab_instance = PrefabInstance { fabricator: spawn.fabricator.clone() };
 
         commands
             .spawn_empty()
-            .insert_prefab(spawn.prefab.clone())
+            .fabricate(request)
             .insert((
                 prefab_instance,
                 Location {
@@ -122,16 +122,29 @@ pub fn spawn(
     }
 
     for (entity, spawn, request, response) in completed_entity.iter() {
+        let (client, ..) = match clients.get(request.client_entity) {
+            Ok(x) => x,
+            _ => continue,
+        };
+
+        let maybe_request = Fabricate::with_handle(spawn.fabricator.clone())
+            .to_request(&fabricators, Some(&asset_server));
+        let request = match maybe_request {
+            Ok(Some(r)) => r,
+            Ok(None) => continue,
+            Err(err) => {
+                commands.entity(entity).despawn();
+                let path = asset_server.get_path(&spawn.fabricator).unwrap();
+                client.send_system_message_hue(format!("Failed to load prefab '{path:?}': {err}"), hues::RED);
+                continue;
+            }
+        };
+
         commands.entity(entity).despawn();
 
         let target = match response.target {
             Some(x) => x,
             None => continue,
-        };
-
-        let (client, ..) = match clients.get(request.client_entity) {
-            Ok(x) => x,
-            _ => continue,
         };
 
         let mut container = match containers.get_mut(target) {
@@ -142,10 +155,10 @@ pub fn spawn(
             }
         };
 
-        let prefab_instance = PrefabInstance { prefab_name: spawn.prefab_name.clone() };
+        let prefab_instance = PrefabInstance { fabricator: spawn.fabricator.clone() };
         let new_entity = commands
             .spawn_empty()
-            .insert_prefab(spawn.prefab.clone())
+            .fabricate(request)
             .insert((
                 prefab_instance,
                 ParentContainer {

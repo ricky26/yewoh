@@ -10,7 +10,6 @@ use crate::ai::AiPlugin;
 use crate::characters::CharactersPlugin;
 use crate::chat::handle_incoming_chat;
 use crate::commands::CommandsPlugin;
-use crate::data::prefab::PrefabPlugin;
 use crate::entities::EntitiesPlugin;
 use crate::items::ItemsPlugin;
 use crate::persistence::PersistencePlugin;
@@ -54,7 +53,6 @@ impl PluginGroup for DefaultGamePlugins {
     fn build(self) -> PluginGroupBuilder {
         PluginGroupBuilder::start::<Self>()
             .add(FabricatorPlugin)
-            .add(PrefabPlugin)
             .add(PersistencePlugin)
             .add(CommandsPlugin)
             .add(AccountsPlugin::<accounts::sql::SqlAccountRepository>::default())

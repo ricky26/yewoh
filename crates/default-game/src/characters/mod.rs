@@ -13,7 +13,6 @@ use yewoh_server::world::ServerSet;
 
 use crate::characters::animation::AnimationStartedEvent;
 use crate::characters::prefabs::CharacterPrefab;
-use crate::data::prefab::PrefabAppExt;
 use crate::persistence::SerializationSetupExt;
 
 pub mod prefabs;
@@ -104,7 +103,7 @@ pub struct CharactersPlugin;
 impl Plugin for CharactersPlugin {
     fn build(&self, app: &mut App) {
         app
-            .init_prefab_bundle::<CharacterPrefab>("character")
+            .register_type::<CharacterPrefab>()
             .add_event::<AnimationStartedEvent>()
             .add_systems(Last, (
                 animation::send_animations.in_set(ServerSet::Send),

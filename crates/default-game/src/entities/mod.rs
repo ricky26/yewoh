@@ -1,25 +1,28 @@
-use std::sync::Arc;
-use bevy::app::{App, Plugin};
-use bevy::ecs::component::Component;
-use bevy::reflect::Reflect;
-use rand::{RngCore, thread_rng};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use uuid::{Uuid, Bytes};
 use crate::persistence::SerializationSetupExt;
+use bevy::app::{App, Plugin};
+use bevy::asset::Handle;
+use bevy::ecs::component::Component;
+use bevy::ecs::reflect::ReflectComponent;
+use bevy::reflect::{Reflect, ReflectSerialize, ReflectDeserialize};
+use bevy_fabricator::Fabricator;
+use rand::{thread_rng, RngCore};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use uuid::{Bytes, Uuid};
 
 pub mod persistence;
 
 #[derive(Debug, Clone, Copy, Default, Component)]
 pub struct Persistent;
 
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, Component, Reflect)]
+#[reflect(Component)]
 pub struct PrefabInstance {
-    pub prefab_name: Arc<str>,
+    pub fabricator: Handle<Fabricator>,
 }
 
 #[derive(Debug, Clone, Component, Reflect)]
+#[reflect(opaque, Serialize, Deserialize)]
 pub struct UniqueId {
-    #[reflect(ignore)]
     pub id: Uuid,
 }
 
@@ -53,6 +56,7 @@ pub struct EntitiesPlugin;
 impl Plugin for EntitiesPlugin {
     fn build(&self, app: &mut App) {
         app
+            .register_type::<UniqueId>()
             .register_serializer::<persistence::UniqueIdSerializer>();
     }
 }

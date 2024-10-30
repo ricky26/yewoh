@@ -1,12 +1,8 @@
 use bevy::ecs::entity::Entity;
-use bevy::ecs::world::{FromWorld, World};
 use bevy::ecs::query::With;
-use serde::{Deserialize, Deserializer, Serializer};
-use serde::de::Error;
+use bevy::ecs::world::{FromWorld, World};
 
-use crate::data::prefab::{PrefabCollection, PrefabCommandsExt};
 use crate::entities::{Persistent, PrefabInstance};
-use crate::persistence::{DeserializeContext, SerializeContext};
 
 use super::BundleSerializer;
 
@@ -35,11 +31,10 @@ impl BundleSerializer for PrefabSerializer {
         item.clone()
     }
 
-    fn serialize<S: Serializer>(_ctx: &SerializeContext, s: S, bundle: &Self::Bundle) -> Result<S::Ok, S::Error> {
-        s.serialize_str(&bundle.prefab_name)
-    }
+    fn insert(world: &mut World, entity: Entity, bundle: Self::Bundle) {
+        world.entity_mut(entity).insert(bundle);
 
-    fn deserialize<'de, D: Deserializer<'de>>(ctx: &mut DeserializeContext, d: D, entity: Entity) -> Result<(), D::Error> {
+        /*
         let prefab_name = String::deserialize(d)?;
         if let Some(prefab) = ctx.world.resource::<PrefabCollection>().get(&prefab_name).cloned() {
             ctx.world.entity_mut(entity)
@@ -52,5 +47,7 @@ impl BundleSerializer for PrefabSerializer {
         } else {
             Err(D::Error::custom(format!("Unable to deserialize prefab {}", &prefab_name)))
         }
+
+         */
     }
 }

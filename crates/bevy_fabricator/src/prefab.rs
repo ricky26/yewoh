@@ -1065,7 +1065,7 @@ pub fn convert(
 
     Ok(Fabricator {
         parameters,
-        fabricate: Arc::new(fabricate),
+        factory: Arc::new(fabricate),
     })
 }
 
@@ -1097,7 +1097,7 @@ mod tests {
         type_registry.register::<Parent>();
         type_registry.register::<Transform>();
         type_registry.register::<Spawn>();
-        let fabricable = convert(&type_registry, &DocumentMap::default(), &doc).unwrap();
+        let fabricator = convert(&type_registry, &DocumentMap::default(), &doc).unwrap();
         drop(type_registry);
 
         let mut world = World::new();
@@ -1113,8 +1113,7 @@ mod tests {
             param1: 42.,
         };
 
-        (fabricable.fabricate)(target, &params, &mut world).unwrap();
-
+        fabricator.fabricate(&params, &mut world, target).unwrap();
 
         let mut found_child = false;
         for entity in world.iter_entities() {

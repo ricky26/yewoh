@@ -28,9 +28,9 @@ pub fn mark_changed(
 
     events.clear();
     for (entity, fabricate, fabricated) in &updatable_entities {
-        let Some(fabricator) = fabricators.get(&fabricate.template) else {
-            if let Some(LoadState::Failed(err)) = asset_server.get_load_state(&fabricate.template) {
-                warn!("failed to load fabricator {:?}: {err}", fabricate.template);
+        let Some(fabricator) = fabricators.get(&fabricate.fabricator) else {
+            if let Some(LoadState::Failed(err)) = asset_server.get_load_state(&fabricate.fabricator) {
+                warn!("failed to load fabricator {:?}: {err}", fabricate.fabricator);
             }
             continue;
         };
@@ -39,7 +39,7 @@ pub fn mark_changed(
             continue;
         };
 
-        let new_factory = Arc::downgrade(&fabricator.fabricate);
+        let new_factory = Arc::downgrade(&fabricator.factory);
         if Weak::ptr_eq(old_factory, &new_factory) {
             continue;
         }

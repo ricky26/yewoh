@@ -4,10 +4,9 @@ use bevy::ecs::entity::Entity;
 use bevy::ecs::world::World;
 use bevy::reflect::Reflect;
 use serde::{Deserialize, Serialize};
-
+use bevy_fabricator::Fabricated;
+use bevy_fabricator::traits::Apply;
 use yewoh_server::world::entity::{Flags, Graphic, Tooltip, TooltipLine};
-
-use crate::data::prefab::{FromPrefabTemplate, PrefabBundle};
 
 pub mod container;
 
@@ -18,22 +17,17 @@ pub struct ItemPrefab {
     hue: u16,
 }
 
-impl FromPrefabTemplate for ItemPrefab {
-    type Template = ItemPrefab;
-
-    fn from_template(template: Self::Template) -> Self {
-        template
-    }
-}
-
-impl PrefabBundle for ItemPrefab {
-    fn write(&self, world: &mut World, entity: Entity) {
+impl Apply for ItemPrefab {
+    fn apply(
+        &self, world: &mut World, entity: Entity, _fabricated: &mut Fabricated,
+    ) -> anyhow::Result<()> {
         world.entity_mut(entity)
             .insert(Graphic {
                 id: self.graphic,
                 hue: self.hue,
             })
             .insert(Flags::default());
+        Ok(())
     }
 }
 
@@ -64,16 +58,10 @@ pub struct TooltipPrefab {
     pub entries: HashMap<String, TooltipLinePrefab>,
 }
 
-impl FromPrefabTemplate for TooltipPrefab {
-    type Template = TooltipPrefab;
-
-    fn from_template(template: Self::Template) -> Self {
-        template
-    }
-}
-
-impl PrefabBundle for TooltipPrefab {
-    fn write(&self, world: &mut World, entity: Entity) {
+impl Apply for TooltipPrefab {
+    fn apply(
+        &self, world: &mut World, entity: Entity, _fabricated: &mut Fabricated,
+    ) -> anyhow::Result<()> {
         let mut tooltip = Tooltip::default();
 
         for (key, prefab) in &self.entries {
@@ -93,5 +81,7 @@ impl PrefabBundle for TooltipPrefab {
 
         world.entity_mut(entity)
             .insert(tooltip);
+
+        Ok(())
     }
 }

@@ -1,10 +1,8 @@
-use bevy::ecs::entity::Entity;
 use bevy::ecs::query::{With, WorldQuery};
 use bevy::ecs::world::{FromWorld, World};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
+use bevy::prelude::Entity;
 use crate::entities::{Persistent, UniqueId};
-use crate::persistence::{BundleSerializer, DeserializeContext, SerializeContext};
+use crate::persistence::BundleSerializer;
 
 pub struct UniqueIdSerializer;
 
@@ -27,15 +25,7 @@ impl BundleSerializer for UniqueIdSerializer {
         item.clone()
     }
 
-    fn serialize<S: Serializer>(_ctx: &SerializeContext, s: S, bundle: &Self::Bundle) -> Result<S::Ok, S::Error> {
-        bundle.serialize(s)
-    }
-
-    fn deserialize<'de, D: Deserializer<'de>>(ctx: &mut DeserializeContext, d: D, entity: Entity) -> Result<(), D::Error> {
-        let id = UniqueId::deserialize(d)?;
-        ctx.world_mut()
-            .entity_mut(entity)
-            .insert(id);
-        Ok(())
+    fn insert(world: &mut World, entity: Entity, bundle: Self::Bundle) {
+        world.entity_mut(entity).insert(bundle);
     }
 }

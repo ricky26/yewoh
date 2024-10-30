@@ -2,9 +2,9 @@ use bevy::ecs::entity::Entity;
 use bevy::ecs::world::World;
 use bevy::reflect::Reflect;
 use serde::Deserialize;
-
+use bevy_fabricator::Fabricated;
+use bevy_fabricator::traits::Apply;
 use crate::characters::{MeleeWeapon, Unarmed};
-use crate::data::prefab::{FromPrefabTemplate, PrefabBundle};
 
 #[derive(Clone, Default, Reflect, Deserialize)]
 pub struct MeleeWeaponPrefab {
@@ -12,18 +12,13 @@ pub struct MeleeWeaponPrefab {
     weapon: MeleeWeapon,
 }
 
-impl FromPrefabTemplate for MeleeWeaponPrefab {
-    type Template = MeleeWeaponPrefab;
-
-    fn from_template(template: Self::Template) -> Self {
-        template
-    }
-}
-
-impl PrefabBundle for MeleeWeaponPrefab {
-    fn write(&self, world: &mut World, entity: Entity) {
+impl Apply for MeleeWeaponPrefab {
+    fn apply(
+        &self, world: &mut World, entity: Entity, _fabricated: &mut Fabricated,
+    ) -> anyhow::Result<()> {
         world.entity_mut(entity)
             .insert(self.weapon.clone());
+        Ok(())
     }
 }
 
@@ -33,19 +28,14 @@ pub struct UnarmedPrefab {
     weapon: MeleeWeapon,
 }
 
-impl FromPrefabTemplate for UnarmedPrefab {
-    type Template = UnarmedPrefab;
-
-    fn from_template(template: Self::Template) -> Self {
-        template
-    }
-}
-
-impl PrefabBundle for UnarmedPrefab {
-    fn write(&self, world: &mut World, entity: Entity) {
+impl Apply for UnarmedPrefab {
+    fn apply(
+        &self, world: &mut World, entity: Entity, _fabricated: &mut Fabricated,
+    ) -> anyhow::Result<()> {
         world.entity_mut(entity)
             .insert(Unarmed {
                 weapon: self.weapon.clone(),
             });
+        Ok(())
     }
 }

@@ -127,7 +127,7 @@ pub struct Multi {
 }
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Component, Reflect, Serialize, Deserialize)]
-#[reflect(Component)]
+#[reflect(Default, Component)]
 pub struct Location {
     pub position: IVec3,
     pub map_id: u8,

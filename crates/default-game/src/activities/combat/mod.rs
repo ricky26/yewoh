@@ -18,7 +18,6 @@ use yewoh_server::world::spatial::NetClientPositions;
 use crate::activities::{CurrentActivity, progress_current_activity};
 use crate::characters::{Alive, CharacterDied, Corpse, CorpseSpawned, DamageDealt, HitAnimation, MeleeWeapon, Unarmed};
 use crate::characters::animation::AnimationStartedEvent;
-use crate::data::prefab::PrefabAppExt;
 
 mod prefabs;
 
@@ -220,8 +219,6 @@ impl Plugin for CombatPlugin {
             .add_event::<CharacterDied>()
             .add_event::<CorpseSpawned>()
             .add_event::<DamageDealt>()
-            .init_prefab_bundle::<prefabs::MeleeWeaponPrefab>("melee_weapon")
-            .init_prefab_bundle::<prefabs::UnarmedPrefab>("unarmed")
             .add_systems(Update, (
                 handle_attack_requests,
                 update_weapon_stats,

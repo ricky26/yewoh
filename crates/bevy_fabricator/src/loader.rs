@@ -55,7 +55,7 @@ impl AssetLoader for FabricatorLoader {
                     .map_or_else(|| PathBuf::from(&dep_path), |d| d.join(&dep_path));
 
                 let loaded = load_context.loader().immediate().load::<Fabricator>(abs_dep_path.as_path()).await?;
-                deps.insert(dep_path, loaded.get().fabricate.clone());
+                deps.insert(dep_path, loaded.get().factory.clone());
             }
 
             let type_registry = type_registry.read();

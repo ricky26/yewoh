@@ -1,5 +1,6 @@
 use std::any::TypeId;
 use std::sync::{Arc, LazyLock, Weak};
+use anyhow::bail;
 use bevy::asset::LoadState;
 use bevy::ecs::entity::MapEntities;
 use bevy::prelude::*;
@@ -35,7 +36,15 @@ pub struct FabricationParameter {
 pub struct Fabricator {
     pub parameters: HashMap<String, FabricationParameter>,
     #[reflect(ignore)]
-    pub fabricate: Factory,
+    pub factory: Factory,
+}
+
+impl Fabricator {
+    pub fn fabricate(
+        &self, parameters: &dyn PartialReflect, world: &mut World, entity: Entity,
+    ) -> anyhow::Result<Fabricated> {
+        (self.factory)(entity, parameters, world)
+    }
 }
 
 static EMPTY_REFLECT: LazyLock<Arc<dyn PartialReflect>> = LazyLock::new(|| Arc::new(()));
@@ -47,16 +56,56 @@ pub fn empty_reflect() -> Arc<dyn PartialReflect> {
 #[derive(Clone, Debug, Reflect, Component)]
 #[reflect(Default, Component)]
 pub struct Fabricate {
-    pub template: Handle<Fabricator>,
+    pub fabricator: Handle<Fabricator>,
     pub parameters: Arc<dyn PartialReflect>,
+}
+
+impl Fabricate {
+    pub fn with_handle(fabricator: Handle<Fabricator>) -> Fabricate {
+        Fabricate {
+            fabricator,
+            parameters: empty_reflect(),
+        }
+    }
+
+    pub fn to_request(
+        &self, fabricators: &Assets<Fabricator>, asset_server: Option<&AssetServer>,
+    ) -> anyhow::Result<Option<FabricateRequest>> {
+        match fabricators.get(&self.fabricator) {
+            Some(template) => Ok(Some(FabricateRequest {
+                factory: template.factory.clone(),
+                parameters: self.parameters.clone(),
+            })),
+            None => {
+                let result = asset_server
+                    .and_then(|s| s.get_load_state(&self.fabricator));
+                if let Some(LoadState::Failed(err)) = result {
+                    bail!("failed to fabricate: {err}");
+                }
+                Ok(None)
+            }
+        }
+    }
 }
 
 impl Default for Fabricate {
     fn default() -> Self {
         Fabricate {
-            template: Handle::default(),
+            fabricator: Handle::default(),
             parameters: empty_reflect(),
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct FabricateRequest {
+    pub factory: Factory,
+    pub parameters: Arc<dyn PartialReflect>,
+}
+
+impl FabricateRequest {
+    pub fn fabricate(&self, world: &mut World, entity: Entity) -> anyhow::Result<Fabricated> {
+        (self.factory)(entity, &self.parameters, world)
     }
 }
 
@@ -97,19 +146,20 @@ pub fn fabricate(
     to_fabricate: Query<(Entity, &Fabricate), Without<Fabricated>>,
 ) {
     for (entity, request) in &to_fabricate {
-        let Some(template) = templates.get(&request.template) else {
-            if let Some(LoadState::Failed(err)) = asset_server.get_load_state(&request.template) {
+        let request = match request.to_request(&templates, Some(&asset_server)) {
+            Ok(Some(r)) => r,
+            Ok(None) => continue,
+            Err(err) => {
                 commands.entity(entity).insert(Fabricated::default());
-                warn!("failed to fabricate {entity:?}: {err}");
-            }
-            return;
+                warn!("{err}");
+                continue;
+            },
         };
-        let fabricate = template.fabricate.clone();
-        let parameters = request.parameters.clone();
+
         commands.queue(move |world: &mut World| {
-            match fabricate(entity, &parameters, world) {
+            match request.fabricate(world, entity) {
                 Ok(mut result) => {
-                    result.factory = Some(Arc::downgrade(&fabricate));
+                    result.factory = Some(Arc::downgrade(&request.factory));
                     world.entity_mut(entity).insert(result);
                 }
                 Err(err) => {
@@ -123,21 +173,18 @@ pub fn fabricate(
 pub trait FabricateExt {
     fn fabricate(
         &mut self,
-        factory: impl Into<Factory>,
-        parameters: impl Into<Arc<dyn PartialReflect>>,
+        request: impl Into<FabricateRequest>,
     ) -> &mut Self;
 }
 
 impl FabricateExt for EntityCommands<'_> {
     fn fabricate(
         &mut self,
-        factory: impl Into<Factory>,
-        parameters: impl Into<Arc<dyn PartialReflect>>,
+        request: impl Into<FabricateRequest>,
     ) -> &mut Self {
-        let factory = factory.into();
-        let parameters = parameters.into();
+        let request = request.into();
         self.queue::<()>(move |entity, world: &mut World| {
-            if let Err(err) = factory(entity, &parameters, world) {
+            if let Err(err) = request.fabricate(world, entity) {
                 error!("failed to fabricate: {err}");
             }
         });
@@ -148,14 +195,12 @@ impl FabricateExt for EntityCommands<'_> {
 impl FabricateExt for EntityWorldMut<'_> {
     fn fabricate(
         &mut self,
-        factory: impl Into<Factory>,
-        parameters: impl Into<Arc<dyn PartialReflect>>,
+        request: impl Into<FabricateRequest>,
     ) -> &mut Self {
-        let factory = factory.into();
-        let parameters = parameters.into();
+        let request = request.into();
         let entity = self.id();
         self.world_scope(|world| {
-            if let Err(err) = factory(entity, &parameters, world) {
+            if let Err(err) = request.fabricate(world, entity) {
                 error!("failed to fabricate: {err}");
             }
         });

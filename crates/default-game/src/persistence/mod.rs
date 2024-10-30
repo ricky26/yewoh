@@ -1,22 +1,25 @@
-use std::cell::RefCell;
+use std::any::TypeId;
 use std::cmp::Ordering;
 use std::collections::{HashMap, VecDeque};
 
 use bevy::app::{App, Plugin};
-use bevy::ecs::entity::Entity;
+use bevy::ecs::entity::{Entity, EntityHashMap};
 use bevy::ecs::query::{QueryFilter, ReadOnlyQueryData, WorldQuery};
+use bevy::ecs::reflect::ReflectMapEntities;
 use bevy::ecs::schedule::ScheduleLabel;
 use bevy::ecs::system::{Deferred, Query, Resource, SystemBuffer, SystemMeta, SystemParam};
 use bevy::ecs::world::{FromWorld, Mut, World};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use bevy::prelude::{AppTypeRegistry, EntityMapper, FromReflect};
+use bevy::reflect::{GetTypeRegistration, PartialReflect, TypeRegistry, Typed};
+use de::{BundleValuesVisitor, WorldVisitor};
+pub use hierarchy::{set_persistent, ChangePersistence, PersistenceCommandsExt};
+use ser::{BufferBundlesSerializer, BufferSerializer};
 use serde::de::Error as DError;
 use serde::ser::SerializeStruct;
-use sqlx::{Database, Pool};
+use serde::{Deserializer, Serializer};
 use sqlx::migrate::Migrate;
-
-use de::{BundleValuesVisitor, WorldVisitor};
-pub use hierarchy::{ChangePersistence, PersistenceCommandsExt, set_persistent};
-use ser::{BufferBundlesSerializer, BufferSerializer};
+use sqlx::{Database, Pool};
+use tracing::{error, info};
 
 use crate::persistence::prefab::PrefabSerializer;
 
@@ -24,7 +27,6 @@ mod ser;
 mod de;
 mod hierarchy;
 pub mod prefab;
-pub mod entity;
 pub mod db;
 
 pub async fn migrate<D: Database>(db: &Pool<D>) -> anyhow::Result<()>
@@ -37,50 +39,12 @@ where
     Ok(())
 }
 
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
-pub struct EntityReference(u32);
-
-#[derive(Default)]
-pub struct SerializeContextInner {
-    next_entity_id: u32,
-    entity_map: HashMap<Entity, EntityReference>,
+pub struct SerializeContext<'a> {
+    type_registry: &'a TypeRegistry,
 }
 
-impl SerializeContextInner {
-    pub fn map_entity(&mut self, entity: Entity) -> EntityReference {
-        *self.entity_map.entry(entity)
-            .or_insert_with(|| {
-                self.next_entity_id += 1;
-                EntityReference(self.next_entity_id)
-            })
-    }
-}
-
-#[derive(Default)]
-pub struct SerializeContext {
-    inner: RefCell<SerializeContextInner>,
-}
-
-impl SerializeContext {
-    pub fn map_entity(&self, entity: Entity) -> EntityReference {
-        self.inner.borrow_mut().map_entity(entity)
-    }
-}
-
-pub struct DeserializeContext<'w> {
-    entity_map: HashMap<EntityReference, Entity>,
-    world: &'w mut World,
-}
-
-impl<'w> DeserializeContext<'w> {
-    pub fn world_mut(&mut self) -> &mut World {
-        self.world
-    }
-
-    pub fn map_entity(&mut self, reference: EntityReference) -> Entity {
-        *self.entity_map.entry(reference)
-            .or_insert_with(|| self.world.spawn_empty().id())
-    }
+pub struct DeserializeContext<'a> {
+    type_registry: &'a TypeRegistry,
 }
 
 #[derive(ScheduleLabel, Hash, Debug, Clone, PartialEq, Eq)]
@@ -89,21 +53,23 @@ pub struct SerializeSchedule;
 pub trait BundleSerializer: FromWorld + Send + 'static {
     type Query: ReadOnlyQueryData;
     type Filter: QueryFilter;
-    type Bundle: Send + Sync + 'static;
+    type Bundle: Typed + FromReflect + GetTypeRegistration;
 
     fn id() -> &'static str;
     fn priority() -> i32 { 0 }
     fn extract(item: <Self::Query as WorldQuery>::Item<'_>) -> Self::Bundle;
-    fn serialize<S: Serializer>(ctx: &SerializeContext, s: S, bundle: &Self::Bundle) -> Result<S::Ok, S::Error>;
-    fn deserialize<'de, D: Deserializer<'de>>(ctx: &mut DeserializeContext, d: D, entity: Entity) -> Result<(), D::Error>;
+    fn insert(world: &mut World, entity: Entity, bundle: Self::Bundle);
 }
 
-type BundleDeserializer = fn(ctx: &mut DeserializeContext, d: &mut dyn erased_serde::Deserializer) -> Result<(), erased_serde::Error>;
+type BundleDeserializer = fn(ctx: &mut DeserializeContext, d: &mut dyn erased_serde::Deserializer) -> Result<Box<dyn PartialReflect>, erased_serde::Error>;
+type BundleMapper = fn(type_registry: &TypeRegistry, mapper: &mut dyn EntityMapper, bundles: &mut dyn PartialReflect);
+type BundleSpawner = fn(world: &mut World, bundles: Box<dyn PartialReflect>);
+
 
 pub struct SerializedBuffer {
     serializer_id: String,
     priority: i32,
-    serialize: Box<dyn Fn(&SerializeContext, &mut dyn FnMut(&dyn erased_serde::Serialize)) + Send + Sync + 'static>,
+    serialize: Box<dyn Fn(&mut dyn FnMut(&dyn erased_serde::Serialize)) + Send + Sync + 'static>,
 }
 
 impl PartialEq<Self> for SerializedBuffer {
@@ -134,8 +100,7 @@ pub struct SerializedBuffers {
 impl SerializedBuffers {
     pub fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         let mut world = s.serialize_struct("World", 1)?;
-        let ctx = &SerializeContext::default();
-        world.serialize_field("bundles", &BufferBundlesSerializer::new(ctx, &self.buffers))?;
+        world.serialize_field("bundles", &BufferBundlesSerializer::new(&self.buffers))?;
         world.end()
     }
 }
@@ -159,8 +124,14 @@ impl<T: BundleSerializer> SystemBuffer for SerializedBundlesBuffer<T> {
             return;
         }
 
-        let serialize = move |ctx: &SerializeContext, callback: &mut dyn FnMut(&dyn erased_serde::Serialize)|
-            callback(&BufferSerializer::<T>::new(ctx, &items));
+        let type_registry = world.resource::<AppTypeRegistry>().clone();
+        let serialize = move |callback: &mut dyn FnMut(&dyn erased_serde::Serialize)| {
+            let type_registry = type_registry.read();
+            let ctx = SerializeContext {
+                type_registry: &type_registry,
+            };
+            callback(&BufferSerializer::<T>::new(&ctx, &items));
+        };
         let buffer = SerializedBuffer {
             serializer_id: T::id().to_string(),
             priority: T::priority(),
@@ -190,6 +161,23 @@ impl<'w, T: BundleSerializer> SerializedBundles<'w, T> {
     }
 }
 
+struct NewEntityMapper<'a> {
+    entity_map: &'a mut EntityHashMap<Entity>,
+    world: &'a mut World,
+}
+
+impl EntityMapper for NewEntityMapper<'_> {
+    fn map_entity(&mut self, entity: Entity) -> Entity {
+        if let Some(existing) = self.entity_map.get(&entity) {
+            *existing
+        } else {
+            let new_entity = self.world.spawn_empty().id();
+            self.entity_map.insert(entity, new_entity);
+            new_entity
+        }
+    }
+}
+
 fn extract_bundles<T: BundleSerializer>(
     query: Query<(Entity, T::Query), T::Filter>,
     mut bundles: SerializedBundles<T>,
@@ -198,24 +186,63 @@ fn extract_bundles<T: BundleSerializer>(
         .map(|(entity, item)| (entity, T::extract(item))));
 }
 
-fn deserialize_bundles<T: BundleSerializer>(ctx: &mut DeserializeContext, d: &mut dyn erased_serde::Deserializer) -> Result<(), erased_serde::Error> {
+fn deserialize_bundles<T: BundleSerializer>(ctx: &mut DeserializeContext, d: &mut dyn erased_serde::Deserializer) -> Result<Box<dyn PartialReflect>, erased_serde::Error> {
     d.deserialize_seq(BundleValuesVisitor::<T>::new(ctx))
+}
+
+fn map_bundles<T: BundleSerializer>(
+    type_registry: &TypeRegistry, mapper: &mut dyn EntityMapper, bundles: &mut dyn PartialReflect,
+) {
+    let bundles = bundles.try_downcast_mut::<Vec<(Entity, T::Bundle)>>().unwrap();
+    let registration = type_registry.get(TypeId::of::<T::Bundle>())
+        .expect("bundle type not registered");
+    let map_entities = registration.data::<ReflectMapEntities>();
+
+    for (entity, ref mut bundle) in bundles {
+        *entity = mapper.map_entity(*entity);
+
+        if let Some(map_entities) = &map_entities {
+            map_entities.map_entities(bundle, mapper);
+        }
+    }
+}
+
+fn spawn_bundles<T: BundleSerializer>(
+    world: &mut World, bundles: Box<dyn PartialReflect>,
+) {
+    let bundles = *bundles.try_downcast::<Vec<(Entity, T::Bundle)>>().unwrap();
+
+    for (entity, bundle) in bundles {
+        T::insert(world, entity, bundle);
+    }
+}
+
+struct BundleOps {
+    deserialize: BundleDeserializer,
+    map_entities: BundleMapper,
+    spawn: BundleSpawner,
 }
 
 #[derive(Default, Resource)]
 pub struct BundleSerializers {
-    deserializers: HashMap<String, BundleDeserializer>,
+    ops: HashMap<String, BundleOps>,
 }
 
 impl BundleSerializers {
     pub fn insert<T: BundleSerializer>(&mut self) {
-        self.deserializers.insert(T::id().to_string(), deserialize_bundles::<T>);
+        self.ops.insert(T::id().to_string(), BundleOps {
+            deserialize: deserialize_bundles::<T>,
+            map_entities: map_bundles::<T>,
+            spawn: spawn_bundles::<T>,
+        });
     }
 
-    pub fn deserialize_bundle_values<'de, D: Deserializer<'de>>(&self, ctx: &mut DeserializeContext, id: &str, d: D) -> Result<(), D::Error> {
-        if let Some(deserialize) = self.deserializers.get(id) {
+    fn deserialize_bundle_values<'de, D: Deserializer<'de>>(
+        &self, ctx: &mut DeserializeContext, id: &str, d: D,
+    ) -> Result<Box<dyn PartialReflect>, D::Error> {
+        if let Some(ops) = self.ops.get(id) {
             let mut d = <dyn erased_serde::Deserializer>::erase(d);
-            deserialize(ctx, &mut d)
+            (ops.deserialize)(ctx, &mut d)
                 .map_err(D::Error::custom)
         } else {
             Err(D::Error::custom(format!("unknown bundle ID {id}")))
@@ -223,15 +250,44 @@ impl BundleSerializers {
     }
 
     pub fn deserialize_into_world<'de, D: Deserializer<'de>>(&self, world: &mut World, d: D) -> Result<(), D::Error> {
-        let mut ctx = DeserializeContext {
-            entity_map: Default::default(),
-            world,
+        let mut bundles = {
+            let type_registry = world.resource::<AppTypeRegistry>().read();
+            let mut ctx = DeserializeContext {
+                type_registry: &type_registry,
+            };
+
+             d.deserialize_struct("World", &["bundles"], WorldVisitor {
+                ctx: &mut ctx,
+                deserializers: self,
+            })?
         };
 
-        d.deserialize_struct("World", &["bundles"], WorldVisitor {
-            ctx: &mut ctx,
-            deserializers: self,
-        })
+        let mut entity_map = EntityHashMap::default();
+        {
+            let mut mapper = NewEntityMapper { entity_map: &mut entity_map, world };
+            let type_registry = mapper.world.resource::<AppTypeRegistry>().clone();
+            let type_registry = type_registry.read();
+
+            for (id, bundles) in &mut bundles {
+                match self.ops.get(id) {
+                    Some(ops) => (ops.map_entities)(&type_registry, &mut mapper, bundles.as_mut()),
+                    None => {
+                        error!("unknown bundle type {id}");
+                    }
+                }
+            }
+        }
+
+        for (id, bundles) in bundles {
+            match self.ops.get(&id) {
+                Some(ops) => (ops.spawn)(world, bundles),
+                None => {
+                    error!("unknown bundle type {id}");
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -262,6 +318,7 @@ impl SerializationSetupExt for App {
         self.world_mut().init_resource::<BundleSerializers>();
         self.world_mut().resource_mut::<BundleSerializers>().insert::<T>();
         self
+            .register_type::<T::Bundle>()
             .add_systems(SerializeSchedule, extract_bundles::<T>)
     }
 }
