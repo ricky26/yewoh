@@ -16,7 +16,6 @@ use clap::Parser;
 use futures::future::join;
 use tokio::fs;
 use tokio::net::{lookup_host, TcpListener};
-use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 use tokio::time::sleep;
 use tracing::info;
@@ -137,7 +136,7 @@ async fn main() -> anyhow::Result<()> {
     create_statics(app.world_mut(), &map_infos, &tile_data, &args.uo_data_path).await?;
 
     // Load prefabs
-    let prefabs = load_prefabs(&mut app, &args.data_path, "prefabs").await?;
+    let (prefabs, prefab_handles) = load_prefabs(&mut app, &args.data_path, "prefabs").await?;
 
     // Spawn map data
     let mut query = app.world_mut().query_filtered::<(), With<Chunk>>();
@@ -167,7 +166,7 @@ async fn main() -> anyhow::Result<()> {
         .serve(http_app.into_make_service()));
 
     app
-        .insert_resource(AsyncRuntime::from(Handle::current()))
+        .insert_resource(AsyncRuntime::from(tokio::runtime::Handle::current()))
         .insert_resource(NetServer::new(args.encryption, new_session_requests, new_session_rx))
         .insert_resource(map_infos)
         .insert_resource(static_data)
@@ -176,9 +175,11 @@ async fn main() -> anyhow::Result<()> {
         .insert_resource(world_repo.clone())
         .insert_resource(accounts_repo.clone())
         .insert_resource(prefabs)
+        .insert_resource(prefab_handles)
         .add_systems(Last, (
             scheduled_save,
             update_static_entities,
+            update_prefabs,
         ));
 
     // Load previous state
@@ -233,11 +234,14 @@ async fn main() -> anyhow::Result<()> {
     }
 }
 
+#[derive(Resource)]
+struct PrefabHandles(Vec<Handle<Fabricator>>);
+
 async fn load_prefabs(
     app: &mut App,
     root_path: &Path,
     start_path: impl Into<PathBuf>,
-) -> anyhow::Result<PrefabLibrary> {
+) -> anyhow::Result<(PrefabLibrary, PrefabHandles)> {
     let mut to_visit = VecDeque::new();
     to_visit.push_back(start_path.into());
 
@@ -264,6 +268,7 @@ async fn load_prefabs(
         }
     }
 
+    let mut handles = Vec::new();
     let mut library = PrefabLibrary::default();
     for (name, handle) in queue {
         loop {
@@ -280,11 +285,49 @@ async fn load_prefabs(
 
         let fabricators = app.world().resource::<Assets<Fabricator>>();
         let fabricator = fabricators.get(&handle).unwrap().clone();
+        handles.push(handle);
         library.insert(name, fabricator);
     }
 
     info!("Loaded {} prefabs", library.len());
-    Ok(library)
+    Ok((library, PrefabHandles(handles)))
+}
+
+fn update_prefabs(
+    mut events: EventReader<AssetEvent<Fabricator>>,
+    mut prefabs: ResMut<PrefabLibrary>,
+    asset_server: Res<AssetServer>,
+    fabricators: Res<Assets<Fabricator>>,
+) {
+    let update_prefab = |prefabs: &mut ResMut<PrefabLibrary>, asset_server: &AssetServer, fabricators: &Assets<Fabricator>, id: AssetId<Fabricator>| {
+        let Some(fabricator) = fabricators.get(id) else {
+            return;
+        };
+
+        let Some(path) = asset_server.get_path(id) else {
+            return;
+        };
+
+        if !path.path().starts_with("prefabs/") {
+            return;
+        }
+
+        let name = path.path().file_stem().unwrap().to_string_lossy().to_string();
+        info!("Reloaded prefab '{name}'");
+        prefabs.insert(name, fabricator.clone());
+    };
+
+    for event in events.read() {
+        match event {
+            AssetEvent::LoadedWithDependencies { id } => {
+                update_prefab(&mut prefabs, asset_server.as_ref(), fabricators.as_ref(), *id);
+            }
+            AssetEvent::Modified { id } => {
+                update_prefab(&mut prefabs, asset_server.as_ref(), fabricators.as_ref(), *id);
+            }
+            _ => {}
+        }
+    }
 }
 
 #[derive(Component)]
