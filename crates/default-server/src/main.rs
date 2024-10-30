@@ -3,8 +3,8 @@ use std::io::Cursor;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail};
@@ -14,31 +14,31 @@ use bevy::prelude::*;
 use bevy::time::Time;
 use clap::Parser;
 use futures::future::join;
-use tracing::info;
 use tokio::fs;
 use tokio::net::{lookup_host, TcpListener};
+use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 use tokio::time::sleep;
-use tokio::runtime::Handle;
+use tracing::info;
 
 use yewoh::assets::multi::load_multi_data;
 use yewoh::assets::tiles::load_tile_data;
 use yewoh_default_game::data::static_data;
-use yewoh_default_game::DefaultGamePlugins;
 use yewoh_default_game::persistence::{migrate, SerializationWorldExt, SerializedBuffers};
+use yewoh_default_game::DefaultGamePlugins;
 use yewoh_server::async_runtime::AsyncRuntime;
 use yewoh_server::game_server::listen_for_game;
 use yewoh_server::lobby::{listen_for_lobby, LocalServerRepository};
-use yewoh_server::world::map::{Chunk, create_map_entities, create_statics, MultiDataResource, Static, TileDataResource};
-use yewoh_server::world::net::{NetCommandsExt, NetServer};
+use yewoh_server::world::map::{create_map_entities, create_statics, Chunk, MultiDataResource, Static, TileDataResource};
+use yewoh_server::world::net::{AssignNetId, NetServer};
 use yewoh_server::world::ServerPlugin;
 
-use sqlx::postgres::PgPool;
-use bevy_fabricator::{empty_reflect, Fabricate, FabricateExt, Fabricator};
 use bevy_fabricator::hot_reload::{FabricatorChanged, WatchForFabricatorChanges};
+use bevy_fabricator::{empty_reflect, Fabricate, FabricateExt, Fabricator};
+use sqlx::postgres::PgPool;
 use yewoh_default_game::accounts::sql::{SqlAccountRepository, SqlAccountRepositoryConfig};
+use yewoh_default_game::data::prefabs::PrefabLibrary;
 use yewoh_default_game::persistence::db::WorldRepository;
-use yewoh_server::world::hierarchy::DespawnRecursiveExt;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
@@ -136,6 +136,9 @@ async fn main() -> anyhow::Result<()> {
     info!("Loading statics...");
     create_statics(app.world_mut(), &map_infos, &tile_data, &args.uo_data_path).await?;
 
+    // Load prefabs
+    let prefabs = load_prefabs(&mut app, &args.data_path, "prefabs").await?;
+
     // Spawn map data
     let mut query = app.world_mut().query_filtered::<(), With<Chunk>>();
     info!("Spawned {} map chunks", query.iter(app.world()).count());
@@ -172,6 +175,7 @@ async fn main() -> anyhow::Result<()> {
         .insert_resource(MultiDataResource { multi_data })
         .insert_resource(world_repo.clone())
         .insert_resource(accounts_repo.clone())
+        .insert_resource(prefabs)
         .add_systems(Last, (
             scheduled_save,
             update_static_entities,
@@ -227,6 +231,60 @@ async fn main() -> anyhow::Result<()> {
            sleep(frame_wait - frame_duration).await;
         }
     }
+}
+
+async fn load_prefabs(
+    app: &mut App,
+    root_path: &Path,
+    start_path: impl Into<PathBuf>,
+) -> anyhow::Result<PrefabLibrary> {
+    let mut to_visit = VecDeque::new();
+    to_visit.push_back(start_path.into());
+
+    let asset_server = app.world().resource::<AssetServer>().clone();
+    let mut queue = Vec::new();
+
+    while let Some(dir_path) = to_visit.pop_front() {
+        let abs_dir_path = root_path.join(&dir_path);
+
+        let mut entries = fs::read_dir(&abs_dir_path).await?;
+        while let Some(entry) = entries.next_entry().await? {
+            let metadata = entry.metadata().await?;
+            if metadata.is_dir() {
+                to_visit.push_back(dir_path.join(entry.file_name()));
+            } else if let Some(name) = entry.file_name().to_str() {
+                if name.ends_with(".fab") {
+                    let full_path = dir_path.join(entry.file_name());
+                    let name = full_path.file_stem().unwrap().to_string_lossy().to_string();
+                    let asset_path = AssetPath::from(full_path);
+                    let handle = asset_server.load(asset_path);
+                    queue.push((name, handle));
+                }
+            }
+        }
+    }
+
+    let mut library = PrefabLibrary::default();
+    for (name, handle) in queue {
+        loop {
+            match asset_server.get_load_state(&handle).unwrap() {
+                LoadState::NotLoaded => unreachable!(),
+                LoadState::Loading => {
+                    app.update();
+                    continue;
+                },
+                LoadState::Loaded => break,
+                LoadState::Failed(err) => bail!("failed to load asset: {err}"),
+            }
+        }
+
+        let fabricators = app.world().resource::<Assets<Fabricator>>();
+        let fabricator = fabricators.get(&handle).unwrap().clone();
+        library.insert(name, fabricator);
+    }
+
+    info!("Loaded {} prefabs", library.len());
+    Ok(library)
 }
 
 #[derive(Component)]
@@ -291,9 +349,9 @@ async fn load_static_entities(
                 StaticEntity(asset_path),
                 fabricate,
                 WatchForFabricatorChanges,
+                AssignNetId,
             ))
-            .fabricate(request)
-            .assign_network_id();
+            .fabricate(request);
         count += 1;
     }
 
@@ -327,9 +385,9 @@ fn update_static_entities(
                 StaticEntity(asset_path),
                 fabricate,
                 WatchForFabricatorChanges,
+                AssignNetId,
             ))
-            .fabricate(request)
-            .assign_network_id();
+            .fabricate(request);
     }
 }
 

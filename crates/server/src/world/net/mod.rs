@@ -26,15 +26,12 @@ pub use view::{
     send_opened_containers,
 };
 pub use entity::{
-    NetEntity,
+    NetId,
     NetEntityLookup,
-    NetEntityAllocator,
-    NetOwner,
-    NetCommandsExt,
+    NetIdAllocator,
+    OwningClient,
     AssignNetId,
-    add_new_entities_to_lookup,
-    remove_old_entities_from_lookup,
-    assign_network_id,
+    assign_net_ids,
 };
 pub use combat::{
     send_updated_attack_target,

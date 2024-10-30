@@ -4,7 +4,7 @@ use glam::{IVec2, IVec3};
 
 use yewoh::protocol::OpenGump;
 use yewoh_server::gump_builder::{GumpBuilder, GumpText};
-use yewoh_server::world::entity::Location;
+use yewoh_server::world::entity::MapPosition;
 use yewoh_server::world::net::{NetClient, Possessing};
 
 use crate::commands::{TextCommand, TextCommandQueue};
@@ -87,7 +87,7 @@ fn show_go_gump(client: &NetClient) {
 
 pub fn go(
     clients: Query<(&NetClient, &Possessing)>,
-    mut characters: Query<&mut Location>,
+    mut characters: Query<&mut MapPosition>,
     mut exec: TextCommandQueue<Go>,
 ) {
     for (from, args) in exec.iter() {

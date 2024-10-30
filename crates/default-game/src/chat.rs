@@ -4,7 +4,7 @@ use yewoh::protocol::{MessageKind, Packet, UnicodeTextMessage};
 use yewoh::types::FixedString;
 use yewoh_server::world::entity::Stats;
 use yewoh_server::world::events::ChatRequestEvent;
-use yewoh_server::world::net::{broadcast, NetClient, NetEntity, Possessing};
+use yewoh_server::world::net::{broadcast, NetClient, NetId, Possessing};
 
 use crate::commands::TextCommandExecutor;
 
@@ -12,7 +12,7 @@ pub fn handle_incoming_chat(
     mut events: EventReader<ChatRequestEvent>,
     mut command_executor: TextCommandExecutor,
     clients: Query<(&NetClient, &Possessing)>,
-    character_query: Query<(&NetEntity, &Stats)>,
+    character_query: Query<(&NetId, &Stats)>,
 ) {
     for ChatRequestEvent { client_entity: client, request } in events.read() {
         if command_executor.try_split_exec(*client, &request.text) {

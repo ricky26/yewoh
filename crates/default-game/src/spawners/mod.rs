@@ -13,8 +13,8 @@ use serde::Deserialize;
 use serde_yaml::Value;
 use bevy_fabricator::{Fabricator, FabricateExt, Fabricated, Fabricate};
 use bevy_fabricator::traits::Apply;
-use yewoh_server::world::entity::Location;
-use yewoh_server::world::net::NetCommandsExt;
+use yewoh_server::world::entity::MapPosition;
+use yewoh_server::world::net::AssignNetId;
 
 fn to_reflect(value: &Value) -> anyhow::Result<Box<dyn PartialReflect>> {
     let v = match value {
@@ -110,7 +110,7 @@ pub fn spawn_from_spawners(
     time: Res<Time>,
     asset_server: Res<AssetServer>,
     fabricators: Res<Assets<Fabricator>>,
-    mut spawners: Query<(&mut Spawner, &mut SpawnedEntities, &Location)>,
+    mut spawners: Query<(&mut Spawner, &mut SpawnedEntities, &MapPosition)>,
     spawned_entities: Query<(), With<Spawned>>,
     mut commands: Commands,
 ) {
@@ -135,9 +135,12 @@ pub fn spawn_from_spawners(
 
         let spawned_entity = commands.spawn_empty()
             .fabricate(request)
-            .insert(Spawned)
+            .insert((
+                Spawned,
+                AssignNetId,
+                *position,
+            ))
             .insert(*position)
-            .assign_network_id()
             .id();
 
         spawned.entities.push(spawned_entity);

@@ -5,7 +5,7 @@ use bevy_fabricator::traits::{Apply, ReflectApply};
 use bevy_fabricator::Fabricated;
 use serde::Deserialize;
 use yewoh::Notoriety;
-use yewoh_server::world::entity::{Character, Flags, Location, Notorious, Stats};
+use yewoh_server::world::entity::{Character, Flags, MapPosition, Notorious, Stats};
 
 use crate::activities::CurrentActivity;
 use crate::characters::{Alive, Animation, HitAnimation};
@@ -50,12 +50,11 @@ impl Apply for CharacterPrefab {
         commands
             .insert((
                 Flags::default(),
-                Location::default(),
+                MapPosition::default(),
                 Notorious(self.notoriety),
                 Character {
                     body_type: self.body_type,
                     hue: self.hue,
-                    equipment: Vec::new(),
                 },
                 Stats {
                     name: self.name.to_string(),

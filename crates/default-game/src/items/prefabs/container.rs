@@ -46,7 +46,6 @@ impl Apply for ContainerPrefab {
         world.entity_mut(entity)
             .insert(Container {
                 gump_id: self.gump,
-                items: Vec::new(),
             })
             .insert(Flags::default());
 

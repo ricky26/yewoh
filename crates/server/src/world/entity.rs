@@ -49,56 +49,18 @@ impl DerefMut for Notorious {
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Reflect)]
-pub struct CharacterEquipped {
-    pub entity: Entity,
-    #[reflect(remote = crate::remote_reflect::EquipmentSlotRemote)]
-    pub slot: EquipmentSlot,
-}
-
-impl CharacterEquipped {
-    pub fn new(slot: EquipmentSlot, entity: Entity) -> CharacterEquipped {
-        Self {
-            entity,
-            slot,
-        }
-    }
-}
-
 #[derive(Default, Debug, Clone, Eq, PartialEq, Component, Reflect)]
-#[reflect(Component, MapEntities)]
+#[reflect(Component)]
 pub struct Character {
     pub body_type: u16,
     pub hue: u16,
-    pub equipment: Vec<CharacterEquipped>,
 }
 
-impl MapEntities for Character {
-    fn map_entities<M: EntityMapper>(&mut self, entity_mapper: &mut M) {
-        for equipment in &mut self.equipment {
-            equipment.entity = entity_mapper.map_entity(equipment.entity);
-        }
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Component, Reflect)]
-#[reflect(Component, MapEntities)]
-pub struct EquippedBy {
-    pub parent: Entity,
+#[derive(Debug, Clone, Default, Eq, PartialEq, Component, Reflect)]
+#[reflect(Component)]
+pub struct EquippedPosition {
     #[reflect(remote = crate::remote_reflect::EquipmentSlotRemote)]
     pub slot: EquipmentSlot,
-}
-
-impl FromWorld for EquippedBy {
-    fn from_world(_world: &mut World) -> Self {
-        EquippedBy { parent: Entity::PLACEHOLDER, slot: EquipmentSlot::default() }
-    }
-}
-
-impl MapEntities for EquippedBy {
-    fn map_entities<M: EntityMapper>(&mut self, entity_mapper: &mut M) {
-        self.parent = entity_mapper.map_entity(self.parent);
-    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Component, Reflect)]
@@ -128,7 +90,7 @@ pub struct Multi {
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Component, Reflect, Serialize, Deserialize)]
 #[reflect(Default, Component)]
-pub struct Location {
+pub struct MapPosition {
     pub position: IVec3,
     pub map_id: u8,
     #[serde(default)]
@@ -136,8 +98,8 @@ pub struct Location {
     pub direction: Direction,
 }
 
-impl Location {
-    pub fn manhattan_distance(&self, other: &Location) -> Option<i32> {
+impl MapPosition {
+    pub fn manhattan_distance(&self, other: &MapPosition) -> Option<i32> {
         if self.map_id == other.map_id {
             Some(self.position.truncate().manhattan_distance(&other.position.truncate()))
         } else {
@@ -145,48 +107,22 @@ impl Location {
         }
     }
 
-    pub fn in_range(&self, other: &Location, range: i32) -> bool {
+    pub fn in_range(&self, other: &MapPosition, range: i32) -> bool {
         self.manhattan_distance(other).map_or(false, |distance| distance <= range)
     }
 }
 
 #[derive(Debug, Clone, Default, Component, Reflect)]
-#[reflect(Component, MapEntities)]
+#[reflect(Component)]
 pub struct Container {
     pub gump_id: u16,
-    pub items: Vec<Entity>,
-}
-
-impl MapEntities for Container {
-    fn map_entities<M: EntityMapper>(&mut self, entity_mapper: &mut M) {
-        for item in &mut self.items {
-            *item = entity_mapper.map_entity(*item);
-        }
-    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Component, Reflect)]
-#[reflect(Component, MapEntities)]
-pub struct ParentContainer {
-    pub parent: Entity,
+#[reflect(Component)]
+pub struct ContainerPosition {
     pub position: IVec2,
     pub grid_index: u8,
-}
-
-impl FromWorld for ParentContainer {
-    fn from_world(_world: &mut World) -> Self {
-        ParentContainer {
-            parent: Entity::PLACEHOLDER,
-            position: IVec2::ZERO,
-            grid_index: 0,
-        }
-    }
-}
-
-impl MapEntities for ParentContainer {
-    fn map_entities<M: EntityMapper>(&mut self, entity_mapper: &mut M) {
-        self.parent = entity_mapper.map_entity(self.parent);
-    }
 }
 
 #[derive(Debug, Clone, Default, Component, Reflect, Eq, PartialEq, Serialize, Deserialize)]

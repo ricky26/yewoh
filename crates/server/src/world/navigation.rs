@@ -3,7 +3,7 @@ use yewoh::assets::tiles::{TileData, TileFlags};
 
 use yewoh::Direction;
 
-use crate::world::entity::Location;
+use crate::world::entity::MapPosition;
 use crate::world::spatial::{EntitySurfaces, SurfaceKind};
 
 #[derive(Debug, Clone)]
@@ -12,7 +12,7 @@ pub enum MoveError {
     Obstructed(Entity),
 }
 
-pub fn try_move_in_direction(surfaces: &EntitySurfaces, tile_data: &TileData, position: Location, direction: Direction, ignore: Option<Entity>) -> Result<Location, MoveError> {
+pub fn try_move_in_direction(surfaces: &EntitySurfaces, tile_data: &TileData, position: MapPosition, direction: Direction, ignore: Option<Entity>) -> Result<MapPosition, MoveError> {
     // Step forward and up 10 units, then drop the character down onto their destination.
     let mut test_position = position.position + direction.as_vec2().extend(10);
     let mut new_z = -1;
@@ -50,6 +50,6 @@ pub fn try_move_in_direction(surfaces: &EntitySurfaces, tile_data: &TileData, po
         Err(MoveError::Impassable)
     } else {
         test_position.z = new_z;
-        Ok(Location { map_id: position.map_id, position: test_position, direction })
+        Ok(MapPosition { map_id: position.map_id, position: test_position, direction })
     }
 }

@@ -8,7 +8,7 @@ use bevy::ecs::schedule::IntoSystemConfigs;
 use bevy::reflect::Reflect;
 use serde::Deserialize;
 
-use yewoh_server::world::entity::Location;
+use yewoh_server::world::entity::MapPosition;
 use yewoh_server::world::ServerSet;
 
 use crate::characters::animation::AnimationStartedEvent;
@@ -29,7 +29,7 @@ pub struct DamageDealt {
     pub target: Entity,
     pub source: Entity,
     pub damage: u16,
-    pub location: Location,
+    pub location: MapPosition,
 }
 
 #[derive(Debug, Clone, Event)]

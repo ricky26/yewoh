@@ -6,6 +6,8 @@ pub mod assets;
 pub mod protocol;
 pub mod types;
 
+pub const MIN_ITEM_ID: u32 = 0x40000000;
+
 #[derive(Debug, Clone, Copy, Default, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct EntityId(u32);
 
@@ -13,6 +15,10 @@ impl EntityId {
     pub const ZERO: EntityId = EntityId::from_u32(0);
 
     pub fn is_valid(&self) -> bool { *self != Self::ZERO }
+
+    pub fn is_item(&self) -> bool {
+        self.0 >= MIN_ITEM_ID
+    }
 
     pub fn as_u32(&self) -> u32 { self.0 }
 

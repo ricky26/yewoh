@@ -7,9 +7,9 @@ use rstar::{AABB, Envelope, Point, PointDistance, RTree, RTreeObject, SelectionF
 
 use yewoh::assets::map::{CHUNK_SIZE, MapChunk};
 
-use crate::world::entity::{Graphic, Location};
+use crate::world::entity::{Graphic, MapPosition};
 use crate::world::map::{Chunk, Impassable, Surface, TileDataResource};
-use crate::world::net::{NetClient, NetOwner, Possessing, View};
+use crate::world::net::{NetClient, OwningClient, Possessing, View};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SpatialPoint(pub IVec2);
@@ -351,10 +351,10 @@ pub struct EntitySurfaces {
 pub fn update_entity_surfaces(
     mut storage: ResMut<EntitySurfaces>,
     tile_data: Res<TileDataResource>,
-    chunks: Query<(Entity, &Location, &Chunk), Or<(Changed<Location>, Changed<Chunk>)>>,
+    chunks: Query<(Entity, &MapPosition, &Chunk), Or<(Changed<MapPosition>, Changed<Chunk>)>>,
     surfaces: Query<
-        (Entity, &Location, &Graphic, Option<&Impassable>),
-        (Or<(With<Impassable>, With<Surface>)>, Or<(Changed<Location>, Changed<Surface>, Changed<Impassable>)>),
+        (Entity, &MapPosition, &Graphic, Option<&Impassable>),
+        (Or<(With<Impassable>, With<Surface>)>, Or<(Changed<MapPosition>, Changed<Surface>, Changed<Impassable>)>),
     >,
     mut removed_chunks: RemovedComponents<Chunk>,
     mut removed_surfaces: RemovedComponents<Surface>,
@@ -417,8 +417,8 @@ pub struct EntityPositions {
 
 pub fn update_entity_positions(
     mut storage: ResMut<EntityPositions>,
-    entities: Query<(Entity, &Location, Option<&Extents>), Or<(Changed<Location>, Changed<Extents>)>>,
-    mut removed_entities: RemovedComponents<Location>,
+    entities: Query<(Entity, &MapPosition, Option<&Extents>), Or<(Changed<MapPosition>, Changed<Extents>)>>,
+    mut removed_entities: RemovedComponents<MapPosition>,
 ) {
     for (entity, position, extents) in &entities {
         let extents = extents.cloned().unwrap_or(Extents::default());
@@ -449,12 +449,12 @@ pub struct NetClientPositions {
 pub fn update_client_positions(
     mut storage: ResMut<NetClientPositions>,
     clients: Query<(Entity, &View, &Possessing), With<NetClient>>,
-    characters: Query<&Location>,
+    characters: Query<&MapPosition>,
     changed_clients: Query<
         (Entity, &View, &Possessing),
         (With<NetClient>, Or<(Changed<View>, Changed<Possessing>)>),
     >,
-    changed_characters: Query<(Entity, &NetOwner, &Location), Changed<Location>>,
+    changed_characters: Query<(Entity, &OwningClient, &MapPosition), Changed<MapPosition>>,
     mut removed_clients: RemovedComponents<NetClient>,
 ) {
     for (entity, view, possessing) in changed_clients.iter() {

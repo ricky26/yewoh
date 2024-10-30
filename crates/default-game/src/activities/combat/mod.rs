@@ -1,17 +1,17 @@
 use bevy::app::{App, Last, Plugin, Update};
 use bevy::ecs::entity::Entity;
 use bevy::ecs::event::{EventReader, EventWriter};
-use bevy::ecs::query::{Changed, With};
+use bevy::ecs::query::{Changed, With, Or};
 use bevy::ecs::schedule::{IntoSystemConfigs};
 use bevy::ecs::system::{Commands, Query, Res};
+use bevy::hierarchy::{Children, DespawnRecursiveExt};
 use bevy::time::{Timer, TimerMode};
 
 use yewoh::protocol;
 use yewoh::protocol::EquipmentSlot;
-use yewoh_server::world::entity::{AttackTarget, Character, Container, Flags, Graphic, Location, Quantity, Stats};
+use yewoh_server::world::entity::{AttackTarget, Character, Container, EquippedPosition, Flags, Graphic, MapPosition, Quantity, Stats};
 use yewoh_server::world::events::AttackRequestedEvent;
-use yewoh_server::world::hierarchy::DespawnRecursiveExt;
-use yewoh_server::world::net::{NetClient, NetEntity, NetEntityAllocator, NetEntityLookup, Possessing};
+use yewoh_server::world::net::{NetClient, NetId, Possessing, AssignNetId};
 use yewoh_server::world::ServerSet;
 use yewoh_server::world::spatial::NetClientPositions;
 
@@ -43,15 +43,27 @@ pub fn handle_attack_requests(
 
 pub fn update_weapon_stats(
     mut commands: Commands,
-    mut characters: Query<(Entity, &Character, Option<&Unarmed>), (Changed<Character>, Changed<Unarmed>)>,
-    weapons: Query<&MeleeWeapon>,
+    mut characters: Query<
+        (Entity, Option<&Children>, Option<&Unarmed>),
+        (With<Character>, Or<(Changed<Character>, Changed<Unarmed>)>),
+    >,
+    weapons: Query<(&EquippedPosition, &MeleeWeapon)>,
 ) {
-    for (entity, character, unarmed) in &mut characters {
-        let weapon = character.equipment.iter()
-            .filter(|e| e.slot == EquipmentSlot::MainHand)
-            .map(|e| e.entity)
-            .next()
-            .and_then(|e| weapons.get(e).ok());
+    for (entity, children, unarmed) in &mut characters {
+        let Some(children) = children else {
+            commands.entity(entity).remove::<MeleeWeapon>();
+            continue;
+        };
+
+        let weapon = children.iter()
+            .filter_map(|e| match weapons.get(*e)
+            {
+                Ok((equipped, weapon)) => Some((*e, equipped, weapon)),
+                _ => None,
+            })
+            .filter(|(_, pos, _)| pos.slot == EquipmentSlot::MainHand)
+            .map(|e| e.2)
+            .next();
 
         if let Some(weapon) = weapon {
             commands.entity(entity).insert(weapon.clone());
@@ -66,8 +78,8 @@ pub fn update_weapon_stats(
 pub fn attack_current_target(
     mut damage_events: EventWriter<DamageDealt>,
     mut animation_events: EventWriter<AnimationStartedEvent>,
-    mut actors: Query<(Entity, &mut CurrentActivity, &mut AttackTarget, &Location, &MeleeWeapon), With<Alive>>,
-    mut targets: Query<(&Location, Option<&HitAnimation>), With<Alive>>,
+    mut actors: Query<(Entity, &mut CurrentActivity, &mut AttackTarget, &MapPosition, &MeleeWeapon), With<Alive>>,
+    mut targets: Query<(&MapPosition, Option<&HitAnimation>), With<Alive>>,
 ) {
     for (entity, mut current_activity, current_target, location, weapon) in &mut actors {
         if !current_activity.is_idle() {
@@ -142,8 +154,7 @@ pub fn spawn_corpses(
     mut commands: Commands,
     mut died_events: EventReader<CharacterDied>,
     mut corpse_events: EventWriter<CorpseSpawned>,
-    entity_allocator: Res<NetEntityAllocator>,
-    characters: Query<(&Character, &Location)>,
+    characters: Query<(&Character, &MapPosition)>,
 ) {
     for event in died_events.read() {
         let (character, map_position) = match characters.get(event.character) {
@@ -153,7 +164,7 @@ pub fn spawn_corpses(
 
         let corpse = commands
             .spawn((
-                NetEntity { id: entity_allocator.allocate_item() },
+                AssignNetId,
                 *map_position,
                 Flags::default(),
                 Graphic {
@@ -163,7 +174,6 @@ pub fn spawn_corpses(
                 Quantity { quantity: character.body_type },
                 Container {
                     gump_id: CORPSE_BOX_GUMP_ID,
-                    items: vec![],
                 },
                 Corpse,
             ))
@@ -176,18 +186,20 @@ pub fn spawn_corpses(
 }
 
 pub fn send_damage_notices(
-    entity_lookup: Res<NetEntityLookup>,
+    net_ids: Query<&NetId>,
     client_positions: Res<NetClientPositions>,
     mut damage_events: EventReader<DamageDealt>,
     clients: Query<&NetClient>,
 ) {
     for event in damage_events.read() {
-        let target_id = match entity_lookup.ecs_to_net(event.target) {
-            Some(x) => x,
-            None => continue,
+        let target_id = match net_ids.get(event.target) {
+            Ok(x) => x.id,
+            _ => continue,
         };
 
-        let attacker_id = entity_lookup.ecs_to_net(event.source);
+        let attacker_id = net_ids.get(event.source)
+            .ok()
+            .map(|id| id.id);
 
         for (entity, ..) in client_positions.tree.iter_at_point(event.location.map_id, event.location.position.truncate()) {
             let client = match clients.get(entity) {

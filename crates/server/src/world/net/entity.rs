@@ -1,154 +1,127 @@
-use std::collections::{HashMap, VecDeque};
-use std::sync::atomic::{AtomicU32, Ordering};
-
-use bevy::ecs::entity::Entity;
-use bevy::ecs::prelude::*;
-use bevy::ecs::system::{EntityCommands};
-use bevy::ecs::world::{Command, World};
+use bevy::ecs::component::{ComponentHooks, StorageType};
+use bevy::prelude::*;
+use bevy::reflect::std_traits::ReflectDefault;
 use bevy::reflect::Reflect;
+use std::collections::HashMap;
 
-use yewoh::EntityId;
+use yewoh::{EntityId, MIN_ITEM_ID};
 
-use crate::world::entity::{Character, Container};
+use crate::world::entity::Character;
 
-#[derive(Debug, Clone, Copy, Component)]
-pub struct NetEntity {
+#[derive(Debug, Clone, Default, Component, Reflect)]
+#[reflect(Default, Component)]
+pub struct AssignNetId;
+
+#[derive(Debug, Clone, Copy, Default, Reflect)]
+#[reflect(opaque, Default, Component)]
+pub struct NetId {
     pub id: EntityId,
 }
 
-#[derive(Debug, Clone, Copy, Component, Reflect)]
-pub struct NetOwner {
-    pub client_entity: Entity,
-}
-
-#[derive(Debug, Resource)]
-pub struct NetEntityAllocator {
-    next_character: AtomicU32,
-    next_item: AtomicU32,
-}
-
-impl Default for NetEntityAllocator {
-    fn default() -> Self {
-        Self {
-            next_character: AtomicU32::new(1),
-            next_item: AtomicU32::new(0x40000001),
+impl From<EntityId> for NetId {
+    fn from(id: EntityId) -> Self {
+        NetId {
+            id,
         }
     }
 }
 
-impl NetEntityAllocator {
-    pub fn allocate_character(&self) -> EntityId {
-        EntityId::from_u32(self.next_character.fetch_add(1, Ordering::Relaxed))
+impl Component for NetId {
+    const STORAGE_TYPE: StorageType = StorageType::Table;
+
+    fn register_component_hooks(hooks: &mut ComponentHooks) {
+        hooks.on_insert(|mut world, entity, _| {
+            let id = world.get::<NetId>(entity).unwrap().id;
+            let mut lookup = world.resource_mut::<NetEntityLookup>();
+            if let Some(prev) = lookup.net_to_ecs.insert(id, entity) {
+                warn!("duplicate net ID assigned: {id:?} ({prev:?} & {entity:?})");
+            }
+        });
+        hooks.on_remove(|mut world, entity, _| {
+            let id = world.get::<NetId>(entity).unwrap().id;
+            let mut lookup = world.resource_mut::<NetEntityLookup>();
+            if lookup.net_to_ecs.remove(&id).is_none() {
+                warn!("duplicate net ID removal: {id:?} (entity={entity:?})");
+            }
+        });
+    }
+}
+
+#[derive(Debug, Clone, Default, Component, Reflect)]
+#[reflect(Default, Component)]
+pub struct CharacterNetId;
+
+#[derive(Debug, Clone, Default, Component, Reflect)]
+#[reflect(Default, Component)]
+pub struct ItemNetId;
+
+#[derive(Debug, Clone, Copy, Component, Reflect)]
+pub struct OwningClient {
+    pub client_entity: Entity,
+}
+
+#[derive(Debug, Resource)]
+pub struct NetIdAllocator {
+    next_character: u32,
+    next_item: u32,
+}
+
+impl Default for NetIdAllocator {
+    fn default() -> Self {
+        Self {
+            next_character: 0,
+            next_item: MIN_ITEM_ID,
+        }
+    }
+}
+
+impl NetIdAllocator {
+    pub fn allocate_character(&mut self) -> EntityId {
+        self.next_character += 1;
+        if self.next_character >= MIN_ITEM_ID {
+            panic!("character ID overflow");
+        }
+        EntityId::from_u32(self.next_character)
     }
 
-    pub fn allocate_item(&self) -> EntityId {
-        EntityId::from_u32(self.next_item.fetch_add(1, Ordering::Relaxed))
+    pub fn allocate_item(&mut self) -> EntityId {
+        self.next_item += 1;
+        EntityId::from_u32(self.next_item)
     }
 }
 
 #[derive(Debug, Default, Resource)]
 pub struct NetEntityLookup {
     net_to_ecs: HashMap<EntityId, Entity>,
-    ecs_to_net: HashMap<Entity, EntityId>,
 }
 
 impl NetEntityLookup {
     pub fn net_to_ecs(&self, id: EntityId) -> Option<Entity> {
         self.net_to_ecs.get(&id).copied()
     }
-
-    pub fn ecs_to_net(&self, entity: Entity) -> Option<EntityId> {
-        self.ecs_to_net.get(&entity).copied()
-    }
-
-    pub fn insert(&mut self, entity: Entity, id: EntityId) {
-        if let Some(old_id) = self.ecs_to_net.get(&entity) {
-            if id == *old_id {
-                return;
-            }
-
-            self.net_to_ecs.remove(old_id);
-        }
-
-        self.net_to_ecs.insert(id, entity);
-        self.ecs_to_net.insert(entity, id);
-    }
-
-    pub fn remove(&mut self, entity: Entity) {
-        if let Some(id) = self.ecs_to_net.remove(&entity) {
-            self.net_to_ecs.remove(&id);
-        }
-    }
 }
 
-pub fn add_new_entities_to_lookup(
-    mut lookup: ResMut<NetEntityLookup>,
-    query: Query<(Entity, &NetEntity), Changed<NetEntity>>,
+pub fn assign_net_ids(
+    mut commands: Commands,
+    mut id_allocator: ResMut<NetIdAllocator>,
+    new_characters: Query<Entity, (With<AssignNetId>, With<Character>, Without<CharacterNetId>)>,
+    new_items: Query<Entity, (With<AssignNetId>, Without<Character>, Without<ItemNetId>)>,
 ) {
-    for (entity, net_entity) in query.iter() {
-        lookup.insert(entity, net_entity.id);
+    for entity in &new_characters {
+        commands.entity(entity)
+            .remove::<ItemNetId>()
+            .insert((
+                NetId::from(id_allocator.allocate_character()),
+                CharacterNetId,
+            ));
     }
-}
 
-pub fn remove_old_entities_from_lookup(
-    mut lookup: ResMut<NetEntityLookup>,
-    mut removals: RemovedComponents<NetEntity>,
-) {
-    for entity in removals.read() {
-        lookup.remove(entity);
-    }
-}
-
-pub struct AssignNetId {
-    pub entity: Entity,
-}
-
-impl Command for AssignNetId {
-    fn apply(self, world: &mut World) {
-        assign_network_id(world, self.entity);
-    }
-}
-
-pub fn assign_network_id(world: &mut World, entity: Entity) {
-    let mut queue = VecDeque::new();
-    queue.push_back(entity);
-
-    while let Some(next) = queue.pop_front() {
-        if let Some(container) = world.get::<Container>(next) {
-            queue.extend(container.items.iter().copied());
-        }
-
-        if let Some(character) = world.get::<Character>(next) {
-            queue.extend(character.equipment.iter().map(|e| e.entity));
-        }
-
-        let allocator = world.resource::<NetEntityAllocator>();
-        let entity_info = world.entity(next);
-        let id = if entity_info.contains::<Character>() {
-            allocator.allocate_character()
-        } else {
-            allocator.allocate_item()
-        };
-        world.entity_mut(next).insert(NetEntity { id });
-    }
-}
-
-pub trait NetCommandsExt {
-    fn assign_network_id(&mut self) -> &mut Self;
-}
-
-impl<'w> NetCommandsExt for EntityCommands<'w> {
-    fn assign_network_id(&mut self) -> &mut Self {
-        let entity = self.id();
-        self.commands().queue(AssignNetId { entity });
-        self
-    }
-}
-
-impl<'w> NetCommandsExt for EntityWorldMut<'w> {
-    fn assign_network_id(&mut self) -> &mut Self {
-        let entity = self.id();
-        self.world_scope(|world| assign_network_id(world, entity));
-        self
+    for entity in &new_items {
+        commands.entity(entity)
+            .remove::<CharacterNetId>()
+            .insert((
+                NetId::from(id_allocator.allocate_item()),
+                ItemNetId,
+            ));
     }
 }

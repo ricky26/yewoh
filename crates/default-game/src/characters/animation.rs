@@ -4,27 +4,27 @@ use bevy::ecs::event::{Event, EventReader};
 use bevy::ecs::query::With;
 use bevy::ecs::system::{Query, Res};
 use yewoh::protocol::{CharacterAnimation, CharacterPredefinedAnimation};
-use yewoh_server::world::entity::Location;
-use yewoh_server::world::net::{NetClient, NetEntityLookup, Synchronized};
+use yewoh_server::world::entity::MapPosition;
+use yewoh_server::world::net::{NetClient, NetId, Synchronized};
 use yewoh_server::world::spatial::NetClientPositions;
 
 #[derive(Debug, Clone, Event)]
 pub struct AnimationStartedEvent {
     pub entity: Entity,
-    pub location: Location,
+    pub location: MapPosition,
     pub animation: Animation,
 }
 
 pub fn send_animations(
-    entity_lookup: Res<NetEntityLookup>,
+    net_ids: Query<&NetId>,
     client_positions: Res<NetClientPositions>,
     clients: Query<&NetClient, With<Synchronized>>,
     mut events: EventReader<AnimationStartedEvent>,
 ) {
     for event in events.read() {
-        let target_id = match entity_lookup.ecs_to_net(event.entity) {
-            Some(x) => x,
-            None => continue,
+        let target_id = match net_ids.get(event.entity) {
+            Ok(x) => x.id,
+            _ => continue,
         };
 
         for (client_entity, ..) in client_positions.tree.iter_at_point(event.location.map_id, event.location.position.truncate()) {

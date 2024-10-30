@@ -1,16 +1,16 @@
 use bevy::ecs::query::Changed;
 use bevy::ecs::removal_detection::RemovedComponents;
-use bevy::ecs::system::{Query, Res};
+use bevy::ecs::system::Query;
 use yewoh::protocol::SetAttackTarget;
 
 use crate::world::entity::AttackTarget;
-use crate::world::net::{NetClient, NetEntityLookup, NetOwner};
+use crate::world::net::{NetClient, NetId, OwningClient};
 
 pub fn send_updated_attack_target(
-    entity_lookup: Res<NetEntityLookup>,
+    net_ids: Query<&NetId>,
     clients: Query<&NetClient>,
-    owners: Query<&NetOwner>,
-    modified_targets: Query<(&NetOwner, &AttackTarget), Changed<AttackTarget>>,
+    owners: Query<&OwningClient>,
+    modified_targets: Query<(&OwningClient, &AttackTarget), Changed<AttackTarget>>,
     mut removed_targets: RemovedComponents<AttackTarget>,
 ) {
     for (owner, attack_target) in &modified_targets {
@@ -19,7 +19,7 @@ pub fn send_updated_attack_target(
             _ => continue,
         };
 
-        let target_id = entity_lookup.ecs_to_net(attack_target.target);
+        let target_id = net_ids.get(attack_target.target).ok().map(|id| id.id);
         client.send_packet(SetAttackTarget {
             target_id,
         }.into());

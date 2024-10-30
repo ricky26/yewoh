@@ -2,12 +2,12 @@ use bevy::prelude::*;
 
 use yewoh::protocol::{CharacterAnimation, CharacterProfile, ContextMenuEntry, DamageDealt, EntityFlags, MoveConfirm, MoveEntityReject, MoveReject, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, Swing, WarMode};
 use yewoh::types::FixedString;
-use yewoh_server::world::entity::{AttackTarget, Character, CharacterEquipped, Container, EquippedBy, Flags, Location, Notorious, ParentContainer};
+use yewoh_server::world::entity::{AttackTarget, Character, EquippedPosition, Container, Flags, MapPosition, Notorious, ContainerPosition};
 use yewoh_server::world::events::{ContextMenuEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SingleClickEvent};
 use yewoh_server::world::input::ContextMenuRequest;
 use yewoh_server::world::map::TileDataResource;
 use yewoh_server::world::navigation::try_move_in_direction;
-use yewoh_server::world::net::{ContainerOpenedEvent, NetClient, NetEntity, NetEntityLookup, Possessing};
+use yewoh_server::world::net::{ContainerOpenedEvent, NetClient, NetId, Possessing};
 use yewoh_server::world::spatial::EntitySurfaces;
 
 #[derive(Debug, Clone, Component, Reflect)]
@@ -25,7 +25,7 @@ pub fn handle_move(
     surfaces: Res<EntitySurfaces>,
     tile_data: Res<TileDataResource>,
     connection_query: Query<(&NetClient, &Possessing)>,
-    mut characters: Query<(&mut Location, &Notorious)>,
+    mut characters: Query<(&mut MapPosition, &Notorious)>,
 ) {
     for MoveEvent { client_entity: connection, request } in events.read() {
         let connection = *connection;
@@ -88,7 +88,7 @@ pub fn handle_double_click(
     mut events: EventReader<DoubleClickEvent>,
     mut clients: Query<&NetClient>,
     mut opened_containers: EventWriter<ContainerOpenedEvent>,
-    target_query: Query<(&NetEntity, Option<&Character>, Option<&Container>)>,
+    target_query: Query<(&NetId, Option<&Character>, Option<&Container>)>,
 ) {
     for DoubleClickEvent { client_entity, target } in events.read() {
         let client = match clients.get_mut(*client_entity) {
@@ -126,9 +126,7 @@ pub fn handle_pick_up(
     mut events: EventReader<PickUpEvent>,
     clients: Query<(&NetClient, &Possessing)>,
     characters: Query<Option<&Held>>,
-    targets: Query<(Entity, Option<&Location>, Option<&ParentContainer>, Option<&EquippedBy>)>,
-    mut containers: Query<&mut Container>,
-    mut character_equipment: Query<&mut Character>,
+    targets: Query<(Entity, Option<&MapPosition>, Option<&ContainerPosition>, Option<&EquippedPosition>)>,
     mut commands: Commands,
 ) {
     for event in events.read() {
@@ -159,19 +157,17 @@ pub fn handle_pick_up(
         if let Some(_) = position {
             commands.entity(entity)
                 .insert(Holder { held_by: character })
-                .remove::<Location>();
-        } else if let Some(container) = container {
-            let mut container = containers.get_mut(container.parent).unwrap();
-            container.items.retain(|v| v != &entity);
+                .remove::<MapPosition>();
+        } else if let Some(_) = container {
             commands.entity(entity)
                 .insert(Holder { held_by: character })
-                .remove::<ParentContainer>();
-        } else if let Some(equipped) = equipped {
-            let mut equipped_character = character_equipment.get_mut(equipped.parent).unwrap();
-            equipped_character.equipment.retain(|e| e.entity != entity);
+                .remove_parent()
+                .remove::<ContainerPosition>();
+        } else if let Some(_) = equipped {
             commands.entity(entity)
                 .insert(Holder { held_by: character })
-                .remove::<EquippedBy>();
+                .remove_parent()
+                .remove::<EquippedPosition>();
         } else {
             // Not sure where this item is, do nothing.
             client.send_packet(MoveEntityReject::OutOfRange.into());
@@ -186,7 +182,7 @@ pub fn handle_pick_up(
 pub fn handle_drop(
     mut events: EventReader<DropEvent>,
     clients: Query<(&NetClient, &Possessing)>,
-    characters: Query<(&Location, &Held)>,
+    characters: Query<(&MapPosition, &Held)>,
     mut containers: Query<&mut Container>,
     mut commands: Commands,
 ) {
@@ -210,19 +206,18 @@ pub fn handle_drop(
         let target = event.target;
 
         if let Some(container_entity) = event.dropped_on {
-            if let Ok(mut container) = containers.get_mut(container_entity) {
-                container.items.push(target);
+            if let Ok(_) = containers.get_mut(container_entity) {
                 commands.entity(target)
                     .remove::<Holder>()
-                    .insert(ParentContainer {
-                        parent: event.dropped_on.unwrap(),
+                    .set_parent(event.dropped_on.unwrap())
+                    .insert(ContainerPosition {
                         position: event.position.truncate(),
                         grid_index: event.grid_index,
                     });
             } else {
                 commands.entity(target)
                     .remove::<Holder>()
-                    .insert(Location {
+                    .insert(MapPosition {
                         position: character_position.position,
                         map_id: character_position.map_id,
                         ..Default::default()
@@ -231,7 +226,7 @@ pub fn handle_drop(
         } else {
             commands.entity(target)
                 .remove::<Holder>()
-                .insert(Location {
+                .insert(MapPosition {
                     position: event.position,
                     map_id: character_position.map_id,
                     ..Default::default()
@@ -246,7 +241,7 @@ pub fn handle_drop(
 pub fn handle_equip(
     mut events: EventReader<EquipEvent>,
     clients: Query<(&NetClient, &Possessing)>,
-    characters: Query<(&Location, &Held)>,
+    characters: Query<(&MapPosition, &Held)>,
     mut loadouts: Query<&mut Character>,
     mut commands: Commands,
 ) {
@@ -268,21 +263,17 @@ pub fn handle_equip(
         }
 
         let target = event.target;
-        if let Ok(mut target_character) = loadouts.get_mut(event.character) {
-            target_character.equipment.push(CharacterEquipped {
-                entity: target,
-                slot: event.slot,
-            });
+        if let Ok(_) = loadouts.get_mut(event.character) {
             commands.entity(target)
                 .remove::<Holder>()
-                .insert(EquippedBy {
-                    parent: event.character,
+                .set_parent(event.character)
+                .insert(EquippedPosition {
                     slot: event.slot,
                 });
         } else {
             commands.entity(target)
                 .remove::<Holder>()
-                .insert(Location {
+                .insert(MapPosition {
                     position: character_position.position,
                     map_id: character_position.map_id,
                     ..Default::default()
@@ -295,9 +286,9 @@ pub fn handle_equip(
 }
 
 pub fn handle_context_menu(
-    lookup: Res<NetEntityLookup>,
+    net_ids: Query<&NetId>,
     clients: Query<(&NetClient, &Possessing)>,
-    characters: Query<&NetEntity>,
+    characters: Query<&NetId>,
     mut context_requests: Query<&mut ContextMenuRequest>,
     mut context_events: EventReader<ContextMenuEvent>,
 ) {
@@ -321,8 +312,8 @@ pub fn handle_context_menu(
             _ => continue,
         };
 
-        let target_id = match lookup.ecs_to_net(*target) {
-            Some(x) => x,
+        let target_id = match net_ids.get(*target) {
+            Ok(x) => x.id,
             _ => continue,
         };
 
@@ -354,7 +345,7 @@ pub fn handle_context_menu(
 }
 
 pub fn handle_profile_requests(
-    lookup: Res<NetEntityLookup>,
+    net_ids: Query<&NetId>,
     clients: Query<&NetClient>,
     mut requests: EventReader<ProfileEvent>,
 ) {
@@ -365,8 +356,8 @@ pub fn handle_profile_requests(
             _ => continue,
         };
 
-        let target_id = match lookup.ecs_to_net(request.target) {
-            Some(x) => x,
+        let target_id = match net_ids.get(request.target) {
+            Ok(x) => x.id,
             _ => continue,
         };
 

@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 
-use crate::world::entity::{AttackTarget, Character, Container, EquippedBy, Flags, Graphic, Location, Multi, Notorious, ParentContainer, Quantity, Stats, Tooltip};
+use crate::world::entity::{AttackTarget, Character, Container, ContainerPosition, EquippedPosition, Flags, Graphic, MapPosition, Multi, Notorious, Quantity, Stats, Tooltip};
 use crate::world::events::{AttackRequestedEvent, CharacterListEvent, ChatRequestEvent, ContextMenuEvent, CreateCharacterEvent, DeleteCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::input::{handle_attack_packets, handle_context_menu_packets, send_context_menu, update_targets};
-use crate::world::net::{accept_new_clients, add_new_entities_to_lookup, finish_synchronizing, handle_input_packets, handle_login_packets, handle_new_packets, observe_ghosts, remove_old_entities_from_lookup, send_change_map, send_ghost_updates, send_opened_containers, send_tooltips, send_updated_attack_target, start_synchronizing, ContainerOpenedEvent, MapInfos, NetEntityAllocator, NetEntityLookup};
+use crate::world::net::{accept_new_clients, finish_synchronizing, handle_input_packets, handle_login_packets, handle_new_packets, observe_ghosts, send_change_map, send_ghost_updates, send_opened_containers, send_tooltips, send_updated_attack_target, start_synchronizing, ContainerOpenedEvent, MapInfos, NetIdAllocator, NetEntityLookup, assign_net_ids};
 use crate::world::spatial::{update_client_positions, update_entity_positions, update_entity_surfaces, EntityPositions, EntitySurfaces, NetClientPositions};
 
 pub mod net;
@@ -19,9 +19,6 @@ pub mod navigation;
 pub mod map;
 
 pub mod input;
-
-pub mod hierarchy;
-
 #[derive(SystemSet, Hash, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerSet {
     Receive,
@@ -40,7 +37,7 @@ impl Plugin for ServerPlugin {
     fn build(&self, app: &mut App) {
         app
             .init_resource::<MapInfos>()
-            .init_resource::<NetEntityAllocator>()
+            .init_resource::<NetIdAllocator>()
             .init_resource::<NetEntityLookup>()
             .init_resource::<EntitySurfaces>()
             .init_resource::<EntityPositions>()
@@ -51,10 +48,10 @@ impl Plugin for ServerPlugin {
             .register_type::<Quantity>()
             .register_type::<Graphic>()
             .register_type::<Multi>()
-            .register_type::<Location>()
+            .register_type::<MapPosition>()
             .register_type::<Container>()
-            .register_type::<ParentContainer>()
-            .register_type::<EquippedBy>()
+            .register_type::<ContainerPosition>()
+            .register_type::<EquippedPosition>()
             .register_type::<Stats>()
             .register_type::<Tooltip>()
             .register_type::<AttackTarget>()
@@ -103,7 +100,7 @@ impl Plugin for ServerPlugin {
             ).in_set(ServerSet::HandlePackets))
             .add_systems(Last, (
                 send_change_map,
-                add_new_entities_to_lookup,
+                assign_net_ids,
             ).in_set(ServerSet::SendFirst))
             .add_systems(Last, (
                 observe_ghosts,
@@ -117,9 +114,6 @@ impl Plugin for ServerPlugin {
                 finish_synchronizing,
                 update_targets,
             ).in_set(ServerSet::Send))
-            .add_systems(Last, (
-                remove_old_entities_from_lookup,
-            ).in_set(ServerSet::SendLast))
             .add_systems(PostUpdate, (
                 update_entity_surfaces,
                 update_entity_positions,

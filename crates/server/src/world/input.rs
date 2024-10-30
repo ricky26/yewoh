@@ -5,7 +5,7 @@ use tracing::debug;
 use yewoh::protocol::{AttackRequest, ContextMenu, ContextMenuEntry, ExtendedCommand, PickTarget, SetAttackTarget, TargetType};
 
 use crate::world::events::{AttackRequestedEvent, ContextMenuEvent, ReceivedPacketEvent};
-use crate::world::net::{NetClient, NetEntityLookup};
+use crate::world::net::{NetClient, NetEntityLookup, NetId};
 
 #[derive(Debug, Clone, Component)]
 pub struct WorldTargetRequest {
@@ -211,9 +211,9 @@ pub fn handle_context_menu_packets(
 }
 
 pub fn send_context_menu(
-    lookup: Res<NetEntityLookup>,
     clients: Query<&NetClient>,
     requests: Query<(Entity, &ContextMenuRequest)>,
+    net_ids: Query<&NetId>,
     mut commands: Commands,
 ) {
     for (entity, request) in requests.iter() {
@@ -224,8 +224,8 @@ pub fn send_context_menu(
             _ => continue,
         };
 
-        let target_id = match lookup.ecs_to_net(request.target) {
-            Some(x) => x,
+        let target_id = match net_ids.get(request.target) {
+            Ok(x) => x.id,
             _ => continue,
         };
 

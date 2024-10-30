@@ -12,7 +12,7 @@ use serde::Deserialize;
 use bevy_fabricator::Fabricated;
 use bevy_fabricator::traits::{Apply, ReflectApply};
 use yewoh::Direction;
-use yewoh_server::world::entity::Location;
+use yewoh_server::world::entity::MapPosition;
 use yewoh_server::world::map::TileDataResource;
 use yewoh_server::world::navigation::try_move_in_direction;
 use yewoh_server::world::spatial::EntitySurfaces;
@@ -27,7 +27,7 @@ pub struct MoveTimer {
 
 pub fn wander(
     time: Res<Time>, tile_data: Res<TileDataResource>, surfaces: Res<EntitySurfaces>,
-    mut npcs: Query<(Entity, &mut Location, &mut MoveTimer), With<Wander>>,
+    mut npcs: Query<(Entity, &mut MapPosition, &mut MoveTimer), With<Wander>>,
 ) {
     let mut rng = thread_rng();
 

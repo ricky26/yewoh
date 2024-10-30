@@ -7,6 +7,7 @@ use bevy::ecs::event::{Event, EventReader};
 use bevy::ecs::query::{With, Without};
 use bevy::ecs::system::{Commands, Query, Res, Resource, SystemParam};
 use bevy::ecs::world::{Mut, Ref};
+use bevy::hierarchy::{Children, Parent};
 use bevy::reflect::Reflect;
 use bitflags::bitflags;
 use glam::UVec2;
@@ -15,8 +16,8 @@ use yewoh::{EntityKind, Notoriety};
 use yewoh::protocol::{CharacterEquipment, DeleteEntity, EntityFlags, EntityTooltipVersion, EquipmentSlot, OpenContainer, UpdateCharacter, UpsertContainerContents, UpsertEntityCharacter, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityWorld, UpsertLocalPlayer};
 use yewoh::protocol::{BeginEnterWorld, ChangeSeason, EndEnterWorld, ExtendedCommand};
 
-use crate::world::entity::{Character, Container, EquippedBy, Flags, Graphic, Location, Notorious, ParentContainer, Quantity, Stats, Tooltip};
-use crate::world::net::{NetClient, NetEntity, NetEntityLookup, NetOwner};
+use crate::world::entity::{Character, Container, ContainerPosition, EquippedPosition, Flags, Graphic, MapPosition, Notorious, Quantity, Stats, Tooltip};
+use crate::world::net::{NetClient, NetId, OwningClient};
 use crate::world::net::connection::Possessing;
 use crate::world::spatial::{EntityPositions, view_aabb};
 
@@ -70,7 +71,7 @@ bitflags! {
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct CharacterState {
     dirty_flags: CharacterDirtyFlags,
-    location: Location,
+    location: MapPosition,
     body_type: u16,
     hue: u16,
     notoriety: Notoriety,
@@ -80,15 +81,15 @@ struct CharacterState {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct WorldItemState {
-    location: Location,
+    location: MapPosition,
     flags: EntityFlags,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 enum ItemPositionState {
     World(WorldItemState),
-    Equipped(EquippedBy),
-    Contained(ParentContainer),
+    Equipped(Entity, EquippedPosition),
+    Contained(Entity, ContainerPosition),
 }
 
 #[derive(Debug, Clone)]
@@ -106,10 +107,10 @@ impl ItemState {
     fn parent(&self) -> Option<Entity> {
         match &self.position {
             ItemPositionState::World(_) => None,
-            ItemPositionState::Equipped(by) =>
-                Some(by.parent),
-            ItemPositionState::Contained(parent) =>
-                Some(parent.parent),
+            ItemPositionState::Equipped(parent, _) =>
+                Some(*parent),
+            ItemPositionState::Contained(parent, _) =>
+                Some(*parent),
         }
     }
 }
@@ -250,7 +251,7 @@ impl ViewState {
                 remove_child(&mut self.children, parent, entity);
             }
 
-            (f)(entity, state);
+            f(entity, state);
         }
     }
 
@@ -265,7 +266,7 @@ impl ViewState {
                 Some(x) => x,
                 None => continue,
             };
-            (f)(self, entity, &mut state);
+            f(self, entity, &mut state);
             self.ghosts.insert(entity, state);
 
             if let Some(kids) = self.children.get(&entity) {
@@ -335,7 +336,7 @@ fn update_tooltip(
 }
 
 pub fn send_ghost_updates(
-    entity_lookup: Res<NetEntityLookup>,
+    net_ids: Query<&NetId>,
     mut clients: Query<(&NetClient, &mut ViewState)>,
 ) {
     for (client, mut view_state) in clients.iter_mut() {
@@ -348,9 +349,9 @@ pub fn send_ghost_updates(
         view_state.dirty = false;
 
         view_state.for_each_removal(|entity, _| {
-            let id = match entity_lookup.ecs_to_net(entity) {
-                Some(x) => x,
-                None => return,
+            let id = match net_ids.get(entity) {
+                Ok(x) => x.id,
+                _ => return,
             };
             client.send_packet(DeleteEntity {
                 id,
@@ -358,9 +359,9 @@ pub fn send_ghost_updates(
         });
 
         view_state.for_each_ghost(|view_state, entity, state| {
-            let id = match entity_lookup.ecs_to_net(entity) {
-                Some(x) => x,
-                None => return,
+            let id = match net_ids.get(entity) {
+                Ok(x) => x.id,
+                _ => return,
             };
 
             match state {
@@ -376,12 +377,12 @@ pub fn send_ghost_updates(
                                 _ => continue,
                             };
                             let by = match &item.position {
-                                ItemPositionState::Equipped(by) => by,
+                                ItemPositionState::Equipped(_, by) => by,
                                 _ => continue,
                             };
-                            let child_id = match entity_lookup.ecs_to_net(child_entity) {
-                                Some(x) => x,
-                                None => continue,
+                            let child_id = match net_ids.get(child_entity) {
+                                Ok(x) => x.id,
+                                _ => continue,
                             };
                             equipment.push(CharacterEquipment {
                                 id: child_id,
@@ -448,8 +449,8 @@ pub fn send_ghost_updates(
                                 }.into());
                             }
                         }
-                        ItemPositionState::Contained(container) => {
-                            if let Some(parent_id) = entity_lookup.ecs_to_net(container.parent) {
+                        ItemPositionState::Contained(parent, container) => {
+                            if let Ok(parent_id) = net_ids.get(*parent) {
                                 client.send_packet(UpsertEntityContained {
                                     id,
                                     graphic_id: item.graphic.id,
@@ -457,17 +458,17 @@ pub fn send_ghost_updates(
                                     quantity: item.quantity,
                                     position: container.position,
                                     grid_index: container.grid_index,
-                                    parent_id,
+                                    parent_id: parent_id.id,
                                     hue: item.graphic.hue,
                                 }.into());
                             }
                         }
-                        ItemPositionState::Equipped(by) => {
+                        ItemPositionState::Equipped(parent, by) => {
                             if !dirty_flags.is_empty() {
-                                if let Some(parent_id) = entity_lookup.ecs_to_net(by.parent) {
+                                if let Ok(parent_id) = net_ids.get(*parent) {
                                     client.send_packet(UpsertEntityEquipped {
                                         id,
-                                        parent_id,
+                                        parent_id: parent_id.id,
                                         slot: by.slot,
                                         graphic_id: item.graphic.id,
                                         hue: item.graphic.hue,
@@ -491,22 +492,26 @@ pub fn send_ghost_updates(
 
 #[derive(SystemParam)]
 pub struct WorldObserver<'w, 's> {
-    characters: Query<'w, 's, (&'static Character, &'static Flags, &'static Location, &'static Notorious, &'static Stats)>,
-    world_items: Query<'w, 's, (&'static Graphic, &'static Flags, &'static Location, Option<&'static Tooltip>, Option<&'static Quantity>, Option<&'static Container>)>,
-    child_items: Query<'w, 's, (&'static Graphic, &'static ParentContainer, Option<&'static Tooltip>, Option<&'static Quantity>, Option<&'static Container>)>,
-    equipped_items: Query<'w, 's, (&'static Graphic, Option<&'static Tooltip>, Option<&'static Quantity>, Option<&'static Container>)>,
+    characters: Query<'w, 's, (&'static Character, &'static Flags, &'static MapPosition, &'static Notorious, &'static Stats, Option<&'static Children>)>,
+    world_items: Query<'w, 's, (&'static Graphic, &'static Flags, &'static MapPosition, Option<&'static Tooltip>, Option<&'static Quantity>, Option<&'static Container>, Option<&'static Children>)>,
+    child_items: Query<'w, 's, (&'static Graphic, &'static Parent, &'static ContainerPosition, Option<&'static Tooltip>, Option<&'static Quantity>, Option<&'static Container>, Option<&'static Children>)>,
+    equipped_items: Query<'w, 's, (&'static Graphic, &'static Parent, &'static EquippedPosition, Option<&'static Tooltip>, Option<&'static Quantity>, Option<&'static Container>, Option<&'static Children>)>,
 }
 
 impl<'w, 's> WorldObserver<'w, 's> {
     fn observe_container(
-        &self, viewer: Entity, view_state: &mut Mut<ViewState>, container: &Container,
+        &self, viewer: Entity, view_state: &mut Mut<ViewState>, _container: &Container, children: Option<&Children>,
     ) {
-        for child in &container.items {
-            if let Ok((graphic, parent, tooltip, quantity, container)) = self.child_items.get(*child) {
+        let Some(children) = children else {
+            return;
+        };
+
+        for child in children {
+            if let Ok((graphic, parent, position, tooltip, quantity, container, sub_children)) = self.child_items.get(*child) {
                 view_state.upsert_ghost(*child, GhostState::Item(ItemState {
                     dirty_flags: ItemDirtyFlags::empty(),
                     graphic: *graphic,
-                    position: ItemPositionState::Contained(parent.clone()),
+                    position: ItemPositionState::Contained(parent.get(), position.clone()),
                     quantity: quantity.map_or(1, |q| q.quantity),
                     tooltip: Default::default(),
                     tooltip_version: 0,
@@ -518,7 +523,7 @@ impl<'w, 's> WorldObserver<'w, 's> {
                 }
 
                 if let Some(container) = container {
-                    self.observe_container(viewer, view_state, container);
+                    self.observe_container(viewer, view_state, container, sub_children);
                 }
             }
         }
@@ -529,12 +534,12 @@ impl<'w, 's> WorldObserver<'w, 's> {
         entity: Entity, slot: EquipmentSlot,
         graphic: &Graphic, tooltip: Option<&Tooltip>,
         quantity: Option<&Quantity>, container: Option<&Container>,
+        children: Option<&Children>,
     ) {
         view_state.upsert_ghost(entity, GhostState::Item(ItemState {
             dirty_flags: ItemDirtyFlags::empty(),
             graphic: *graphic,
-            position: ItemPositionState::Equipped(EquippedBy {
-                parent,
+            position: ItemPositionState::Equipped(parent, EquippedPosition {
                 slot,
             }),
             quantity: quantity.map_or(1, |q| q.quantity),
@@ -548,14 +553,14 @@ impl<'w, 's> WorldObserver<'w, 's> {
         }
 
         if let Some(container) = container {
-            self.observe_container(viewer, view_state, container);
+            self.observe_container(viewer, view_state, container, children);
         }
     }
 
     fn observe_character(
         &self, viewer: Entity, view_state: &mut Mut<ViewState>, entity: Entity,
-        character: &Character, flags: EntityFlags, location: &Location, notoriety: Notoriety,
-        stats: &Stats,
+        character: &Character, flags: EntityFlags, location: &MapPosition, notoriety: Notoriety,
+        stats: &Stats, children: Option<&Children>,
     ) {
         view_state.upsert_ghost(entity, GhostState::Character(CharacterState {
             dirty_flags: CharacterDirtyFlags::empty(),
@@ -567,20 +572,22 @@ impl<'w, 's> WorldObserver<'w, 's> {
             flags,
         }));
 
-        for equipped in &character.equipment {
-            if let Ok((graphic, tooltip, quantity, container)) = self.equipped_items.get(equipped.entity) {
-                self.observe_equipped(
-                    viewer, view_state, entity, equipped.entity, equipped.slot,
-                    graphic, tooltip, quantity, container,
-                );
+        if let Some(children) = children {
+            for equipped in children {
+                if let Ok((graphic, _, position, tooltip, quantity, container, sub_children)) = self.equipped_items.get(*equipped) {
+                    self.observe_equipped(
+                        viewer, view_state, entity, *equipped, position.slot,
+                        graphic, tooltip, quantity, container, sub_children,
+                    );
+                }
             }
         }
     }
 
     fn observe_world_item(
         &self, viewer: Entity, view_state: &mut Mut<ViewState>, entity: Entity,
-        graphic: &Graphic, flags: EntityFlags, location: &Location, tooltip: Option<&Tooltip>,
-        quantity: Option<&Quantity>, container: Option<&Container>,
+        graphic: &Graphic, flags: EntityFlags, location: &MapPosition, tooltip: Option<&Tooltip>,
+        quantity: Option<&Quantity>, container: Option<&Container>, children: Option<&Children>,
     ) {
         view_state.upsert_ghost(entity, GhostState::Item(ItemState {
             dirty_flags: ItemDirtyFlags::empty(),
@@ -600,17 +607,17 @@ impl<'w, 's> WorldObserver<'w, 's> {
         }
 
         if let Some(container) = container {
-            self.observe_container(viewer, view_state, container);
+            self.observe_container(viewer, view_state, container, children);
         }
     }
 
     fn observe_entity(&self, viewer: Entity, view_state: &mut Mut<ViewState>, entity: Entity) {
-        if let Ok((character, flags, location, notorious, stats)) = self.characters.get(entity) {
-            self.observe_character(viewer, view_state, entity, character, flags.flags, location, notorious.0, stats);
+        if let Ok((character, flags, location, notorious, stats, children)) = self.characters.get(entity) {
+            self.observe_character(viewer, view_state, entity, character, flags.flags, location, notorious.0, stats, children);
         }
 
-        if let Ok((graphic, flags, location, tooltip, quantity, container)) = self.world_items.get(entity) {
-            self.observe_world_item(viewer, view_state, entity, graphic, flags.flags, location, tooltip, quantity, container);
+        if let Ok((graphic, flags, location, tooltip, quantity, container, children)) = self.world_items.get(entity) {
+            self.observe_world_item(viewer, view_state, entity, graphic, flags.flags, location, tooltip, quantity, container, children);
         }
     }
 }
@@ -619,7 +626,7 @@ pub fn observe_ghosts(
     observer: WorldObserver,
     entities: Res<EntityPositions>,
     mut clients: Query<(Entity, &View, &mut ViewState, &Possessing)>,
-    owned: Query<&Location, With<NetOwner>>,
+    owned: Query<&MapPosition, With<OwningClient>>,
 ) {
     for (entity, view, mut view_state, possessing) in &mut clients {
         let location = match owned.get(possessing.entity) {
@@ -638,7 +645,7 @@ pub fn observe_ghosts(
 
 pub fn start_synchronizing(
     clients: Query<(Entity, &ViewState, Ref<Possessing>), (With<NetClient>, Without<Synchronizing>)>,
-    characters: Query<&Location, (With<NetOwner>, With<NetEntity>, With<Location>, With<Character>)>,
+    characters: Query<&MapPosition, (With<OwningClient>, With<NetId>, With<MapPosition>, With<Character>)>,
     mut commands: Commands,
 ) {
     for (entity, view_state, possessing) in &clients {
@@ -659,7 +666,7 @@ pub fn start_synchronizing(
 
 pub fn send_change_map(
     mut clients: Query<(&NetClient, &mut ViewState, Ref<Possessing>), With<Synchronizing>>,
-    characters: Query<(&NetEntity, &Location, Ref<Character>)>,
+    characters: Query<(&NetId, &MapPosition, Ref<Character>)>,
     maps: Res<MapInfos>,
 ) {
     for (client, mut view_state, possessing) in clients.iter_mut() {
@@ -712,7 +719,7 @@ pub fn finish_synchronizing(
 }
 
 pub fn send_opened_containers(
-    entity_lookup: Res<NetEntityLookup>,
+    net_ids: Query<&NetId>,
     clients: Query<(&NetClient, &ViewState)>,
     mut events: EventReader<ContainerOpenedEvent>,
 ) {
@@ -722,9 +729,9 @@ pub fn send_opened_containers(
             _ => continue,
         };
 
-        let id = match entity_lookup.ecs_to_net(event.container) {
-            Some(x) => x,
-            None => continue,
+        let id = match net_ids.get(event.container) {
+            Ok(x) => x.id,
+            _ => continue,
         };
 
         let container_state = match view_state.ghosts.get(&event.container) {
@@ -740,13 +747,13 @@ pub fn send_opened_containers(
         let mut contents = Vec::new();
         for child in view_state.iter_children(event.container) {
             if let Some(GhostState::Item(item)) = view_state.ghosts.get(&child) {
-                let child_id = match entity_lookup.ecs_to_net(child) {
-                    Some(x) => x,
-                    None => continue,
+                let child_id = match net_ids.get(child) {
+                    Ok(x) => x.id,
+                    _ => continue,
                 };
 
                 let (position, grid_index) = match &item.position {
-                    ItemPositionState::Contained(c) => (c.position, c.grid_index),
+                    ItemPositionState::Contained(_, c) => (c.position, c.grid_index),
                     _ => continue,
                 };
 

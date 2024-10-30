@@ -1,10 +1,8 @@
 use crate::persistence::SerializationSetupExt;
 use bevy::app::{App, Plugin};
-use bevy::asset::Handle;
 use bevy::ecs::component::Component;
 use bevy::ecs::reflect::ReflectComponent;
 use bevy::reflect::{Reflect, ReflectSerialize, ReflectDeserialize};
-use bevy_fabricator::Fabricator;
 use rand::{thread_rng, RngCore};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use uuid::{Bytes, Uuid};
@@ -17,7 +15,7 @@ pub struct Persistent;
 #[derive(Debug, Clone, Component, Reflect)]
 #[reflect(Component)]
 pub struct PrefabInstance {
-    pub fabricator: Handle<Fabricator>,
+    pub prefab_name: String,
 }
 
 #[derive(Debug, Clone, Component, Reflect)]

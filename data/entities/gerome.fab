@@ -1,11 +1,12 @@
 import yewoh_default_game::ai::behaviours::wander::WanderPrefab;
 import yewoh_default_game::characters::prefabs::CharacterPrefab;
-import yewoh_server::world::entity::Location;
+import yewoh_server::world::entity::MapPosition;
+import yewoh::protocol::entity::EquipmentSlot;
 import bevy_fabricator::humantime::HumanDuration;
 import bevy_fabricator::values::Some;
 
 $ <- CharacterPrefab {
-    name: "Gerome2",
+    name: "Gerome",
     body_type: 0x190,
     hue: 0x909,
 };
@@ -14,7 +15,7 @@ $ <- WanderPrefab {
     interval: HumanDuration("2s"),
 };
 
-$ <- Location {
+$ <- MapPosition {
     map_id: 1,
     position: (1324, 1624, 55),
 };

@@ -1,30 +1,24 @@
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
-use bevy::app::{App, Plugin, Update};
-use bevy::ecs::entity::Entity;
-use bevy::ecs::event::EventReader;
-use bevy::ecs::query::With;
-use bevy::ecs::system::{Commands, Local, Query, Res, ResMut, Resource};
-use bevy::prelude::AssetServer;
-use bevy_fabricator::Fabricate;
+use bevy::prelude::*;
 use glam::IVec3;
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 use yewoh::Direction;
 
-use yewoh::protocol::{CharacterFromList, CharacterList, CharacterListFlags, Race};
+use yewoh::protocol::{CharacterFromList, CharacterList, CharacterListFlags, EquipmentSlot, Race};
 use yewoh::types::FixedString;
 use yewoh_server::async_runtime::AsyncRuntime;
-use yewoh_server::world::entity::{Character, Location, Stats};
+use yewoh_server::world::entity::{Character, EquippedPosition, Flags, Graphic, MapPosition, Stats};
 use yewoh_server::world::events::{CharacterListEvent, CreateCharacterEvent, DeleteCharacterEvent, SelectCharacterEvent};
-use yewoh_server::world::net::{NetClient, NetCommandsExt, NetOwner, Possessing, User};
+use yewoh_server::world::net::{AssignNetId, NetClient, OwningClient, Possessing, User};
 
 use crate::accounts::repository::{AccountCharacters, AccountRepository, CharacterInfo, CharacterToSpawn};
+use crate::data::prefabs::PrefabLibraryEntityExt;
 use crate::data::static_data::StaticData;
-use crate::entities::UniqueId;
-use crate::persistence::PersistenceCommandsExt;
+use crate::entities::{Persistent, PrefabInstance, UniqueId};
 
 pub mod repository;
 
@@ -230,7 +224,6 @@ pub fn handle_delete_character<T: AccountRepository>(
 
 pub fn create_new_character(
     commands: &mut Commands,
-    asset_server: &AssetServer,
     info: CharacterInfo,
 ) -> Entity {
     let race_name = match info.race {
@@ -244,79 +237,82 @@ pub fn create_new_character(
         true => "female",
     };
 
-    let prefab_path = format!("prefabs/players/player_{race_name}_{gender_name}.fab");
-    let fabricator = asset_server.load(prefab_path);
+    let prefab_name = format!("player_{race_name}_{gender_name}");
 
     commands
-        .spawn((
-            Fabricate::with_handle(fabricator),
-        ))
-        /*.queue(move |entity: Entity, world: &mut World| {
-            let mut equipment = Vec::new();
-
+        .spawn_empty()
+        .fabricate_from_library(&prefab_name)
+        .queue(move |entity: Entity, world: &mut World| {
             if info.hair != 0 {
-                let entity = world.spawn((
+                world.spawn((
                     Flags::default(),
                     Graphic { id: info.hair, hue: info.hair_hue },
-                )).id();
-                equipment.push(CharacterEquipped::new(EquipmentSlot::Hair, entity));
+                    EquippedPosition { slot: EquipmentSlot::Hair },
+                ));
             }
 
             if info.beard != 0 {
-                let entity = world.spawn((
+                world.spawn((
                     Flags::default(),
                     Graphic { id: info.beard, hue: info.beard_hue },
-                )).id();
-                equipment.push(CharacterEquipped::new(EquipmentSlot::FacialHair, entity));
+                    EquippedPosition { slot: EquipmentSlot::FacialHair },
+                ));
             }
 
             let mut entity_ref = world.entity_mut(entity);
-            entity_ref.insert(PrefabInstance { prefab_name: prefab_name.into() });
+            entity_ref.insert(PrefabInstance { prefab_name });
 
             if let Some(mut c) = entity_ref.get_mut::<Character>() {
-                let mut c = std::mem::take(&mut *c);
+                let c = c.as_mut();
                 c.hue = info.hue;
-                c.equipment.extend(equipment);
 
-                entity_ref.world_scope(|world| {
-                    for equipped in &c.equipment {
-                        match equipped.slot {
-                            EquipmentSlot::Top => {
-                                world.entity_mut(equipped.entity)
-                                    .get_mut::<Graphic>()
-                                    .unwrap()
-                                    .hue = info.shirt_hue;
-                            }
-                            EquipmentSlot::Bottom => {
-                                world.entity_mut(equipped.entity)
-                                    .get_mut::<Graphic>()
-                                    .unwrap()
-                                    .hue = info.pants_hue;
-                            }
+                let mut top = None;
+                let mut bottom = None;
+
+                if let Some(children) = entity_ref.get::<Children>() {
+                    for child in children {
+                        let Some(pos) = entity_ref.world().entity(*child).get::<EquippedPosition>() else {
+                            continue;
+                        };
+
+                        match pos.slot {
+                            EquipmentSlot::Top => top = Some(*child),
+                            EquipmentSlot::Bottom => bottom = Some(*child),
                             _ => {}
                         }
                     }
-                });
+                }
 
-                *entity_ref.get_mut().unwrap() = c;
+                entity_ref.world_scope(|world| {
+                    if let Some(entity) = top {
+                        world.entity_mut(entity)
+                            .get_mut::<Graphic>()
+                            .map(|mut g| g.hue = info.shirt_hue);
+                    }
+
+                    if let Some(entity) = bottom {
+                        world.entity_mut(entity)
+                            .get_mut::<Graphic>()
+                            .map(|mut g| g.hue = info.pants_hue);
+                    }
+                });
             }
-        })*/
+        })
         .insert((
-            Location {
+            MapPosition {
                 map_id: 1,
                 position: IVec3::new(1325, 1624, 55),
                 direction: Direction::North,
             },
             info.stats,
+            AssignNetId,
+            Persistent,
         ))
-        .make_persistent()
-        .assign_network_id()
         .id()
 }
 
 pub fn handle_spawn_character<T: AccountRepository>(
     runtime: Res<AsyncRuntime>,
-    asset_server: Res<AssetServer>,
     mut pending: ResMut<PendingCharacterInfo>,
     pending_list: ResMut<PendingCharacterLists>,
     mut commands: Commands,
@@ -367,16 +363,18 @@ pub fn handle_spawn_character<T: AccountRepository>(
             }
             CharacterToSpawn::NewCharacter(id, info) => {
                 info!("Creating new character: {}", &id);
-                let primary_entity = create_new_character(&mut commands, &asset_server, info);
+                let primary_entity = create_new_character(&mut commands, info);
                 all_players.insert(id, primary_entity);
                 commands.entity(primary_entity)
-                    .insert(UniqueId { id })
-                    .assign_network_id();
+                    .insert((
+                        AssignNetId,
+                        UniqueId { id },
+                    ));
                 primary_entity
             }
         };
 
-        commands.entity(primary_entity).insert(NetOwner { client_entity });
+        commands.entity(primary_entity).insert(OwningClient { client_entity });
         commands.entity(client_entity).insert(Possessing { entity: primary_entity });
         info!("Attached character for {:?} = {:?}", client_entity, primary_entity);
     }

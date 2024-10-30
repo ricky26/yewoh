@@ -12,20 +12,18 @@ use bevy::ecs::world::{FromWorld, Mut, World};
 use bevy::prelude::{AppTypeRegistry, EntityMapper, FromReflect};
 use bevy::reflect::{GetTypeRegistration, PartialReflect, TypeRegistry, Typed};
 use de::{BundleValuesVisitor, WorldVisitor};
-pub use hierarchy::{set_persistent, ChangePersistence, PersistenceCommandsExt};
 use ser::{BufferBundlesSerializer, BufferSerializer};
 use serde::de::Error as DError;
 use serde::ser::SerializeStruct;
 use serde::{Deserializer, Serializer};
 use sqlx::migrate::Migrate;
 use sqlx::{Database, Pool};
-use tracing::{error, info};
+use tracing::error;
 
 use crate::persistence::prefab::PrefabSerializer;
 
 mod ser;
 mod de;
-mod hierarchy;
 pub mod prefab;
 pub mod db;
 

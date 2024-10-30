@@ -1,7 +1,7 @@
 use bevy::ecs::query::{With, WorldQuery};
 use bevy::ecs::world::{FromWorld, World};
 use bevy::prelude::Entity;
-use yewoh_server::world::entity::{Container, EquippedBy, Flags, Graphic, Location, ParentContainer};
+use yewoh_server::world::entity::{Container, ContainerPosition, EquippedPosition, Flags, Graphic, MapPosition};
 
 use crate::entities::Persistent;
 use crate::persistence::BundleSerializer;
@@ -18,19 +18,19 @@ impl BundleSerializer for ItemSerializer {
     type Query = (
         &'static Graphic,
         &'static Flags,
-        Option<&'static Location>,
+        Option<&'static MapPosition>,
         Option<&'static Container>,
-        Option<&'static ParentContainer>,
-        Option<&'static EquippedBy>,
+        Option<&'static ContainerPosition>,
+        Option<&'static EquippedPosition>,
     );
     type Filter = With<Persistent>;
     type Bundle = (
         Graphic,
         Flags,
-        Option<Location>,
+        Option<MapPosition>,
         Option<Container>,
-        Option<ParentContainer>,
-        Option<EquippedBy>,
+        Option<ContainerPosition>,
+        Option<EquippedPosition>,
     );
 
     fn id() -> &'static str {

@@ -1,0 +1,6 @@
+import yewoh_default_game::characters::prefabs::CharacterPrefab;
+
+$ <- CharacterPrefab {
+    name: "Player",
+    body_type: 605,
+};

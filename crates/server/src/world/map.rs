@@ -13,7 +13,7 @@ use yewoh::assets::multi::MultiData;
 use yewoh::assets::tiles::{TileData, TileFlags};
 use yewoh::Direction;
 
-use crate::world::entity::{Graphic, Location};
+use crate::world::entity::{Graphic, MapPosition};
 use crate::world::net::MapInfos;
 
 #[derive(Debug, Clone, Default, Component, Reflect)]
@@ -72,7 +72,7 @@ pub fn spawn_chunk(commands: &mut Commands, map_id: u8, chunk_x: usize, chunk_y:
 
     commands.spawn((
         Chunk { map_chunk },
-        Location { map_id, position, direction: Direction::default() },
+        MapPosition { map_id, position, direction: Direction::default() },
     ));
 }
 
@@ -138,7 +138,7 @@ pub async fn create_statics(
 
     while let Some((map_id, s)) = rx.recv().await {
         let mut entity = commands.spawn((
-            Location { map_id, position: s.position, direction: Direction::default() },
+            MapPosition { map_id, position: s.position, direction: Direction::default() },
             Graphic { id: s.graphic_id, hue: s.hue },
             Static,
         ));
