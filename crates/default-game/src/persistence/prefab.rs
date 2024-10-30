@@ -1,7 +1,7 @@
 use bevy::ecs::entity::Entity;
 use bevy::ecs::query::With;
 use bevy::ecs::world::{FromWorld, World};
-
+use crate::data::prefabs::{PrefabLibraryEntityExt, PrefabLibraryRequest};
 use crate::entities::{Persistent, PrefabInstance};
 
 use super::BundleSerializer;
@@ -32,22 +32,10 @@ impl BundleSerializer for PrefabSerializer {
     }
 
     fn insert(world: &mut World, entity: Entity, bundle: Self::Bundle) {
-        world.entity_mut(entity).insert(bundle);
-
-        /*
-        let prefab_name = String::deserialize(d)?;
-        if let Some(prefab) = ctx.world.resource::<PrefabCollection>().get(&prefab_name).cloned() {
-            ctx.world.entity_mut(entity)
-                .insert_prefab(prefab)
-                .insert((
-                    PrefabInstance { prefab_name: prefab_name.into() },
-                    Persistent,
-                ));
-            Ok(())
-        } else {
-            Err(D::Error::custom(format!("Unable to deserialize prefab {}", &prefab_name)))
-        }
-
-         */
+        world.entity_mut(entity)
+            .fabricate_from_library(PrefabLibraryRequest {
+                prefab_name: bundle.prefab_name,
+                parameters: bundle.parameters,
+            });
     }
 }

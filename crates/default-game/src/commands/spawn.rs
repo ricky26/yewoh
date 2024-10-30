@@ -11,7 +11,7 @@ use yewoh_server::world::net::{AssignNetId, NetClient, ViewState};
 
 use crate::commands::{TextCommand, TextCommandQueue};
 use crate::data::prefabs::{PrefabLibrary, PrefabLibraryEntityExt};
-use crate::entities::{Persistent, PrefabInstance};
+use crate::entities::Persistent;
 use crate::hues;
 use crate::networking::NetClientExt;
 
@@ -95,20 +95,16 @@ pub fn spawn(
         // TODO: check whether location is obstructed.
 
         let map_id = view_state.map_id();
-        let prefab_instance = PrefabInstance { prefab_name: spawn.prefab_name.clone() };
 
         commands
             .spawn_empty()
             .fabricate_from_library(&spawn.prefab_name)
             .insert((
-                prefab_instance,
                 MapPosition {
                     map_id,
                     position,
                     direction: Default::default(),
                 },
-                Persistent,
-                AssignNetId,
             ));
     }
 
@@ -133,12 +129,10 @@ pub fn spawn(
             }
         };
 
-        let prefab_instance = PrefabInstance { prefab_name: spawn.prefab_name.clone() };
         commands
             .spawn_empty()
             .fabricate_from_library(&spawn.prefab_name)
             .insert((
-                prefab_instance,
                 ContainerPosition {
                     position: IVec2::ZERO,
                     grid_index: 0,

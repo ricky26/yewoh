@@ -20,6 +20,7 @@ use sqlx::migrate::Migrate;
 use sqlx::{Database, Pool};
 use tracing::error;
 
+use crate::entities::Persistent;
 use crate::persistence::prefab::PrefabSerializer;
 
 mod ser;
@@ -169,7 +170,11 @@ impl EntityMapper for NewEntityMapper<'_> {
         if let Some(existing) = self.entity_map.get(&entity) {
             *existing
         } else {
-            let new_entity = self.world.spawn_empty().id();
+            let new_entity = self.world
+                .spawn((
+                    Persistent,
+                ))
+                .id();
             self.entity_map.insert(entity, new_entity);
             new_entity
         }
@@ -254,7 +259,7 @@ impl BundleSerializers {
                 type_registry: &type_registry,
             };
 
-             d.deserialize_struct("World", &["bundles"], WorldVisitor {
+            d.deserialize_struct("World", &["bundles"], WorldVisitor {
                 ctx: &mut ctx,
                 deserializers: self,
             })?

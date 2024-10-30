@@ -4,6 +4,7 @@ use anyhow::anyhow;
 use bevy::prelude::*;
 use bevy::utils::HashMap;
 use bevy_fabricator::{empty_reflect, FabricateRequest, Fabricator};
+use crate::entities::PrefabInstance;
 
 #[derive(Clone, Default, Resource)]
 pub struct PrefabLibrary {
@@ -74,8 +75,16 @@ pub fn fabricate_from_library(
     world: &mut World, entity: Entity, request: PrefabLibraryRequest,
 ) -> anyhow::Result<()> {
     let library = world.resource::<PrefabLibrary>();
-    let request = library.request_for(&request)?;
-    request.fabricate(world, entity)?;
+    let fabricate_request = library.request_for(&request)?;
+    let fabricated = fabricate_request.fabricate(world, entity)?;
+    world.entity_mut(entity)
+        .insert((
+            fabricated,
+            PrefabInstance {
+                prefab_name: request.prefab_name.clone(),
+                parameters: request.parameters.clone(),
+            },
+        ));
     Ok(())
 }
 

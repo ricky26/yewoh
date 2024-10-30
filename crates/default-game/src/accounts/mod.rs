@@ -18,7 +18,7 @@ use yewoh_server::world::net::{NetClient, OwningClient, Possessing, User};
 use crate::accounts::repository::{AccountCharacters, AccountRepository, CharacterInfo, CharacterToSpawn};
 use crate::data::prefabs::{PrefabLibraryRequest, PrefabLibraryWorldExt};
 use crate::data::static_data::StaticData;
-use crate::entities::{PrefabInstance, UniqueId};
+use crate::entities::UniqueId;
 
 pub mod repository;
 
@@ -246,7 +246,6 @@ pub fn create_new_character(
     commands
         .fabricate_from_library(request)
         .insert((
-            PrefabInstance { prefab_name },
             MapPosition {
                 map_id: 1,
                 position: IVec3::new(1325, 1624, 55),
@@ -336,6 +335,7 @@ impl<T: AccountRepository> Default for AccountsPlugin<T> {
 impl<T: AccountRepository> Plugin for AccountsPlugin<T> {
     fn build(&self, app: &mut App) {
         app
+            .register_type::<CharacterInfo>()
             .init_resource::<PendingCharacterLists>()
             .init_resource::<PendingCharacterInfo>()
             .add_systems(Update, (

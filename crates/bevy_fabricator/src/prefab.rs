@@ -1200,6 +1200,15 @@ pub fn convert(
                     bail!("input was not a struct, got {input:?}");
                 }
             }
+            ReflectRef::Map(map_input) => {
+                for (name, (index, required)) in &inputs {
+                    if let Some(field) = map_input.get(name) {
+                        registers[*index] = Some(field.clone_value().into());
+                    } else if *required {
+                        bail!("missing required input '{name}'");
+                    }
+                }
+            }
             _ => bail!("input was not a struct, got {input:?}"),
         }
 
