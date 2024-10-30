@@ -1,16 +1,15 @@
 use std::collections::HashMap;
 
-use bevy::ecs::entity::Entity;
-use bevy::ecs::world::World;
-use bevy::reflect::Reflect;
+use bevy::prelude::*;
+use bevy::reflect::std_traits::ReflectDefault;
+use bevy::reflect::ReflectDeserialize;
 use serde::{Deserialize, Serialize};
 use bevy_fabricator::Fabricated;
-use bevy_fabricator::traits::Apply;
-use yewoh_server::world::entity::{Flags, Graphic, Tooltip, TooltipLine};
+use bevy_fabricator::traits::{Apply, ReflectApply};
+use yewoh_server::world::entity::{Container, Flags, Graphic, Tooltip, TooltipLine};
 
-pub mod container;
-
-#[derive(Debug, Clone, Reflect, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Reflect, Serialize, Deserialize)]
+#[reflect(Default, Serialize, Deserialize, Apply)]
 pub struct ItemPrefab {
     graphic: u16,
     #[serde(default)]
@@ -53,6 +52,7 @@ pub struct TooltipLinePrefab {
 }
 
 #[derive(Debug, Clone, Default, Reflect, Serialize, Deserialize)]
+#[reflect(Apply, Deserialize)]
 pub struct TooltipPrefab {
     #[serde(flatten)]
     pub entries: HashMap<String, TooltipLinePrefab>,
@@ -82,6 +82,25 @@ impl Apply for TooltipPrefab {
         world.entity_mut(entity)
             .insert(tooltip);
 
+        Ok(())
+    }
+}
+
+#[derive(Clone, Default, Reflect, Deserialize)]
+#[reflect(Default, Deserialize, Apply)]
+pub struct ContainerPrefab {
+    gump: u16,
+}
+
+impl Apply for ContainerPrefab {
+    fn apply(
+        &self, world: &mut World, entity: Entity, _fabricated: &mut Fabricated,
+    ) -> anyhow::Result<()> {
+        world.entity_mut(entity)
+            .insert(Container {
+                gump_id: self.gump,
+            })
+            .insert(Flags::default());
         Ok(())
     }
 }

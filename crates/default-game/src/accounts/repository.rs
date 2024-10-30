@@ -1,15 +1,14 @@
 use async_trait::async_trait;
-use bevy::ecs::system::Resource;
+use bevy::prelude::*;
 use uuid::Uuid;
 
-use yewoh::protocol::{CreateCharacter, DeleteCharacter, Race};
+use yewoh::protocol::{CreateCharacter, DeleteCharacter};
 use yewoh_server::world::entity::Stats;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default, Reflect)]
+#[reflect(Default)]
 pub struct CharacterInfo {
-    pub race: Race,
     pub hue: u16,
-    pub is_female: bool,
     pub hair: u16,
     pub hair_hue: u16,
     pub beard: u16,
@@ -22,9 +21,7 @@ pub struct CharacterInfo {
 impl CharacterInfo {
     pub fn from_request(request: &CreateCharacter) -> Self {
         Self {
-            race: request.race,
             hue: request.hue,
-            is_female: request.is_female,
             hair: request.hair.graphic,
             hair_hue: request.hair.hue,
             beard: request.beard.graphic,

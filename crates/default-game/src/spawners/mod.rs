@@ -12,7 +12,7 @@ use bevy::utils::HashMap;
 use serde::Deserialize;
 use serde_yaml::Value;
 use bevy_fabricator::{Fabricator, FabricateExt, Fabricated, Fabricate};
-use bevy_fabricator::traits::Apply;
+use bevy_fabricator::traits::{Apply, ReflectApply};
 use yewoh_server::world::entity::MapPosition;
 use yewoh_server::world::net::AssignNetId;
 
@@ -53,6 +53,7 @@ fn to_reflect(value: &Value) -> anyhow::Result<Box<dyn PartialReflect>> {
 }
 
 #[derive(Clone, Default, Reflect, Deserialize)]
+#[reflect(Apply, Deserialize)]
 pub struct SpawnerPrefab {
     prefab: String,
     #[serde(default)]

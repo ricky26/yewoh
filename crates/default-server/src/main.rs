@@ -29,7 +29,7 @@ use yewoh_server::async_runtime::AsyncRuntime;
 use yewoh_server::game_server::listen_for_game;
 use yewoh_server::lobby::{listen_for_lobby, LocalServerRepository};
 use yewoh_server::world::map::{create_map_entities, create_statics, Chunk, MultiDataResource, Static, TileDataResource};
-use yewoh_server::world::net::{AssignNetId, NetServer};
+use yewoh_server::world::net::NetServer;
 use yewoh_server::world::ServerPlugin;
 
 use bevy_fabricator::hot_reload::{FabricatorChanged, WatchForFabricatorChanges};
@@ -235,6 +235,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 #[derive(Resource)]
+#[allow(dead_code)]
 struct PrefabHandles(Vec<Handle<Fabricator>>);
 
 async fn load_prefabs(
@@ -392,7 +393,6 @@ async fn load_static_entities(
                 StaticEntity(asset_path),
                 fabricate,
                 WatchForFabricatorChanges,
-                AssignNetId,
             ))
             .fabricate(request);
         count += 1;
@@ -420,7 +420,7 @@ fn update_static_entities(
             }
         };
 
-        info!("Reloaded {name}");
+        info!("Reloaded static entity '{name}'");
         commands.entity(entity).despawn_recursive();
         commands
             .spawn((
@@ -428,7 +428,6 @@ fn update_static_entities(
                 StaticEntity(asset_path),
                 fabricate,
                 WatchForFabricatorChanges,
-                AssignNetId,
             ))
             .fabricate(request);
     }

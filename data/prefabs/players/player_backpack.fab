@@ -1,0 +1,12 @@
+import yewoh_server::world::net::entity::AssignNetId;
+import yewoh_default_game::entities::Persistent;
+import yewoh_default_game::items::prefabs::{ItemPrefab, ContainerPrefab};
+
+$ <- AssignNetId;
+$ <- Persistent;
+$ <- ItemPrefab {
+    graphic: 0xe75,
+};
+$ <- ContainerPrefab {
+    gump: 0x3c,
+};

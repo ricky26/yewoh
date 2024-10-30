@@ -7,7 +7,7 @@ use bevy::utils::{ConditionalSendFuture, HashMap};
 
 use crate::document::Document;
 use crate::parser::FilePosition;
-use crate::prefab::{convert, DocumentMap};
+use crate::prefab::{convert, FabricatorMap};
 use crate::Fabricator;
 
 
@@ -55,11 +55,11 @@ impl AssetLoader for FabricatorLoader {
                     .map_or_else(|| PathBuf::from(&dep_path), |d| d.join(&dep_path));
 
                 let loaded = load_context.loader().immediate().load::<Fabricator>(abs_dep_path.as_path()).await?;
-                deps.insert(dep_path, loaded.get().factory.clone());
+                deps.insert(dep_path, loaded.get().clone());
             }
 
             let type_registry = type_registry.read();
-            let documents = DocumentMap(deps);
+            let documents = FabricatorMap(deps);
             let fabricator = convert(&type_registry, &documents, &doc)?;
             Ok(fabricator)
         }

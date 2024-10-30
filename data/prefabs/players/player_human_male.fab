@@ -11,7 +11,7 @@ in beard_hue: u16 = 1;
 
 local body_type: u16 = 605;
 local top_id: u16 = 0x1517;
-local bottom_id: u16 = 0x1516;
+local bottom_id: u16 = 0x1539;
 local shoes_id: u16 = 0x170f;
 
 $ <- Fabricate(playerPrefab, {

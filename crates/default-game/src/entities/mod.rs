@@ -9,7 +9,12 @@ use uuid::{Bytes, Uuid};
 
 pub mod persistence;
 
-#[derive(Debug, Clone, Copy, Default, Component)]
+pub mod position;
+
+pub mod prefabs;
+
+#[derive(Debug, Clone, Copy, Default, Reflect, Component)]
+#[reflect(Component)]
 pub struct Persistent;
 
 #[derive(Debug, Clone, Component, Reflect)]
@@ -19,7 +24,7 @@ pub struct PrefabInstance {
 }
 
 #[derive(Debug, Clone, Component, Reflect)]
-#[reflect(opaque, Serialize, Deserialize)]
+#[reflect(opaque, Component, Serialize, Deserialize)]
 pub struct UniqueId {
     pub id: Uuid,
 }
@@ -55,6 +60,10 @@ impl Plugin for EntitiesPlugin {
     fn build(&self, app: &mut App) {
         app
             .register_type::<UniqueId>()
+            .register_type::<Persistent>()
+            .register_type::<prefabs::AtMapPosition>()
+            .register_type::<prefabs::EquippedBy>()
+            .register_type::<prefabs::ContainedBy>()
             .register_serializer::<persistence::UniqueIdSerializer>();
     }
 }

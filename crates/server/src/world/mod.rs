@@ -36,6 +36,9 @@ pub struct ServerPlugin;
 impl Plugin for ServerPlugin {
     fn build(&self, app: &mut App) {
         app
+            .add_plugins((
+                net::plugin,
+            ))
             .init_resource::<MapInfos>()
             .init_resource::<NetIdAllocator>()
             .init_resource::<NetEntityLookup>()

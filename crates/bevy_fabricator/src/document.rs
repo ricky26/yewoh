@@ -107,9 +107,7 @@ impl<'a> Path<'a> {
         segments.extend_from_slice(&other.0);
         Path(segments)
     }
-}
 
-impl<'a> Debug for Path<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut parts = self.0.iter();
         let Some(first) = parts.next() else { return Ok(()); };
@@ -120,6 +118,18 @@ impl<'a> Debug for Path<'a> {
         }
 
         Ok(())
+    }
+}
+
+impl<'a> Display for Path<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.fmt(f)
+    }
+}
+
+impl<'a> Debug for Path<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.fmt(f)
     }
 }
 
@@ -764,7 +774,18 @@ fn parse_struct_body<'a>(
         let (next, key) = expect_identifier(rest)?;
         rest = skip_whitespace(next);
 
-        if !rest.starts_with(':') {
+        if rest.starts_with(&[',', '}']) {
+            let expr = Expression::Path(Path::single(key));
+            let index = document.push_register(expr);
+            body.push((key, index));
+
+            if !rest.starts_with(',') {
+                break;
+            }
+
+            rest = skip_whitespace(&rest[1..]);
+            continue;
+        } else if !rest.starts_with(':') {
             return Err(ParseError::ExpectedColon(rest));
         }
 

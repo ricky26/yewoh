@@ -1,24 +1,24 @@
-use std::collections::HashMap;
-use std::marker::PhantomData;
-
 use bevy::prelude::*;
 use glam::IVec3;
+use std::collections::HashMap;
+use std::marker::PhantomData;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 use yewoh::Direction;
 
-use yewoh::protocol::{CharacterFromList, CharacterList, CharacterListFlags, EquipmentSlot, Race};
+use yewoh::protocol::{CharacterFromList, CharacterList, CharacterListFlags, Race};
 use yewoh::types::FixedString;
 use yewoh_server::async_runtime::AsyncRuntime;
-use yewoh_server::world::entity::{Character, EquippedPosition, Flags, Graphic, MapPosition, Stats};
+use yewoh_server::world::entity::{Character, MapPosition, Stats};
 use yewoh_server::world::events::{CharacterListEvent, CreateCharacterEvent, DeleteCharacterEvent, SelectCharacterEvent};
-use yewoh_server::world::net::{AssignNetId, NetClient, OwningClient, Possessing, User};
+use yewoh_server::world::net::{NetClient, OwningClient, Possessing, User};
 
 use crate::accounts::repository::{AccountCharacters, AccountRepository, CharacterInfo, CharacterToSpawn};
-use crate::data::prefabs::PrefabLibraryEntityExt;
+use crate::data::prefabs::{PrefabLibraryRequest, PrefabLibraryWorldExt};
 use crate::data::static_data::StaticData;
-use crate::entities::{Persistent, PrefabInstance, UniqueId};
+use crate::entities::{PrefabInstance, UniqueId};
 
 pub mod repository;
 
@@ -226,87 +226,33 @@ pub fn create_new_character(
     commands: &mut Commands,
     info: CharacterInfo,
 ) -> Entity {
-    let race_name = match info.race {
+    let race_name = match info.stats.race {
         Race::Human => "human",
         Race::Elf => "elf",
         Race::Gargoyle => "gargoyle",
     };
 
-    let gender_name = match info.is_female {
+    let gender_name = match info.stats.female {
         false => "male",
         true => "female",
     };
 
     let prefab_name = format!("player_{race_name}_{gender_name}");
+    let request = PrefabLibraryRequest {
+        prefab_name: prefab_name.clone(),
+        parameters: Arc::new(info.clone()),
+    };
 
     commands
-        .spawn_empty()
-        .fabricate_from_library(&prefab_name)
-        .queue(move |entity: Entity, world: &mut World| {
-            if info.hair != 0 {
-                world.spawn((
-                    Flags::default(),
-                    Graphic { id: info.hair, hue: info.hair_hue },
-                    EquippedPosition { slot: EquipmentSlot::Hair },
-                ));
-            }
-
-            if info.beard != 0 {
-                world.spawn((
-                    Flags::default(),
-                    Graphic { id: info.beard, hue: info.beard_hue },
-                    EquippedPosition { slot: EquipmentSlot::FacialHair },
-                ));
-            }
-
-            let mut entity_ref = world.entity_mut(entity);
-            entity_ref.insert(PrefabInstance { prefab_name });
-
-            if let Some(mut c) = entity_ref.get_mut::<Character>() {
-                let c = c.as_mut();
-                c.hue = info.hue;
-
-                let mut top = None;
-                let mut bottom = None;
-
-                if let Some(children) = entity_ref.get::<Children>() {
-                    for child in children {
-                        let Some(pos) = entity_ref.world().entity(*child).get::<EquippedPosition>() else {
-                            continue;
-                        };
-
-                        match pos.slot {
-                            EquipmentSlot::Top => top = Some(*child),
-                            EquipmentSlot::Bottom => bottom = Some(*child),
-                            _ => {}
-                        }
-                    }
-                }
-
-                entity_ref.world_scope(|world| {
-                    if let Some(entity) = top {
-                        world.entity_mut(entity)
-                            .get_mut::<Graphic>()
-                            .map(|mut g| g.hue = info.shirt_hue);
-                    }
-
-                    if let Some(entity) = bottom {
-                        world.entity_mut(entity)
-                            .get_mut::<Graphic>()
-                            .map(|mut g| g.hue = info.pants_hue);
-                    }
-                });
-            }
-        })
+        .fabricate_from_library(request)
         .insert((
+            PrefabInstance { prefab_name },
             MapPosition {
                 map_id: 1,
                 position: IVec3::new(1325, 1624, 55),
                 direction: Direction::North,
             },
             info.stats,
-            AssignNetId,
-            Persistent,
         ))
         .id()
 }
@@ -367,7 +313,6 @@ pub fn handle_spawn_character<T: AccountRepository>(
                 all_players.insert(id, primary_entity);
                 commands.entity(primary_entity)
                     .insert((
-                        AssignNetId,
                         UniqueId { id },
                     ));
                 primary_entity

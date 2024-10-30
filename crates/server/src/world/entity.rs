@@ -118,8 +118,8 @@ pub struct Container {
     pub gump_id: u16,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Component, Reflect)]
-#[reflect(Component)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Component, Reflect)]
+#[reflect(Default, Component)]
 pub struct ContainerPosition {
     pub position: IVec2,
     pub grid_index: u8,

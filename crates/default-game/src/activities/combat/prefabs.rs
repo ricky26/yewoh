@@ -1,12 +1,12 @@
-use bevy::ecs::entity::Entity;
-use bevy::ecs::world::World;
-use bevy::reflect::Reflect;
+use bevy::prelude::*;
 use serde::Deserialize;
 use bevy_fabricator::Fabricated;
-use bevy_fabricator::traits::Apply;
+use bevy_fabricator::traits::{Apply, ReflectApply};
+
 use crate::characters::{MeleeWeapon, Unarmed};
 
 #[derive(Clone, Default, Reflect, Deserialize)]
+#[reflect(Default, Apply, Deserialize)]
 pub struct MeleeWeaponPrefab {
     #[serde(flatten)]
     weapon: MeleeWeapon,
@@ -23,6 +23,7 @@ impl Apply for MeleeWeaponPrefab {
 }
 
 #[derive(Clone, Reflect, Deserialize)]
+#[reflect(Apply, Deserialize)]
 pub struct UnarmedPrefab {
     #[serde(flatten)]
     weapon: MeleeWeapon,

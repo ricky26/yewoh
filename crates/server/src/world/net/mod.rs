@@ -1,3 +1,4 @@
+use bevy::prelude::*;
 pub use connection::{
     NetServer,
     NetClient,
@@ -44,3 +45,10 @@ mod entity;
 mod view;
 
 mod combat;
+
+pub fn plugin(app: &mut App) {
+    app
+        .register_type::<NetId>()
+        .register_type::<AssignNetId>()
+        .register_type::<OwningClient>();
+}

@@ -19,17 +19,17 @@ impl PrefabLibrary {
         self.prefabs.is_empty()
     }
 
-    pub fn get(&self, id: &str) -> Option<&Fabricator> {
-        self.prefabs.get(id)
+    pub fn get(&self, prefab_name: &str) -> Option<&Fabricator> {
+        self.prefabs.get(prefab_name)
     }
 
-    pub fn insert(&mut self, id: String, fabricator: Fabricator) {
-        self.prefabs.insert(id, fabricator);
+    pub fn insert(&mut self, prefab_name: String, fabricator: Fabricator) {
+        self.prefabs.insert(prefab_name, fabricator);
     }
 
     pub fn request_for(&self, request: &PrefabLibraryRequest) -> anyhow::Result<FabricateRequest> {
-        let fabricator = self.get(&request.id)
-            .ok_or_else(|| anyhow!("missing prefab {}", &request.id))?;
+        let fabricator = self.get(&request.prefab_name)
+            .ok_or_else(|| anyhow!("missing prefab {}", &request.prefab_name))?;
         Ok(FabricateRequest {
             factory: fabricator.factory.clone(),
             parameters: request.parameters.clone(),
@@ -39,14 +39,14 @@ impl PrefabLibrary {
 
 #[derive(Clone, Debug)]
 pub struct PrefabLibraryRequest {
-    pub id: String,
+    pub prefab_name: String,
     pub parameters: Arc<dyn PartialReflect>,
 }
 
 impl PrefabLibraryRequest {
-    pub fn with_id(id: impl Into<String>) -> PrefabLibraryRequest {
+    pub fn with_prefab_name(prefab_name: impl Into<String>) -> PrefabLibraryRequest {
         PrefabLibraryRequest {
-            id: id.into(),
+            prefab_name: prefab_name.into(),
             parameters: empty_reflect(),
         }
     }
@@ -54,19 +54,19 @@ impl PrefabLibraryRequest {
 
 impl From<String> for PrefabLibraryRequest {
     fn from(value: String) -> Self {
-        PrefabLibraryRequest::with_id(value)
+        PrefabLibraryRequest::with_prefab_name(value)
     }
 }
 
 impl From<&String> for PrefabLibraryRequest {
     fn from(value: &String) -> Self {
-        PrefabLibraryRequest::with_id(value)
+        PrefabLibraryRequest::with_prefab_name(value)
     }
 }
 
 impl From<&str> for PrefabLibraryRequest {
     fn from(value: &str) -> Self {
-        PrefabLibraryRequest::with_id(value)
+        PrefabLibraryRequest::with_prefab_name(value)
     }
 }
 

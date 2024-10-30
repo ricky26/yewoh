@@ -4,51 +4,21 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail};
 use bevy::log::Level;
 use bevy::prelude::*;
-use bevy::reflect::{DynamicArray, DynamicEnum, DynamicList, DynamicStruct, DynamicTuple, DynamicTupleStruct, TypeInfo, TypeRegistration, TypeRegistry, VariantInfo};
+use bevy::reflect::{DynamicArray, DynamicEnum, DynamicList, DynamicStruct, DynamicTuple, DynamicTupleStruct, ReflectRef, TypeInfo, TypeRegistration, TypeRegistry, VariantInfo};
 use bevy::utils::{tracing, HashMap};
 use smallvec::SmallVec;
 
 use crate::document::{Document, Expression, Import, Number, Path, Visibility};
 use crate::string::parse_string;
 use crate::traits::{ReflectEvaluate, ReflectApply};
-use crate::{Fabricated, FabricationParameter, Fabricator, Factory};
+use crate::{Fabricated, FabricationParameter, Fabricator};
 use crate::parser::FormatterFn;
 
 type RegisterValue = Option<Arc<dyn PartialReflect>>;
 type RegisterValues = Vec<RegisterValue>;
 
-fn apply(
-    reflect_apply: &Option<ReflectApply>,
-    reflect_component: &Option<ReflectComponent>,
-    src: &Arc<dyn PartialReflect>,
-    world: &mut World,
-    entity: Entity,
-    fabricated: &mut Fabricated,
-) -> anyhow::Result<()> {
-    if let Some(reflect_apply) = reflect_apply {
-        let Some(src) = src.as_ref().try_as_reflect() else {
-            bail!("{src:?} is not a concrete type");
-        };
-
-        let Some(apply) = reflect_apply.get(src) else {
-            bail!("{src:?} does not implement Command");
-        };
-
-        apply.apply(world, entity, fabricated)?;
-    } else if let Some(reflect_component) = reflect_component {
-        let type_registry = world.resource::<AppTypeRegistry>().clone();
-        let type_registry = type_registry.read();
-        let mut entity_mut = world.entity_mut(entity);
-        reflect_component.insert(&mut entity_mut, src.as_ref(), &*type_registry);
-    } else {
-        bail!("unknown apply type");
-    }
-
-    Ok(())
-}
-
 fn lookup_type(type_registry: &TypeRegistry, path: &Path) -> Option<TypeId> {
-    let full_name = path.0.join("::");
+    let full_name = path.to_string();
     type_registry.get_with_type_path(&full_name).map(|r| r.type_id())
 }
 
@@ -56,7 +26,7 @@ fn lookup_type_or_variant(type_registry: &TypeRegistry, path: &Path) -> Option<T
     if path.len() == 1 {
         lookup_type(type_registry, path)
     } else {
-        let full_name = path.0.join("::");
+        let full_name = path.to_string();
         let variant_len = path.0.last().unwrap().len();
         let enum_name = &full_name[..(full_name.len() - variant_len - 2)];
         type_registry.get_with_type_path(&full_name)
@@ -78,15 +48,15 @@ fn resolve_alias<'a>(aliases: &HashMap<String, Path<'a>>, path: &Path<'a>) -> Pa
     path.clone()
 }
 
-pub trait DocumentSource {
-    fn get(&self, path: &str) -> Option<Factory>;
+pub trait FabricatorSource {
+    fn get(&self, path: &str) -> Option<Fabricator>;
 }
 
 #[derive(Default)]
-pub struct DocumentMap(pub HashMap<String, Factory>);
+pub struct FabricatorMap(pub HashMap<String, Fabricator>);
 
-impl DocumentSource for DocumentMap {
-    fn get(&self, path: &str) -> Option<Factory> {
+impl FabricatorSource for FabricatorMap {
+    fn get(&self, path: &str) -> Option<Fabricator> {
         self.0.get(path).cloned()
     }
 }
@@ -101,7 +71,9 @@ macro_rules! impl_load_number {
             });
             let index = $index;
             $steps.push(Box::new(move |registers, _, _, _| {
-                registers[index] = Some(value.clone());
+                if registers[index].is_none() {
+                    registers[index] = Some(value.clone());
+                }
                 Ok(())
             }));
             continue;
@@ -144,7 +116,7 @@ struct Evaluator {
 }
 
 impl Evaluator {
-    pub fn from_type_registration(type_registration: &TypeRegistration) -> Evaluator {
+    pub fn from_registration(type_registration: &TypeRegistration) -> Evaluator {
         let evaluate = type_registration.data::<ReflectEvaluate>().cloned();
         Evaluator {
             evaluate,
@@ -176,6 +148,93 @@ impl Evaluator {
     }
 }
 
+struct Applicator {
+    type_path: &'static str,
+    apply: Option<ReflectApply>,
+    component: Option<ReflectComponent>,
+}
+
+impl Applicator {
+    pub fn from_registration(type_registration: &TypeRegistration) -> Applicator {
+        let type_path = type_registration.type_info().type_path();
+        let apply = type_registration.data::<ReflectApply>().cloned();
+        let component = type_registration.data::<ReflectComponent>().cloned();
+
+        Applicator {
+            type_path,
+            apply,
+            component,
+        }
+    }
+
+    pub fn apply(
+        &self,
+        src: &Arc<dyn PartialReflect>,
+        world: &mut World,
+        entity: Entity,
+        fabricated: &mut Fabricated,
+    ) -> anyhow::Result<()> {
+        if let Some(reflect_apply) = &self.apply {
+            let Some(src) = src.as_ref().try_as_reflect() else {
+                bail!("{src:?} is not a concrete type");
+            };
+
+            let Some(apply) = reflect_apply.get(src) else {
+                bail!("{src:?} does not implement Command");
+            };
+
+            apply.apply(world, entity, fabricated)?;
+        } else if let Some(reflect_component) = &self.component {
+            let type_registry = world.resource::<AppTypeRegistry>().clone();
+            let type_registry = type_registry.read();
+            let mut entity_mut = world.entity_mut(entity);
+            reflect_component.insert(&mut entity_mut, src.as_ref(), &*type_registry);
+        } else {
+            bail!("unknown apply type: {}", self.type_path);
+        }
+
+        Ok(())
+    }
+}
+
+fn build_dynamic_struct<'a>(
+    body: &[(&'a str, usize)],
+) -> anyhow::Result<impl Fn(&mut RegisterValues, &mut World, &mut Fabricated) -> anyhow::Result<Box<dyn PartialReflect>>> {
+    let body = body.iter()
+        .map(|(k, v)| Ok((k.to_string(), *v)))
+        .collect::<anyhow::Result<SmallVec<[_; 8]>>>()?;
+
+    Ok(move |registers: &mut RegisterValues, _world: &mut World, _fabricated: &mut Fabricated| {
+        let mut value = DynamicStruct::default();
+        for (key, src) in body.iter() {
+            let field_value = registers[*src].as_ref()
+                .ok_or_else(|| anyhow!("unfilled register {}", *src))?;
+            let field_value = (**field_value).clone_value();
+            value.insert_boxed(key, field_value);
+        }
+        Ok(Box::new(value) as Box<dyn PartialReflect>)
+    })
+}
+
+fn build_dynamic_tuple<'a>(
+    body: &[usize],
+) -> anyhow::Result<impl Fn(&mut RegisterValues, &mut World, &mut Fabricated) -> anyhow::Result<Box<dyn PartialReflect>>> {
+    let body = body.iter()
+        .copied()
+        .collect::<SmallVec<[_; 8]>>();
+
+    Ok(move |registers: &mut RegisterValues, _world: &mut World, _fabricated: &mut Fabricated| {
+        let mut value = DynamicTuple::default();
+        for src in body.iter().copied() {
+            let field_value = registers[src].as_ref()
+                .ok_or_else(|| anyhow!("unfilled register {}", src))?;
+            let field_value = (**field_value).clone_value();
+            value.insert_boxed(field_value);
+        }
+        Ok(Box::new(value) as Box<dyn PartialReflect>)
+    })
+}
+
 fn build_struct<'a>(
     type_registry: &TypeRegistry,
     type_id: TypeId,
@@ -185,7 +244,7 @@ fn build_struct<'a>(
         .ok_or_else(|| anyhow!("missing struct type info"))?;
     let struct_info = type_reg.type_info().as_struct()?;
     let converter = ValueConverter::try_from_registration(type_reg)?;
-    let evaluator = Evaluator::from_type_registration(type_reg);
+    let evaluator = Evaluator::from_registration(type_reg);
     let body = body.iter()
         .map(|(k, v)| {
             let field = struct_info.field(*k)
@@ -200,7 +259,8 @@ fn build_struct<'a>(
     Ok(move |registers: &mut RegisterValues, world: &mut World, fabricated: &mut Fabricated| {
         let mut value = DynamicStruct::default();
         for (key, src, converter) in body.iter() {
-            let Some(field_value) = &registers[*src] else { continue };
+            let field_value = registers[*src].as_ref()
+                .ok_or_else(|| anyhow!("unfilled register {}", *src))?;
             let field_value = converter.convert(field_value.as_ref(), world)?;
             value.insert_boxed(key, field_value);
         }
@@ -219,7 +279,7 @@ fn build_struct_from_tuple(
         .ok_or_else(|| anyhow!("missing struct type info"))?;
     let struct_info = type_reg.type_info().as_struct()?;
     let converter = ValueConverter::try_from_registration(type_reg)?;
-    let evaluator = Evaluator::from_type_registration(type_reg);
+    let evaluator = Evaluator::from_registration(type_reg);
     let body = body.iter()
         .enumerate()
         .map(|(field_index, register_index)| {
@@ -235,7 +295,8 @@ fn build_struct_from_tuple(
     Ok(move |registers: &mut RegisterValues, world: &mut World, fabricated: &mut Fabricated| {
         let mut value = DynamicStruct::default();
         for (key, src, converter) in body.iter() {
-            let Some(field_value) = &registers[*src] else { continue };
+            let field_value = registers[*src].as_ref()
+                .ok_or_else(|| anyhow!("unfilled register {}", *src))?;
             let field_value = converter.convert(field_value.as_ref(), world)?;
             value.insert_boxed(*key, field_value);
         }
@@ -254,7 +315,7 @@ fn build_tuple_struct(
         .ok_or_else(|| anyhow!("missing tuple struct type info"))?;
     let struct_info = type_reg.type_info().as_tuple_struct()?;
     let converter = ValueConverter::try_from_registration(type_reg)?;
-    let evaluator = Evaluator::from_type_registration(type_reg);
+    let evaluator = Evaluator::from_registration(type_reg);
     let body = body.iter()
         .enumerate()
         .map(|(field_index, register_index)| {
@@ -270,7 +331,8 @@ fn build_tuple_struct(
     Ok(move |registers: &mut RegisterValues, world: &mut World, fabricated: &mut Fabricated| {
         let mut value = DynamicTupleStruct::default();
         for (src, converter) in body.iter() {
-            let Some(field_value) = &registers[*src] else { continue };
+            let field_value = registers[*src].as_ref()
+                .ok_or_else(|| anyhow!("unfilled register {}", *src))?;
             let field_value = converter.convert(field_value.as_ref(), world)?;
             value.insert_boxed(field_value);
         }
@@ -289,7 +351,7 @@ fn build_tuple(
         .ok_or_else(|| anyhow!("missing tuple type info"))?;
     let struct_info = type_reg.type_info().as_tuple()?;
     let converter = ValueConverter::try_from_registration(type_reg)?;
-    let evaluator = Evaluator::from_type_registration(type_reg);
+    let evaluator = Evaluator::from_registration(type_reg);
     let body = body.iter()
         .enumerate()
         .map(|(field_index, register_index)| {
@@ -305,7 +367,8 @@ fn build_tuple(
     Ok(move |registers: &mut RegisterValues, world: &mut World, fabricated: &mut Fabricated| {
         let mut value = DynamicTuple::default();
         for (src, converter) in body.iter() {
-            let Some(field_value) = &registers[*src] else { continue };
+            let field_value = registers[*src].as_ref()
+                .ok_or_else(|| anyhow!("unfilled register {}", *src))?;
             let field_value = converter.convert(field_value.as_ref(), world)?;
             value.insert_boxed(field_value);
         }
@@ -329,7 +392,7 @@ fn build_enum_tuple(
     let variant_name = variant.name();
     let struct_info = variant.as_tuple_variant()?;
     let converter = ValueConverter::try_from_registration(type_reg)?;
-    let evaluator = Evaluator::from_type_registration(type_reg);
+    let evaluator = Evaluator::from_registration(type_reg);
     let body = body.iter()
         .enumerate()
         .map(|(field_index, register_index)| {
@@ -370,7 +433,7 @@ fn build_enum_struct<'a>(
     let variant_name = variant.name();
     let struct_info = variant.as_struct_variant()?;
     let converter = ValueConverter::try_from_registration(type_reg)?;
-    let evaluator = Evaluator::from_type_registration(type_reg);
+    let evaluator = Evaluator::from_registration(type_reg);
     let body = body.iter()
         .map(|(k, v)| {
             let field = struct_info.field(*k)
@@ -410,7 +473,7 @@ fn build_enum_struct_from_tuple<'a>(
     let variant_name = variant.name();
     let struct_info = variant.as_struct_variant()?;
     let converter = ValueConverter::try_from_registration(type_reg)?;
-    let evaluator = Evaluator::from_type_registration(type_reg);
+    let evaluator = Evaluator::from_registration(type_reg);
     let body = body.iter()
         .enumerate()
         .map(|(field_index, register_index)| {
@@ -450,7 +513,7 @@ fn build_list(
     let element_reg = type_registry.get(element_type_id)
         .ok_or_else(|| anyhow!("missing list element type info"))?;
     let element_converter = ValueConverter::try_from_registration(element_reg)?;
-    let evaluator = Evaluator::from_type_registration(type_reg);
+    let evaluator = Evaluator::from_registration(type_reg);
     let body = body.to_vec();
 
     Ok(move |registers: &mut RegisterValues, world: &mut World, fabricated: &mut Fabricated| {
@@ -479,7 +542,7 @@ fn build_array(
     let element_reg = type_registry.get(element_type_id)
         .ok_or_else(|| anyhow!("missing array element type info"))?;
     let element_converter = ValueConverter::try_from_registration(element_reg)?;
-    let evaluator = Evaluator::from_type_registration(type_reg);
+    let evaluator = Evaluator::from_registration(type_reg);
     let body = body.to_vec();
 
     Ok(move |registers: &mut RegisterValues, world: &mut World, fabricated: &mut Fabricated| {
@@ -498,7 +561,7 @@ fn build_array(
 
 pub fn convert(
     type_registry: &TypeRegistry,
-    documents: &dyn DocumentSource,
+    documents: &dyn FabricatorSource,
     doc: &Document,
 ) -> anyhow::Result<Fabricator> {
     type Step = Box<dyn Fn(&mut RegisterValues, Entity, &mut World, &mut Fabricated) -> anyhow::Result<()> + Send + Sync>;
@@ -527,7 +590,7 @@ pub fn convert(
             if register.visibility == Visibility::In {
                 inputs.insert(name.to_string(), (index, !register.optional));
 
-                if !register.optional {
+                if !register.optional && register.expression.is_none() {
                     requires_an_input = true;
                 }
             }
@@ -540,9 +603,12 @@ pub fn convert(
                             aliases.insert(name.to_string(), path);
                         }
                         Import::File(path) => {
-                            let imported = documents.get(*path)
+                            let (_, unescaped_path) = parse_string(path)
+                                .unwrap()
+                                .unwrap();
+                            let imported = documents.get(&unescaped_path)
                                 .ok_or_else(|| anyhow!("missing imported prefab '{path}'"))?;
-                            file_imports.insert(name.to_string(), imported);
+                            file_imports.insert(name.to_string(), Arc::new(imported) as Arc<dyn PartialReflect>);
                         }
                     }
                 }
@@ -574,8 +640,15 @@ pub fn convert(
             }
             Some(Expression::Path(path)) => {
                 let path = resolve_alias(&aliases, path);
+
+                if path.len() == 1 {
+                    if let Some(source) = locals.get(path.0[0]) {
+                        register_type = register_type.or(register_types[*source]);
+                    }
+                }
+
                 if let Some(id) = lookup_type_or_variant(type_registry, &path) {
-                    register_type = Some(id);
+                    register_type = register_type.or(Some(id));
                 }
             }
             _ => {}
@@ -757,19 +830,11 @@ pub fn convert(
                         _ => {}
                     }
                 }
-                _ => {}
-            }
-        }
-    }
-
-    for (index, register) in doc.registers.iter().enumerate() {
-        if let Some(value) = &register.expression {
-            match value {
                 Expression::Path(path) => {
                     if path.len() == 1 {
                         if let Some(source_index) = locals.get(path.0[0]) {
-                            let type_id = register_types[*source_index];
-                            register_types[index] = type_id;
+                            register_types[*source_index] = register_types[*source_index]
+                                .or(register_types[index]);
                         }
                     }
                 }
@@ -820,7 +885,9 @@ pub fn convert(
                         Number::F64(v) => *v,
                     });
                     steps.push(Box::new(move |registers, _, _, _| {
-                        registers[index] = Some(value.clone());
+                        if registers[index].is_none() {
+                            registers[index] = Some(value.clone());
+                        }
                         Ok(())
                     }));
                 }
@@ -828,7 +895,9 @@ pub fn convert(
                     let (_, value) = parse_string(s).unwrap().unwrap();
                     let value = Arc::new(value);
                     steps.push(Box::new(move |registers, _, _, _| {
-                        registers[index] = Some(value.clone());
+                        if registers[index].is_none() {
+                            registers[index] = Some(value.clone());
+                        }
                         Ok(())
                     }));
                 }
@@ -841,21 +910,27 @@ pub fn convert(
                         TypeInfo::Struct(_) => {
                             let factory = build_struct_from_tuple(type_registry, type_id, &body)?;
                             steps.push(Box::new(move |registers, _, world, fabricated| {
-                                registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                if registers[index].is_none() {
+                                    registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                }
                                 Ok(())
                             }));
                         }
                         TypeInfo::TupleStruct(_) => {
                             let factory = build_tuple_struct(type_registry, type_id, &body)?;
                             steps.push(Box::new(move |registers, _, world, fabricated| {
-                                registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                if registers[index].is_none() {
+                                    registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                }
                                 Ok(())
                             }));
                         }
                         TypeInfo::Tuple(_) => {
                             let factory = build_tuple(type_registry, type_id, &body)?;
                             steps.push(Box::new(move |registers, _, world, fabricated| {
-                                registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                if registers[index].is_none() {
+                                    registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                }
                                 Ok(())
                             }));
                         }
@@ -871,7 +946,9 @@ pub fn convert(
                                     let factory = build_enum_struct_from_tuple(
                                         type_registry, type_id, variant_name, &body)?;
                                     steps.push(Box::new(move |registers, _, world, fabricated| {
-                                        registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                        if registers[index].is_none() {
+                                            registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                        }
                                         Ok(())
                                     }));
                                 }
@@ -879,14 +956,24 @@ pub fn convert(
                                     let factory = build_enum_tuple(
                                         type_registry, type_id, variant_name, &body)?;
                                     steps.push(Box::new(move |registers, _, world, fabricated| {
-                                        registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                        if registers[index].is_none() {
+                                            registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                        }
                                         Ok(())
                                     }));
                                 }
                                 _ => unreachable!(),
                             }
                         }
-                        _ => unreachable!(),
+                        _ => {
+                            let factory = build_dynamic_tuple(&body)?;
+                            steps.push(Box::new(move |registers, _, world, fabricated| {
+                                if registers[index].is_none() {
+                                    registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                }
+                                Ok(())
+                            }));
+                        }
                     }
                 }
                 Expression::Struct(type_path, body) => {
@@ -898,7 +985,9 @@ pub fn convert(
                         TypeInfo::Struct(_) => {
                             let factory = build_struct(type_registry, type_id, &body)?;
                             steps.push(Box::new(move |registers, _, world, fabricated| {
-                                registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                if registers[index].is_none() {
+                                    registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                }
                                 Ok(())
                             }));
                         }
@@ -908,11 +997,21 @@ pub fn convert(
                             let factory = build_enum_struct(
                                 type_registry, type_id, type_path.0.last().unwrap(), &body)?;
                             steps.push(Box::new(move |registers, _, world, fabricated| {
-                                registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                if registers[index].is_none() {
+                                    registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                }
                                 Ok(())
                             }));
                         }
-                        _ => {}
+                        _ => {
+                            let factory = build_dynamic_struct(&body)?;
+                            steps.push(Box::new(move |registers, _, world, fabricated| {
+                                if registers[index].is_none() {
+                                    registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                }
+                                Ok(())
+                            }));
+                        }
                     }
                 }
                 Expression::List(_, body) => {
@@ -924,14 +1023,18 @@ pub fn convert(
                         TypeInfo::List(_) => {
                             let factory = build_list(type_registry, type_id, &body)?;
                             steps.push(Box::new(move |registers, _, world, fabricated| {
-                                registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                if registers[index].is_none() {
+                                    registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                }
                                 Ok(())
                             }));
                         }
                         TypeInfo::Array(_) => {
                             let factory = build_array(type_registry, type_id, &body)?;
                             steps.push(Box::new(move |registers, _, world, fabricated| {
-                                registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                if registers[index].is_none() {
+                                    registers[index] = Some(factory(registers, world, fabricated)?.into());
+                                }
                                 Ok(())
                             }));
                         }
@@ -939,61 +1042,108 @@ pub fn convert(
                     }
                 }
                 Expression::Path(path) => {
+                    let path = resolve_alias(&aliases, path);
+
                     if path.len() == 1 {
+                        if let Some(fabricator) = file_imports.get(path.0[0]) {
+                            let fabricator = fabricator.clone();
+                            steps.push(Box::new(move |registers, _, _, _| {
+                                if registers[index].is_none() {
+                                    registers[index] = Some(fabricator.clone());
+                                }
+                                Ok(())
+                            }));
+                            continue;
+                        }
+
                         if let Some(source_index) = locals.get(path.0[0]) {
                             let source = *source_index;
                             steps.push(Box::new(move |registers, _, _, _| {
-                                let value = registers[source].clone();
-                                registers[index] = value;
+                                if registers[index].is_none() {
+                                    let value = registers[source].clone();
+                                    registers[index] = value;
+                                }
                                 Ok(())
                             }));
                             continue;
                         }
                     }
 
-                    if let Some(type_reg) = register_type_reg {
+                    let convert_from = |steps: &mut Vec<Step>, path: &Path, type_reg: &TypeRegistration| -> anyhow::Result<bool> {
                         let converter = ValueConverter::try_from_registration(type_reg)?;
+                        let evaluator = Evaluator::from_registration(type_reg);
 
                         match type_reg.type_info() {
                             TypeInfo::Struct(_) => {
-                                steps.push(Box::new(move |registers, _, world, _| {
-                                    let value = DynamicStruct::default();
-                                    let value = converter.convert(&value, world)?;
-                                    registers[index] = Some(value.into());
+                                steps.push(Box::new(move |registers, _, world, fabricated| {
+                                    if registers[index].is_none() {
+                                        let value = DynamicStruct::default();
+                                        let value = converter.convert(&value, world)?;
+                                        let value = evaluator.evaluate(value, world, fabricated)?;
+                                        registers[index] = Some(value.into());
+                                    }
                                     Ok(())
                                 }));
+                                return Ok(true);
                             }
                             TypeInfo::TupleStruct(_) => {
-                                steps.push(Box::new(move |registers, _, world, _| {
-                                    let value = DynamicTupleStruct::default();
-                                    let value = converter.convert(&value, world)?;
-                                    registers[index] = Some(value.into());
+                                steps.push(Box::new(move |registers, _, world, fabricated| {
+                                    if registers[index].is_none() {
+                                        let value = DynamicTupleStruct::default();
+                                        let value = converter.convert(&value, world)?;
+                                        let value = evaluator.evaluate(value, world, fabricated)?;
+                                        registers[index] = Some(value.into());
+                                    }
                                     Ok(())
                                 }));
+                                return Ok(true);
                             }
                             TypeInfo::Tuple(_) => {
-                                steps.push(Box::new(move |registers, _, world, _| {
-                                    let value = DynamicTuple::default();
-                                    let value = converter.convert(&value, world)?;
-                                    registers[index] = Some(value.into());
+                                steps.push(Box::new(move |registers, _, world, fabricated| {
+                                    if registers[index].is_none() {
+                                        let value = DynamicTuple::default();
+                                        let value = converter.convert(&value, world)?;
+                                        let value = evaluator.evaluate(value, world, fabricated)?;
+                                        registers[index] = Some(value.into());
+                                    }
                                     Ok(())
                                 }));
+                                return Ok(true);
                             }
                             TypeInfo::Enum(enum_info) => {
-                                let path = resolve_alias(&aliases, path);
                                 let variant_name = path.0.last().unwrap();
                                 let variant = enum_info.variant(variant_name)
                                     .ok_or_else(|| anyhow!("unknown enum variant {}", enum_info.variant_path(variant_name)))?;
                                 let variant_name = variant.name();
 
-                                steps.push(Box::new(move |registers, _, world, _| {
-                                    let value = DynamicEnum::new(variant_name, ());
-                                    let value = converter.convert(&value, world)?;
-                                    registers[index] = Some(value.into());
+                                steps.push(Box::new(move |registers, _, world, fabricated| {
+                                    if registers[index].is_none() {
+                                        let value = DynamicEnum::new(variant_name, ());
+                                        let value = converter.convert(&value, world)?;
+                                        let value = evaluator.evaluate(value, world, fabricated)?;
+                                        registers[index] = Some(value.into());
+                                    }
                                     Ok(())
                                 }));
+                                return Ok(true);
                             }
                             _ => {}
+                        }
+
+                        Ok(false)
+                    };
+
+                    if let Some(type_reg) = register_type_reg {
+                        if convert_from(&mut steps, &path, type_reg)? {
+                            continue;
+                        }
+                    }
+
+                    let value_type_id = lookup_type_or_variant(type_registry, &path);
+                    let value_reg = value_type_id.and_then(|id| type_registry.get(id));
+                    if let Some(type_reg) = value_reg {
+                        if convert_from(&mut steps, &path, type_reg)? {
+                            continue;
                         }
                     }
 
@@ -1004,14 +1154,13 @@ pub fn convert(
         }
     }
 
-    for application in &doc.applications {
+    for (index, application) in doc.applications.iter().enumerate() {
         let source = application.expression;
         let target = application.entity;
         let type_id = register_types[source];
         let type_info = type_id.and_then(|id| type_registry.get(id))
-            .ok_or_else(|| anyhow!("missing tuple type info"))?;
-        let reflect_apply = type_info.data::<ReflectApply>().cloned();
-        let reflect_component = type_info.data::<ReflectComponent>().cloned();
+            .ok_or_else(|| anyhow!("missing apply operand type info for %{source} in application {index}, type id {type_id:?}"))?;
+        let applicator = Applicator::from_registration(type_info);
 
         steps.push(Box::new(move |registers, _, world, fabricated| {
             let Some(source_value) = &registers[source] else {
@@ -1020,11 +1169,10 @@ pub fn convert(
             let Some(target_value) = &registers[target] else {
                 bail!("apply target null");
             };
-            let Some(entity) = target_value.try_downcast_ref::<Entity>().cloned() else {
-                bail!("apply target was not entity");
+            let Some(entity) = Entity::from_reflect(target_value.as_ref()) else {
+                bail!("apply target was not entity: {target_value:?}");
             };
-
-            apply(&reflect_apply, &reflect_component, source_value, world, entity, fabricated)
+            applicator.apply(source_value, world, entity, fabricated)
         }));
     }
 
@@ -1037,16 +1185,22 @@ pub fn convert(
         registers.push(Some(Arc::new(entity)));
 
         // Apply inputs
-        if let Ok(struct_input) = input.reflect_ref().as_struct() {
-            for (name, (index, required)) in &inputs {
-                if let Some(field) = struct_input.field(name) {
-                    registers[*index] = Some(field.clone_value().into());
-                } else if *required {
-                    bail!("missing required input '{name}'");
+        match input.reflect_ref() {
+            ReflectRef::Struct(struct_input) => {
+                for (name, (index, required)) in &inputs {
+                    if let Some(field) = struct_input.field(name) {
+                        registers[*index] = Some(field.clone_value().into());
+                    } else if *required {
+                        bail!("missing required input '{name}'");
+                    }
                 }
             }
-        } else if requires_an_input {
-            bail!("missing input");
+            ReflectRef::Tuple(tuple_input) => {
+                if tuple_input.field_len() != 0 || requires_an_input {
+                    bail!("input was not a struct, got {input:?}");
+                }
+            }
+            _ => bail!("input was not a struct, got {input:?}"),
         }
 
         for step in &steps {
@@ -1097,7 +1251,7 @@ mod tests {
         type_registry.register::<Parent>();
         type_registry.register::<Transform>();
         type_registry.register::<Spawn>();
-        let fabricator = convert(&type_registry, &DocumentMap::default(), &doc).unwrap();
+        let fabricator = convert(&type_registry, &FabricatorMap::default(), &doc).unwrap();
         drop(type_registry);
 
         let mut world = World::new();

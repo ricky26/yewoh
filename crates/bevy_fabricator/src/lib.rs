@@ -32,11 +32,17 @@ pub struct FabricationParameter {
 }
 
 #[derive(Clone, Reflect, Asset)]
-#[reflect(from_reflect = false)]
+#[reflect(from_reflect = false, FromReflect)]
 pub struct Fabricator {
     pub parameters: HashMap<String, FabricationParameter>,
     #[reflect(ignore)]
     pub factory: Factory,
+}
+
+impl FromReflect for Fabricator {
+    fn from_reflect(reflect: &dyn PartialReflect) -> Option<Self> {
+        reflect.try_downcast_ref::<Fabricator>().cloned()
+    }
 }
 
 impl Fabricator {
@@ -105,7 +111,7 @@ pub struct FabricateRequest {
 
 impl FabricateRequest {
     pub fn fabricate(&self, world: &mut World, entity: Entity) -> anyhow::Result<Fabricated> {
-        (self.factory)(entity, &self.parameters, world)
+        (self.factory)(entity, self.parameters.as_ref(), world)
     }
 }
 
@@ -221,6 +227,8 @@ impl Plugin for FabricatorPlugin {
             .register_type::<any::Any>()
             .register_type::<values::Some>()
             .register_type::<values::None>()
+            .register_type::<operations::Spawn>()
+            .register_type::<operations::Fabricate>()
             .register_type::<hot_reload::WatchForFabricatorChanges>()
             .register_type::<hot_reload::FabricatorChanged>()
             .init_asset::<Fabricator>()

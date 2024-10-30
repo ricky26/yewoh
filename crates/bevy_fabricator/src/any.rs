@@ -17,6 +17,18 @@ impl FromReflect for Any {
     }
 }
 
+impl Clone for Any {
+    fn clone(&self) -> Self {
+        Any::from_reflect(self.0.as_ref()).unwrap()
+    }
+}
+
+impl Default for Any {
+    fn default() -> Self {
+        Any(Box::new(()))
+    }
+}
+
 impl Evaluate for Any {
     fn evaluate(
         &self, _world: &mut World, _fabricated: &mut Fabricated,

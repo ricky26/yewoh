@@ -1,6 +1,4 @@
-use bevy::ecs::entity::Entity;
-use bevy::ecs::world::World;
-use bevy::reflect::{std_traits::ReflectDefault, Reflect};
+use bevy::prelude::*;
 use bevy_fabricator::traits::{Apply, ReflectApply};
 use bevy_fabricator::Fabricated;
 use serde::Deserialize;
@@ -11,7 +9,7 @@ use crate::activities::CurrentActivity;
 use crate::characters::{Alive, Animation, HitAnimation};
 
 #[derive(Default, Clone, Reflect, Deserialize)]
-#[reflect(Default, Apply)]
+#[reflect(Default, Apply, Deserialize)]
 #[serde(default)]
 pub struct CharacterPrefab {
     pub name: String,
@@ -26,26 +24,6 @@ impl Apply for CharacterPrefab {
     fn apply(
         &self, world: &mut World, entity: Entity, _fabricated: &mut Fabricated,
     ) -> anyhow::Result<()> {
-        /*
-        let mut equipment = Vec::with_capacity(self.equipment.len());
-
-        for child in &self.equipment {
-            let child_entity = world.spawn_empty()
-                .insert((
-                    EquippedBy {
-                        parent: entity,
-                        slot: child.slot,
-                    },
-                ))
-                .id();
-            child.prefab.write(world, child_entity);
-            equipment.push(CharacterEquipped {
-                entity: child_entity,
-                slot: child.slot,
-            });
-        }
-         */
-
         let mut commands = world.entity_mut(entity);
         commands
             .insert((
