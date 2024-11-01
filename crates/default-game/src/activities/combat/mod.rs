@@ -9,9 +9,9 @@ use bevy::time::{Timer, TimerMode};
 
 use yewoh::protocol;
 use yewoh::protocol::EquipmentSlot;
-use yewoh_server::world::entity::{AttackTarget, BodyType, Container, EquippedPosition, Flags, Graphic, Hue, MapPosition, Quantity, Stats};
+use yewoh_server::world::entity::{AttackTarget, BodyType, Container, EquippedPosition, Graphic, Hue, MapPosition, Quantity, Stats};
 use yewoh_server::world::events::AttackRequestedEvent;
-use yewoh_server::world::net::{NetClient, NetId, Possessing, AssignNetId};
+use yewoh_server::world::net::{NetClient, NetId, Possessing};
 use yewoh_server::world::ServerSet;
 use yewoh_server::world::spatial::NetClientPositions;
 
@@ -164,9 +164,7 @@ pub fn spawn_corpses(
 
         let corpse = commands
             .spawn((
-                AssignNetId,
                 *map_position,
-                Flags::default(),
                 Graphic(CORPSE_GRAPHIC_ID),
                 Hue(**hue),
                 Quantity { quantity: **body_type },
@@ -226,6 +224,7 @@ pub struct CombatPlugin;
 impl Plugin for CombatPlugin {
     fn build(&self, app: &mut App) {
         app
+            .register_type::<prefabs::MeleeWeaponPrefab>()
             .add_event::<CharacterDied>()
             .add_event::<CorpseSpawned>()
             .add_event::<DamageDealt>()

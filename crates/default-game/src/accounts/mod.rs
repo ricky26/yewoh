@@ -21,7 +21,7 @@ use crate::data::prefabs::PrefabLibraryWorldExt;
 use crate::data::static_data::StaticData;
 use crate::entities::persistence::CustomHue;
 use crate::entities::position::PositionExt;
-use crate::entities::UniqueId;
+use crate::entities::{Persistent, UniqueId};
 
 pub mod repository;
 
@@ -249,6 +249,7 @@ pub fn create_new_character(
     let entity = commands
         .fabricate_prefab(prefab_name)
         .insert((
+            Persistent,
             CustomStats,
             CustomHue,
             Hue(info.hue),
@@ -266,6 +267,7 @@ pub fn create_new_character(
         commands
             .fabricate_prefab("hair")
             .insert((
+                Persistent,
                 Graphic(info.hair),
                 Hue(info.hair_hue),
             ))
@@ -276,6 +278,7 @@ pub fn create_new_character(
         commands
             .fabricate_prefab("hair")
             .insert((
+                Persistent,
                 Graphic(info.beard),
                 Hue(info.beard_hue),
             ))

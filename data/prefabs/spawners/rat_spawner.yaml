@@ -1,4 +1,0 @@
-spawner:
-  prefab: prefabs/creatures/rat.fab
-  interval: 5s
-  limit: 5

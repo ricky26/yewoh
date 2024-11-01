@@ -1,14 +1,6 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-
-use bevy::ecs::change_detection::DetectChanges;
-use bevy::ecs::component::Component;
-use bevy::ecs::entity::Entity;
-use bevy::ecs::event::{Event, EventReader};
-use bevy::ecs::query::{With, Without};
-use bevy::ecs::system::{Commands, Query, Res, Resource, SystemParam};
-use bevy::ecs::world::{Mut, Ref};
-use bevy::hierarchy::{Children, Parent};
-use bevy::reflect::Reflect;
+use bevy::ecs::system::SystemParam;
+use bevy::prelude::*;
 use bitflags::bitflags;
 use glam::UVec2;
 
@@ -322,15 +314,10 @@ fn remove_child(children: &mut HashMap<Entity, HashSet<Entity>>, parent: Entity,
 }
 
 fn update_tooltip(
-    view_state: &mut Mut<ViewState>, entity: Entity, tooltip: &Tooltip,
+    view_state: &mut Mut<ViewState>, entity: Entity, tooltip: Ref<Tooltip>,
 ) {
-    match view_state.ghosts.get(&entity) {
-        Some(GhostState::Item(item)) => {
-            if &item.tooltip == tooltip {
-                return;
-            }
-        }
-        _ => return,
+    if !tooltip.is_changed() {
+        return;
     }
 
     view_state.set_tooltip(entity, tooltip.clone());
@@ -494,9 +481,9 @@ pub fn send_ghost_updates(
 #[derive(SystemParam)]
 pub struct WorldObserver<'w, 's> {
     characters: Query<'w, 's, (&'static BodyType, &'static Hue, &'static Flags, &'static MapPosition, &'static Notorious, &'static Stats, Option<&'static Children>)>,
-    world_items: Query<'w, 's, (&'static Graphic, &'static Hue, &'static Flags, &'static MapPosition, Option<&'static Tooltip>, Option<&'static Quantity>, Option<&'static Container>, Option<&'static Children>)>,
-    child_items: Query<'w, 's, (&'static Graphic, &'static Hue, &'static Parent, &'static ContainerPosition, Option<&'static Tooltip>, Option<&'static Quantity>, Option<&'static Container>, Option<&'static Children>)>,
-    equipped_items: Query<'w, 's, (&'static Graphic, &'static Hue, &'static Parent, &'static EquippedPosition, Option<&'static Tooltip>, Option<&'static Quantity>, Option<&'static Container>, Option<&'static Children>)>,
+    world_items: Query<'w, 's, (&'static Graphic, &'static Hue, &'static Flags, &'static MapPosition, Option<Ref<'static, Tooltip>>, Option<&'static Quantity>, Option<&'static Container>, Option<&'static Children>)>,
+    child_items: Query<'w, 's, (&'static Graphic, &'static Hue, &'static Parent, &'static ContainerPosition, Option<Ref<'static, Tooltip>>, Option<&'static Quantity>, Option<&'static Container>, Option<&'static Children>)>,
+    equipped_items: Query<'w, 's, (&'static Graphic, &'static Hue, &'static Parent, &'static EquippedPosition, Option<Ref<'static, Tooltip>>, Option<&'static Quantity>, Option<&'static Container>, Option<&'static Children>)>,
 }
 
 impl<'w, 's> WorldObserver<'w, 's> {
@@ -534,7 +521,7 @@ impl<'w, 's> WorldObserver<'w, 's> {
     fn observe_equipped(
         &self, viewer: Entity, view_state: &mut Mut<ViewState>, parent: Entity,
         entity: Entity, slot: EquipmentSlot,
-        graphic: &Graphic, hue: &Hue, tooltip: Option<&Tooltip>,
+        graphic: &Graphic, hue: &Hue, tooltip: Option<Ref<Tooltip>>,
         quantity: Option<&Quantity>, container: Option<&Container>,
         children: Option<&Children>,
     ) {
@@ -590,7 +577,7 @@ impl<'w, 's> WorldObserver<'w, 's> {
     fn observe_world_item(
         &self, viewer: Entity, view_state: &mut Mut<ViewState>, entity: Entity,
         graphic: &Graphic, hue: &Hue, flags: EntityFlags, location: &MapPosition,
-        tooltip: Option<&Tooltip>, quantity: Option<&Quantity>, container: Option<&Container>,
+        tooltip: Option<Ref<Tooltip>>, quantity: Option<&Quantity>, container: Option<&Container>,
         children: Option<&Children>,
     ) {
         view_state.upsert_ghost(entity, GhostState::Item(ItemState {

@@ -1,0 +1,7 @@
+import yewoh_default_game::entities::prefabs::{Prefab, AtMapPosition};
+
+$ <- Prefab("rat_spawner");
+$ <- AtMapPosition {
+    map_id: 1,
+    position: (1325, 1624, 55),
+};

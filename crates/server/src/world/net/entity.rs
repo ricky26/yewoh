@@ -6,11 +6,7 @@ use std::collections::HashMap;
 
 use yewoh::{EntityId, MIN_ITEM_ID};
 
-use crate::world::entity::BodyType;
-
-#[derive(Debug, Clone, Default, Component, Reflect)]
-#[reflect(Default, Component)]
-pub struct AssignNetId;
+use crate::world::entity::{BodyType, Graphic};
 
 #[derive(Debug, Clone, Copy, Default, Reflect)]
 #[reflect(opaque, Default, Component)]
@@ -104,8 +100,8 @@ impl NetEntityLookup {
 pub fn assign_net_ids(
     mut commands: Commands,
     mut id_allocator: ResMut<NetIdAllocator>,
-    new_characters: Query<Entity, (With<AssignNetId>, With<BodyType>, Without<CharacterNetId>)>,
-    new_items: Query<Entity, (With<AssignNetId>, Without<BodyType>, Without<ItemNetId>)>,
+    new_characters: Query<Entity, (With<BodyType>, Without<Graphic>, Without<CharacterNetId>)>,
+    new_items: Query<Entity, (With<Graphic>, Without<BodyType>, Without<ItemNetId>)>,
 ) {
     for entity in &new_characters {
         commands.entity(entity)

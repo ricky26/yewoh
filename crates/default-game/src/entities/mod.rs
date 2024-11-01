@@ -49,6 +49,7 @@ impl Plugin for EntitiesPlugin {
         app
             .register_type::<UniqueId>()
             .register_type::<Persistent>()
+            .register_type::<prefabs::Prefab>()
             .register_type::<prefabs::AtMapPosition>()
             .register_type::<prefabs::EquippedBy>()
             .register_type::<prefabs::ContainedBy>()

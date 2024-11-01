@@ -82,6 +82,7 @@ pub struct HitAnimation {
 }
 
 #[derive(Debug, Clone, Default, Reflect, Component, Deserialize)]
+#[reflect(Component, Deserialize)]
 pub struct MeleeWeapon {
     pub damage: u16,
     #[serde(with = "humantime_serde")]

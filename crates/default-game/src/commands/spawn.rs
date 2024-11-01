@@ -3,11 +3,10 @@ use bevy::ecs::entity::Entity;
 use bevy::ecs::system::{Commands, Query, Res, Resource};
 use bevy::hierarchy::BuildChildren;
 use clap::Parser;
-use glam::IVec2;
 use yewoh::protocol::TargetType;
 use yewoh_server::world::entity::{Container, ContainerPosition, MapPosition};
 use yewoh_server::world::input::{EntityTargetRequest, EntityTargetResponse, WorldTargetRequest, WorldTargetResponse};
-use yewoh_server::world::net::{AssignNetId, NetClient, ViewState};
+use yewoh_server::world::net::{NetClient, ViewState};
 
 use crate::commands::{TextCommand, TextCommandQueue};
 use crate::data::prefabs::{PrefabLibrary, PrefabLibraryEntityExt};
@@ -99,6 +98,7 @@ pub fn spawn(
             .spawn_empty()
             .fabricate_prefab(&spawn.prefab_name)
             .insert((
+                Persistent,
                 MapPosition {
                     map_id,
                     position,
@@ -132,12 +132,8 @@ pub fn spawn(
             .spawn_empty()
             .fabricate_prefab(&spawn.prefab_name)
             .insert((
-                ContainerPosition {
-                    position: IVec2::ZERO,
-                    grid_index: 0,
-                },
                 Persistent,
-                AssignNetId,
+                ContainerPosition::default(),
             ))
             .set_parent(target);
     }

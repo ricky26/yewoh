@@ -1,0 +1,8 @@
+import yewoh_default_game::spawners::SpawnerPrefab;
+import bevy_fabricator::humantime::HumanDuration;
+
+$ <- SpawnerPrefab {
+    prefab: "rat",
+    interval: HumanDuration("5s"),
+    limit: 5,
+}

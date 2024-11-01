@@ -1,12 +1,6 @@
 use std::time::Duration;
 
-use bevy::ecs::component::Component;
-use bevy::ecs::entity::Entity;
-use bevy::ecs::prelude::World;
-use bevy::ecs::query::With;
-use bevy::ecs::system::{Query, Res};
-use bevy::reflect::{Reflect, std_traits::ReflectDefault};
-use bevy::time::{Time, Timer, TimerMode};
+use bevy::prelude::*;
 use rand::{thread_rng, Rng};
 use serde::Deserialize;
 use bevy_fabricator::Fabricated;
@@ -44,7 +38,7 @@ pub fn wander(
 }
 
 #[derive(Clone, Default, Reflect, Deserialize)]
-#[reflect(Default, Apply)]
+#[reflect(Default, Apply, Deserialize)]
 pub struct WanderPrefab {
     #[serde(with = "humantime_serde")]
     pub interval: Duration,

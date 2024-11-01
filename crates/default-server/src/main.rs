@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, bail};
+use anyhow::anyhow;
 use bevy::asset::{AssetPath, LoadState};
 use bevy::log::LogPlugin;
 use bevy::prelude::*;
@@ -137,6 +137,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Load prefabs
     let (prefabs, prefab_handles) = load_prefabs(&mut app, &args.data_path, "prefabs").await?;
+    app
+        .insert_resource(prefabs)
+        .insert_resource(prefab_handles);
 
     // Spawn map data
     let mut query = app.world_mut().query_filtered::<(), With<Chunk>>();
@@ -174,8 +177,6 @@ async fn main() -> anyhow::Result<()> {
         .insert_resource(MultiDataResource { multi_data })
         .insert_resource(world_repo.clone())
         .insert_resource(accounts_repo.clone())
-        .insert_resource(prefabs)
-        .insert_resource(prefab_handles)
         .add_systems(Last, (
             scheduled_save,
             update_static_entities,
@@ -272,6 +273,8 @@ async fn load_prefabs(
     let mut handles = Vec::new();
     let mut library = PrefabLibrary::default();
     for (name, handle) in queue {
+        handles.push(handle.clone());
+
         loop {
             match asset_server.get_load_state(&handle).unwrap() {
                 LoadState::NotLoaded => unreachable!(),
@@ -280,14 +283,17 @@ async fn load_prefabs(
                     continue;
                 },
                 LoadState::Loaded => break,
-                LoadState::Failed(err) => bail!("failed to load asset: {err}"),
+                LoadState::Failed(err) => {
+                    warn!("failed to load asset: {err}");
+                    break;
+                },
             }
         }
 
         let fabricators = app.world().resource::<Assets<Fabricator>>();
-        let fabricator = fabricators.get(&handle).unwrap().clone();
-        handles.push(handle);
-        library.insert(name, fabricator);
+        if let Some(fabricator) = fabricators.get(&handle) {
+            library.insert(name, fabricator.clone());
+        }
     }
 
     info!("Loaded {} prefabs", library.len());
@@ -375,7 +381,10 @@ async fn load_static_entities(
                     continue;
                 },
                 LoadState::Loaded => break,
-                LoadState::Failed(err) => bail!("failed to load asset: {err}"),
+                LoadState::Failed(err) => {
+                    error!("failed to load static entity: {err}");
+                    break;
+                },
             }
         }
 
@@ -385,16 +394,22 @@ async fn load_static_entities(
             fabricator: template,
             parameters: parameters.clone(),
         };
-        let request = fabricate.to_request(&fabricators, Some(&asset_server))?
-            .unwrap();
-        app.world_mut()
+
+        let request = fabricate.to_request(&fabricators, Some(&asset_server));
+        let mut entity = app.world_mut()
             .spawn((
                 Name::new(name),
                 StaticEntity(asset_path),
                 fabricate,
                 WatchForFabricatorChanges,
-            ))
-            .fabricate(request);
+            ));
+        match request {
+            Ok(Some(request)) => {
+                entity.fabricate(request);
+            }
+            Ok(None) => {},
+            Err(err) => error!("failed to spawn static entity: {err}"),
+        }
         count += 1;
     }
 
@@ -415,7 +430,7 @@ fn update_static_entities(
             Ok(Some(r)) => r,
             Ok(None) => continue,
             Err(err) => {
-                warn!("failed to load updated fabricator: {err}");
+                error!("failed to load updated fabricator: {err}");
                 continue;
             }
         };

@@ -1,12 +1,7 @@
-import yewoh_server::world::net::entity::AssignNetId;
-import yewoh_default_game::entities::Persistent;
+import yewoh_server::world::entity::Graphic;
 import yewoh_default_game::entities::persistence::CustomHue;
-import yewoh_default_game::items::prefabs::ItemPrefab;
 import yewoh_default_game::items::persistence::CustomGraphic;
 
-$ <- AssignNetId;
-$ <- Persistent;
 $ <- CustomGraphic;
 $ <- CustomHue;
-$ <- ItemPrefab {
-};
+$ <- Graphic;

@@ -10,12 +10,12 @@ use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, CharacterProfile, Clie
 use crate::async_runtime::AsyncRuntime;
 use crate::game_server::NewSessionAttempt;
 use crate::lobby::{NewSessionRequest, SessionAllocator};
-use crate::world::entity::Tooltip;
+use crate::world::entity::{Tooltip, TooltipRequest, TooltipRequests};
 use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DeleteCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::input::Targeting;
 use crate::world::net::entity::NetEntityLookup;
 use crate::world::net::view::View;
-use crate::world::net::ViewState;
+use crate::world::net::{NetId, ViewState};
 
 pub const DEFAULT_VIEW_RANGE: i32 = 18;
 
@@ -438,21 +438,13 @@ pub fn handle_input_packets(
     }
 }
 
-pub fn send_tooltips(
+pub fn handle_tooltip_packets(
     lookup: Res<NetEntityLookup>,
-    clients: Query<&NetClient>,
-    tooltips: Query<&Tooltip>,
+    mut tooltips: Query<&mut TooltipRequests>,
     mut events: EventReader<ReceivedPacketEvent>,
 ) {
-    let mut scratch = Vec::new();
-
     for ReceivedPacketEvent { client_entity: connection, packet } in events.read() {
         let connection = *connection;
-        let client = match clients.get(connection) {
-            Ok(x) => x,
-            _ => continue,
-        };
-
         let request = match packet.downcast::<EntityTooltip>() {
             Some(x) => x,
             _ => continue,
@@ -461,28 +453,48 @@ pub fn send_tooltips(
         match request {
             EntityTooltip::Request(ids) => {
                 for id in ids.iter().copied() {
-                    let entries = lookup.net_to_ecs(id)
-                        .and_then(|e| tooltips.get(e).ok())
-                        .map_or(Vec::new(), |t| {
-                            scratch.extend(t.entries.keys());
-                            scratch.sort_by(|a, b| {
-                                t.entries[*a].cmp(&t.entries[*b])
+                    if let Some(entity) = lookup.net_to_ecs(id) {
+                        if let Ok(mut tooltip) = tooltips.get_mut(entity) {
+                            tooltip.requests.push(TooltipRequest {
+                                client: connection,
+                                entries: Vec::new(),
                             });
-
-                            scratch.drain(..)
-                                .map(|key| {
-                                    let entry = &t.entries[key];
-                                    EntityTooltipLine {
-                                        text_id: entry.text_id,
-                                        params: entry.arguments.clone(),
-                                    }
-                                })
-                                .collect()
-                        });
-                    client.send_packet(EntityTooltip::Response { id, entries }.into());
+                        }
+                    }
                 }
             }
             _ => {}
+        }
+    }
+}
+
+pub fn send_tooltips(
+    clients: Query<&NetClient>,
+    mut tooltips: Query<(&NetId, &mut TooltipRequests), Changed<Tooltip>>,
+) {
+    for (net_id, mut tooltip) in &mut tooltips {
+        if tooltip.requests.is_empty() {
+            continue;
+        }
+
+        let id = net_id.id;
+        for TooltipRequest { client, mut entries } in tooltip.requests.drain(..) {
+            let client = match clients.get(client) {
+                Ok(x) => x,
+                _ => continue,
+            };
+
+            entries.sort();
+            let entries = entries.into_iter()
+                .map(|entry| {
+                    EntityTooltipLine {
+                        text_id: entry.text_id,
+                        params: entry.arguments,
+                    }
+                })
+                .collect();
+
+            client.send_packet(EntityTooltip::Response { id, entries }.into());
         }
     }
 }

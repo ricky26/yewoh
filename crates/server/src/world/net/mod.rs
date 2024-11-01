@@ -9,6 +9,7 @@ pub use connection::{
     handle_input_packets,
     handle_login_packets,
     handle_new_packets,
+    handle_tooltip_packets,
     send_tooltips,
 };
 pub use view::{
@@ -31,7 +32,6 @@ pub use entity::{
     NetEntityLookup,
     NetIdAllocator,
     OwningClient,
-    AssignNetId,
     assign_net_ids,
 };
 pub use combat::{
@@ -49,6 +49,5 @@ mod combat;
 pub fn plugin(app: &mut App) {
     app
         .register_type::<NetId>()
-        .register_type::<AssignNetId>()
         .register_type::<OwningClient>();
 }

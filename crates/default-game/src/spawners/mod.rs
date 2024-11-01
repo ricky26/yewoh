@@ -9,12 +9,13 @@ use bevy::prelude::*;
 use bevy::reflect::{DynamicList, DynamicStruct};
 use bevy::time::{Time, Timer, TimerMode};
 use bevy::utils::HashMap;
+use bevy_fabricator::traits::{Apply, ReflectApply};
+use bevy_fabricator::Fabricated;
 use serde::Deserialize;
 use serde_yaml::Value;
-use bevy_fabricator::{Fabricator, FabricateExt, Fabricated, Fabricate};
-use bevy_fabricator::traits::{Apply, ReflectApply};
 use yewoh_server::world::entity::MapPosition;
-use yewoh_server::world::net::AssignNetId;
+
+use crate::data::prefabs::{PrefabLibraryEntityExt, PrefabLibraryRequest};
 
 fn to_reflect(value: &Value) -> anyhow::Result<Box<dyn PartialReflect>> {
     let v = match value {
@@ -68,9 +69,6 @@ impl Apply for SpawnerPrefab {
     fn apply(
         &self, world: &mut World, entity: Entity, _fabricated: &mut Fabricated,
     ) -> anyhow::Result<()> {
-        let asset_server = world.resource::<AssetServer>();
-        let prefab = asset_server.load(&self.prefab);
-
         let mut parameters = DynamicStruct::default();
 
         for (k, v) in &self.parameters {
@@ -78,10 +76,9 @@ impl Apply for SpawnerPrefab {
         }
 
         let parameters = Arc::new(parameters) as Arc<dyn PartialReflect>;
-
         world.entity_mut(entity)
             .insert(Spawner {
-                prefab,
+                prefab: self.prefab.clone(),
                 parameters,
                 next_spawn: Timer::new(self.interval, TimerMode::Repeating),
                 limit: self.limit,
@@ -93,7 +90,7 @@ impl Apply for SpawnerPrefab {
 
 #[derive(Clone, Component)]
 pub struct Spawner {
-    pub prefab: Handle<Fabricator>,
+    pub prefab: String,
     pub parameters: Arc<dyn PartialReflect>,
     pub next_spawn: Timer,
     pub limit: usize,
@@ -109,8 +106,6 @@ pub struct SpawnedEntities {
 
 pub fn spawn_from_spawners(
     time: Res<Time>,
-    asset_server: Res<AssetServer>,
-    fabricators: Res<Assets<Fabricator>>,
     mut spawners: Query<(&mut Spawner, &mut SpawnedEntities, &MapPosition)>,
     spawned_entities: Query<(), With<Spawned>>,
     mut commands: Commands,
@@ -121,24 +116,14 @@ pub fn spawn_from_spawners(
             continue;
         }
 
-        let maybe_request = Fabricate {
-            fabricator: spawner.prefab.clone(),
+        let request = PrefabLibraryRequest {
+            prefab_name: spawner.prefab.clone(),
             parameters: spawner.parameters.clone(),
-        }.to_request(&fabricators, Some(&asset_server));
-        let request = match maybe_request {
-            Ok(Some(r)) => r,
-            Ok(None) => continue,
-            Err(err) => {
-                warn!("failed to spawn: {err}");
-                continue;
-            }
         };
-
         let spawned_entity = commands.spawn_empty()
-            .fabricate(request)
+            .fabricate_from_library(request)
             .insert((
                 Spawned,
-                AssignNetId,
                 *position,
             ))
             .insert(*position)
@@ -154,6 +139,9 @@ pub struct SpawnersPlugin;
 impl Plugin for SpawnersPlugin {
     fn build(&self, app: &mut App) {
         app
+            .register_type::<SpawnerPrefab>()
+            .register_type::<Spawned>()
+            .register_type::<SpawnedEntities>()
             .add_systems(Update, (
                 spawn_from_spawners,
             ));

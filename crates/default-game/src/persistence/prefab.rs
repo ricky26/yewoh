@@ -27,6 +27,7 @@ impl BundleSerializer for PrefabSerializer {
 
     fn insert(world: &mut World, entity: Entity, bundle: Self::Bundle) {
         world.entity_mut(entity)
-            .fabricate_prefab(bundle);
+            .fabricate_prefab(bundle)
+            .insert(Persistent);
     }
 }

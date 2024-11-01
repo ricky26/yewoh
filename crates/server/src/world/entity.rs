@@ -1,5 +1,4 @@
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
 use bevy::ecs::entity::MapEntities;
@@ -52,6 +51,7 @@ impl DerefMut for Notorious {
 #[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Deref, Component, Reflect, Serialize, Deserialize)]
 #[reflect(Component, Serialize, Deserialize)]
 #[serde(transparent)]
+#[require(Flags, Hue)]
 pub struct BodyType(pub u16);
 
 #[derive(Debug, Clone, Default, Eq, PartialEq, Component, Reflect, Serialize, Deserialize)]
@@ -81,6 +81,7 @@ pub struct Hue(pub u16);
 #[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Deref, Component, Reflect, Serialize, Deserialize)]
 #[reflect(Component, Serialize, Deserialize)]
 #[serde(transparent)]
+#[require(Flags, Hue)]
 pub struct Graphic(pub u16);
 
 #[derive(Debug, Default, Clone, Copy, Component, Reflect)]
@@ -270,36 +271,41 @@ impl TooltipLine {
 
 impl PartialOrd for TooltipLine {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.text_id.cmp(&other.text_id))
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for TooltipLine {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.text_id.cmp(&other.text_id)
+        self.priority.cmp(&other.priority)
+            .then_with(|| self.text_id.cmp(&other.text_id))
+            .then_with(|| self.arguments.cmp(&other.arguments))
     }
 }
 
-#[derive(Debug, Clone, Default, Component, Eq, PartialEq, Reflect)]
+#[derive(Debug, Clone, Reflect)]
+pub struct TooltipRequest {
+    pub client: Entity,
+    pub entries: Vec<TooltipLine>,
+}
+
+#[derive(Debug, Clone, Default, Component, Reflect)]
 #[reflect(Component)]
+#[require(TooltipRequests)]
 pub struct Tooltip {
-    pub entries: HashMap<String, TooltipLine>,
+    pub version: u32,
 }
 
 impl Tooltip {
-    pub fn contains(&self, key: &str, line: &TooltipLine) -> bool {
-        self.entries.get(key).map_or(false, |e| e == line)
+    pub fn mark_changed(&mut self) {
+        self.version = self.version.wrapping_add(1);
     }
+}
 
-    pub fn push(&mut self, key: impl Into<String>, line: TooltipLine) {
-        self.entries.insert(key.into(), line);
-    }
-
-    pub fn push_mut(this: &mut Mut<Tooltip>, key: impl AsRef<str> + ToOwned<Owned = String>, line: TooltipLine) {
-        if !this.contains(key.as_ref(), &line) {
-            this.push(key.to_owned(), line);
-        }
-    }
+#[derive(Debug, Clone, Default, Component, Reflect)]
+#[reflect(Component)]
+pub struct TooltipRequests {
+    pub requests: Vec<TooltipRequest>,
 }
 
 #[derive(Debug, Clone, Component, Eq, PartialEq, Reflect)]

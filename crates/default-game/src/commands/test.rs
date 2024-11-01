@@ -2,10 +2,10 @@ use bevy::prelude::*;
 use clap::Parser;
 use glam::IVec2;
 use tracing::info;
-use yewoh::protocol::{EntityFlags, GumpLayout, OpenGump};
+use yewoh::protocol::{GumpLayout, OpenGump};
 use yewoh::Direction;
-use yewoh_server::world::entity::{Flags, Graphic, Hue, MapPosition};
-use yewoh_server::world::net::{AssignNetId, NetClient, Possessing};
+use yewoh_server::world::entity::{Graphic, Hue, MapPosition};
+use yewoh_server::world::net::{NetClient, Possessing};
 
 use crate::commands::{TextCommand, TextCommandQueue};
 
@@ -46,8 +46,6 @@ pub fn frypan(
             .ok()
             .and_then(|owner| characters.get(owner.entity).ok()) {
             commands.spawn((
-                AssignNetId,
-                Flags { flags: EntityFlags::default() },
                 MapPosition {
                     map_id: 1,
                     position: position.position,

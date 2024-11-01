@@ -1,12 +1,8 @@
-import yewoh_server::world::net::entity::AssignNetId;
-import yewoh_default_game::entities::Persistent;
 import yewoh_default_game::characters::prefabs::CharacterPrefab;
 
 in body_type: u16;
 in hue: u16 = 0x909;
 
-$ <- AssignNetId;
-$ <- Persistent;
 $ <- CharacterPrefab {
     name: "Player",
     body_type,

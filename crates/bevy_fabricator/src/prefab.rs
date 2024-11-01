@@ -876,6 +876,8 @@ pub fn convert(
                     impl_load_number!(steps, index, register_type_id, n, u16);
                     impl_load_number!(steps, index, register_type_id, n, i16);
                     impl_load_number!(steps, index, register_type_id, n, u32);
+                    impl_load_number!(steps, index, register_type_id, n, isize);
+                    impl_load_number!(steps, index, register_type_id, n, usize);
                     impl_load_number!(steps, index, register_type_id, n, i32);
                     impl_load_number!(steps, index, register_type_id, n, f32);
 

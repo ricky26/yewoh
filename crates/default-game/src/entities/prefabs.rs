@@ -2,8 +2,23 @@ use bevy::prelude::*;
 use bevy_fabricator::Fabricated;
 use yewoh::protocol::EquipmentSlot;
 use bevy_fabricator::traits::{Apply, ReflectApply};
+use yewoh::Direction;
 use yewoh_server::world::entity::{ContainerPosition, MapPosition};
+use crate::data::prefabs::PrefabLibraryEntityExt;
 use crate::entities::position::PositionExt;
+
+#[derive(Clone, Debug, Reflect)]
+#[reflect(Apply)]
+pub struct Prefab(pub String);
+
+impl Apply for Prefab {
+    fn apply(
+        &self, world: &mut World, entity: Entity, _fabricated: &mut Fabricated,
+    ) -> anyhow::Result<()> {
+        world.entity_mut(entity).fabricate_prefab(&self.0);
+        Ok(())
+    }
+}
 
 #[derive(Clone, Debug, Reflect)]
 #[reflect(Apply)]
@@ -42,14 +57,22 @@ impl Apply for ContainedBy {
 #[derive(Clone, Debug, Default, Reflect)]
 #[reflect(Default, Apply)]
 pub struct AtMapPosition {
-    pub position: MapPosition,
+    pub position: IVec3,
+    pub map_id: u8,
+    #[reflect(remote = yewoh_server::remote_reflect::DirectionRemote)]
+    pub direction: Direction,
 }
 
 impl Apply for AtMapPosition {
     fn apply(
         &self, world: &mut World, entity: Entity, _fabricated: &mut Fabricated,
     ) -> anyhow::Result<()> {
-        world.entity_mut(entity).move_to_map_position(self.position);
+        let position = MapPosition {
+            position: self.position,
+            map_id: self.map_id,
+            direction: self.direction,
+        };
+        world.entity_mut(entity).move_to_map_position(position);
         Ok(())
     }
 }
