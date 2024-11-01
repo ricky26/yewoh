@@ -12,7 +12,7 @@ byteorder = { workspace = true }
 anyhow = { workspace = true }
 flate2 = { workspace = true }
 tracing = { workspace = true }
-tokio = { workspace = true, default_features = false, features = ["net", "io-util", "sync"] }
+tokio = { workspace = true, default_features = false, features = ["fs", "net", "io-util", "sync"] }
 once_cell = { workspace = true }
 bitflags = { workspace = true, features = ["serde"] }
 strum = { workspace = true }

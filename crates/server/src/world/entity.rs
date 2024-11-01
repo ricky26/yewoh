@@ -14,7 +14,7 @@ use yewoh::{Direction, EntityId, Notoriety};
 use crate::math::IVecExt;
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Reflect, Component)]
-#[reflect(Component, Serialize, Deserialize)]
+#[reflect(Component, Default, Serialize, Deserialize)]
 pub struct Flags {
     #[reflect(remote = crate::remote_reflect::EntityFlagsRemote)]
     pub flags: EntityFlags,
@@ -35,7 +35,7 @@ impl<'de> Deserialize<'de> for Flags {
 }
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Reflect, Component, Serialize, Deserialize)]
-#[reflect(Component, Serialize, Deserialize)]
+#[reflect(Component, Default, Serialize, Deserialize)]
 pub struct Notorious(#[reflect(remote = crate::remote_reflect::NotorietyRemote)] pub Notoriety);
 
 impl Deref for Notorious {
@@ -49,7 +49,7 @@ impl DerefMut for Notorious {
 }
 
 #[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Deref, Component, Reflect, Serialize, Deserialize)]
-#[reflect(Component, Serialize, Deserialize)]
+#[reflect(Component, Default, Serialize, Deserialize)]
 #[serde(transparent)]
 #[require(Flags, Hue)]
 pub struct BodyType(pub u16);
@@ -62,7 +62,7 @@ pub struct EquippedPosition {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Component, Reflect)]
-#[reflect(Component)]
+#[reflect(Component, Default)]
 pub struct Quantity {
     pub quantity: u16,
 }
@@ -74,18 +74,18 @@ impl Default for Quantity {
 }
 
 #[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Deref, Component, Reflect, Serialize, Deserialize)]
-#[reflect(Component, Serialize, Deserialize)]
+#[reflect(Component, Default, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Hue(pub u16);
 
 #[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Deref, Component, Reflect, Serialize, Deserialize)]
-#[reflect(Component, Serialize, Deserialize)]
+#[reflect(Component, Default, Serialize, Deserialize)]
 #[serde(transparent)]
 #[require(Flags, Hue)]
 pub struct Graphic(pub u16);
 
 #[derive(Debug, Default, Clone, Copy, Component, Reflect)]
-#[reflect(Component)]
+#[reflect(Component, Default)]
 pub struct Multi {
     pub id: u16,
 }
@@ -115,7 +115,7 @@ impl MapPosition {
 }
 
 #[derive(Debug, Clone, Default, Component, Reflect)]
-#[reflect(Component)]
+#[reflect(Component, Default)]
 pub struct Container {
     pub gump_id: u16,
 }
@@ -128,7 +128,7 @@ pub struct ContainerPosition {
 }
 
 #[derive(Debug, Clone, Default, Component, Reflect, Eq, PartialEq, Serialize, Deserialize)]
-#[reflect(Component, Serialize, Deserialize)]
+#[reflect(Component, Default, Serialize, Deserialize)]
 pub struct Stats {
     pub name: String,
     pub female: bool,
@@ -245,10 +245,21 @@ impl Stats {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Reflect)]
+#[reflect(Default)]
 pub struct TooltipLine {
     pub text_id: u32,
     pub arguments: String,
     pub priority: u32,
+}
+
+impl Default for TooltipLine {
+    fn default() -> Self {
+        TooltipLine {
+            text_id: 1042971,
+            arguments: String::new(),
+            priority: 0,
+        }
+    }
 }
 
 impl TooltipLine {
@@ -290,7 +301,7 @@ pub struct TooltipRequest {
 }
 
 #[derive(Debug, Clone, Default, Component, Reflect)]
-#[reflect(Component)]
+#[reflect(Component, Default)]
 #[require(TooltipRequests)]
 pub struct Tooltip {
     pub version: u32,
@@ -303,7 +314,7 @@ impl Tooltip {
 }
 
 #[derive(Debug, Clone, Default, Component, Reflect)]
-#[reflect(Component)]
+#[reflect(Component, Default)]
 pub struct TooltipRequests {
     pub requests: Vec<TooltipRequest>,
 }
