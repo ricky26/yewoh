@@ -1,23 +1,9 @@
-import yewoh_default_game::characters::prefabs::CharacterPrefab;
-import yewoh_default_game::items::prefabs::ItemPrefab;
-import yewoh_default_game::entities::{Persistent, prefabs::EquippedBy};
 import yewoh_server::world::net::entity::AssignNetId;
-import yewoh::protocol::entity::EquipmentSlot;
-import bevy_fabricator::operations::{Spawn, Fabricate};
-import "player_backpack.fab" as backpackPrefab;
+import yewoh_default_game::entities::Persistent;
+import yewoh_default_game::characters::prefabs::CharacterPrefab;
 
 in body_type: u16;
-in top_id: u16;
-in bottom_id: u16;
-in shoes_id: u16;
-
 in hue: u16 = 0x909;
-in shirt_hue: u16 = 1;
-in pants_hue: u16 = 1;
-in hair: u16 = 0;
-in hair_hue: u16 = 1;
-in beard: u16 = 0;
-in beard_hue: u16 = 1;
 
 $ <- AssignNetId;
 $ <- Persistent;
@@ -26,70 +12,3 @@ $ <- CharacterPrefab {
     body_type,
     hue,
 };
-
-local top = Spawn;
-top <- AssignNetId;
-top <- Persistent;
-top <- EquippedBy {
-    parent: $,
-    slot: EquipmentSlot::Top,
-};
-top <- ItemPrefab {
-    graphic: top_id,
-    hue: shirt_hue,
-};
-
-local bottom = Spawn;
-bottom <- AssignNetId;
-bottom <- Persistent;
-bottom <- EquippedBy {
-    parent: $,
-    slot: EquipmentSlot::Bottom,
-};
-bottom <- ItemPrefab {
-    graphic: bottom_id,
-    hue: pants_hue,
-};
-
-local shoes = Spawn;
-shoes <- AssignNetId;
-shoes <- Persistent;
-shoes <- EquippedBy {
-    parent: $,
-    slot: EquipmentSlot::Shoes,
-};
-shoes <- ItemPrefab {
-    graphic: shoes_id,
-    hue: 1,
-};
-
-local hair_entity = Spawn;
-hair_entity <- AssignNetId;
-hair_entity <- Persistent;
-hair_entity <- EquippedBy {
-    parent: $,
-    slot: EquipmentSlot::Hair,
-};
-hair_entity <- ItemPrefab {
-    graphic: hair,
-    hue: hair_hue,
-};
-
-local facial_hair = Spawn;
-facial_hair <- AssignNetId;
-facial_hair <- Persistent;
-facial_hair <- EquippedBy {
-    parent: $,
-    slot: EquipmentSlot::FacialHair,
-};
-facial_hair <- ItemPrefab {
-    graphic: beard,
-    hue: beard_hue,
-};
-
-local backpack = Spawn;
-backpack <- EquippedBy {
-    parent: $,
-    slot: EquipmentSlot::Backpack,
-};
-backpack <- Fabricate(backpackPrefab);

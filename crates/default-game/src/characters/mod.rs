@@ -1,11 +1,6 @@
 use std::time::Duration;
 
-use bevy::app::{App, Last, Plugin};
-use bevy::ecs::component::Component;
-use bevy::ecs::entity::Entity;
-use bevy::ecs::event::Event;
-use bevy::ecs::schedule::IntoSystemConfigs;
-use bevy::reflect::Reflect;
+use bevy::prelude::*;
 use serde::Deserialize;
 
 use yewoh_server::world::entity::MapPosition;
@@ -19,7 +14,9 @@ pub mod prefabs;
 
 pub mod animation;
 
-mod persistence;
+pub mod player;
+
+pub mod persistence;
 
 #[derive(Debug, Default, Clone, Component)]
 pub struct Alive;
@@ -104,10 +101,15 @@ impl Plugin for CharactersPlugin {
     fn build(&self, app: &mut App) {
         app
             .register_type::<CharacterPrefab>()
+            .register_type::<player::NewPlayerCharacter>()
+            .register_type::<persistence::CustomStats>()
             .add_event::<AnimationStartedEvent>()
+            .add_systems(Update, (
+                player::spawn_starting_items,
+            ))
             .add_systems(Last, (
                 animation::send_animations.in_set(ServerSet::Send),
             ))
-            .register_serializer::<persistence::CharacterSerializer>();
+            .register_serializer::<persistence::CustomStatsSerializer>();
     }
 }

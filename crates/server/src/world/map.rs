@@ -13,7 +13,7 @@ use yewoh::assets::multi::MultiData;
 use yewoh::assets::tiles::{TileData, TileFlags};
 use yewoh::Direction;
 
-use crate::world::entity::{Graphic, MapPosition};
+use crate::world::entity::{Graphic, Hue, MapPosition};
 use crate::world::net::MapInfos;
 
 #[derive(Debug, Clone, Default, Component, Reflect)]
@@ -139,7 +139,8 @@ pub async fn create_statics(
     while let Some((map_id, s)) = rx.recv().await {
         let mut entity = commands.spawn((
             MapPosition { map_id, position: s.position, direction: Direction::default() },
-            Graphic { id: s.graphic_id, hue: s.hue },
+            Graphic(s.graphic_id),
+            Hue(s.hue),
             Static,
         ));
 

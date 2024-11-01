@@ -1,55 +1,34 @@
-use bevy::ecs::query::{With, WorldQuery};
-use bevy::ecs::world::{FromWorld, World};
-use bevy::prelude::Entity;
-
-use yewoh_server::world::entity::{Character, Flags, MapPosition, Stats};
-
+use bevy::ecs::query::WorldQuery;
+use bevy::prelude::*;
+use yewoh_server::world::entity::Stats;
 use crate::entities::Persistent;
 use crate::persistence::BundleSerializer;
 
-pub struct CharacterSerializer;
+#[derive(Clone, Debug, Default, Reflect, Component)]
+#[reflect(Component)]
+pub struct CustomStats;
 
-impl FromWorld for CharacterSerializer {
-    fn from_world(_world: &mut World) -> Self {
-        Self
-    }
-}
+#[derive(Default)]
+pub struct CustomStatsSerializer;
 
-impl BundleSerializer for CharacterSerializer {
-    type Query = (
-        &'static Character,
-        &'static Flags,
-        &'static Stats,
-        &'static MapPosition,
-    );
-    type Filter = With<Persistent>;
-    type Bundle = (
-        Character,
-        Flags,
-        Stats,
-        MapPosition,
-    );
+impl BundleSerializer for CustomStatsSerializer {
+    type Query = &'static Stats;
+    type Filter = (With<CustomStats>, With<Persistent>);
+    type Bundle = Stats;
 
     fn id() -> &'static str {
-        "Character"
+        "Stats"
     }
 
     fn extract(item: <Self::Query as WorldQuery>::Item<'_>) -> Self::Bundle {
-        let (
-            character,
-            flags,
-            stats,
-            location,
-        ) = item.clone();
-        (
-            character.clone(),
-            flags.clone(),
-            stats.clone(),
-            location.clone(),
-        )
+        item.clone()
     }
 
     fn insert(world: &mut World, entity: Entity, bundle: Self::Bundle) {
-        world.entity_mut(entity).insert(bundle);
+        world.entity_mut(entity)
+            .insert((
+                CustomStats,
+                bundle,
+            ));
     }
 }

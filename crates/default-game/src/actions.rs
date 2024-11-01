@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use yewoh::protocol::{CharacterAnimation, CharacterProfile, ContextMenuEntry, DamageDealt, EntityFlags, MoveConfirm, MoveEntityReject, MoveReject, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, Swing, WarMode};
 use yewoh::types::FixedString;
-use yewoh_server::world::entity::{AttackTarget, Character, EquippedPosition, Container, Flags, MapPosition, Notorious, ContainerPosition};
+use yewoh_server::world::entity::{AttackTarget, BodyType, EquippedPosition, Container, Flags, MapPosition, Notorious, ContainerPosition};
 use yewoh_server::world::events::{ContextMenuEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SingleClickEvent};
 use yewoh_server::world::input::ContextMenuRequest;
 use yewoh_server::world::map::TileDataResource;
@@ -88,7 +88,7 @@ pub fn handle_double_click(
     mut events: EventReader<DoubleClickEvent>,
     mut clients: Query<&NetClient>,
     mut opened_containers: EventWriter<ContainerOpenedEvent>,
-    target_query: Query<(&NetId, Option<&Character>, Option<&Container>)>,
+    target_query: Query<(&NetId, Option<&BodyType>, Option<&Container>)>,
 ) {
     for DoubleClickEvent { client_entity, target } in events.read() {
         let client = match clients.get_mut(*client_entity) {
@@ -242,7 +242,7 @@ pub fn handle_equip(
     mut events: EventReader<EquipEvent>,
     clients: Query<(&NetClient, &Possessing)>,
     characters: Query<(&MapPosition, &Held)>,
-    mut loadouts: Query<&mut Character>,
+    mut loadouts: Query<&mut BodyType>,
     mut commands: Commands,
 ) {
     for event in events.read() {

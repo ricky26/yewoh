@@ -4,7 +4,7 @@ use glam::IVec2;
 use tracing::info;
 use yewoh::protocol::{EntityFlags, GumpLayout, OpenGump};
 use yewoh::Direction;
-use yewoh_server::world::entity::{Flags, Graphic, MapPosition};
+use yewoh_server::world::entity::{Flags, Graphic, Hue, MapPosition};
 use yewoh_server::world::net::{AssignNetId, NetClient, Possessing};
 
 use crate::commands::{TextCommand, TextCommandQueue};
@@ -53,10 +53,9 @@ pub fn frypan(
                     position: position.position,
                     direction: Direction::North,
                 },
-                Graphic {
-                    id: 0x97f,
-                    hue: 0x7d0,
-                }));
+                Graphic(0x97f),
+                Hue(0x7d0),
+            ));
         }
     }
 }

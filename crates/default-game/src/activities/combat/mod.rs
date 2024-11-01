@@ -9,7 +9,7 @@ use bevy::time::{Timer, TimerMode};
 
 use yewoh::protocol;
 use yewoh::protocol::EquipmentSlot;
-use yewoh_server::world::entity::{AttackTarget, Character, Container, EquippedPosition, Flags, Graphic, MapPosition, Quantity, Stats};
+use yewoh_server::world::entity::{AttackTarget, BodyType, Container, EquippedPosition, Flags, Graphic, Hue, MapPosition, Quantity, Stats};
 use yewoh_server::world::events::AttackRequestedEvent;
 use yewoh_server::world::net::{NetClient, NetId, Possessing, AssignNetId};
 use yewoh_server::world::ServerSet;
@@ -45,7 +45,7 @@ pub fn update_weapon_stats(
     mut commands: Commands,
     mut characters: Query<
         (Entity, Option<&Children>, Option<&Unarmed>),
-        (With<Character>, Or<(Changed<Character>, Changed<Unarmed>)>),
+        (With<BodyType>, Or<(Changed<BodyType>, Changed<Unarmed>)>),
     >,
     weapons: Query<(&EquippedPosition, &MeleeWeapon)>,
 ) {
@@ -154,10 +154,10 @@ pub fn spawn_corpses(
     mut commands: Commands,
     mut died_events: EventReader<CharacterDied>,
     mut corpse_events: EventWriter<CorpseSpawned>,
-    characters: Query<(&Character, &MapPosition)>,
+    characters: Query<(&BodyType, &Hue, &MapPosition)>,
 ) {
     for event in died_events.read() {
-        let (character, map_position) = match characters.get(event.character) {
+        let (body_type, hue, map_position) = match characters.get(event.character) {
             Ok(x) => x,
             _ => continue,
         };
@@ -167,11 +167,9 @@ pub fn spawn_corpses(
                 AssignNetId,
                 *map_position,
                 Flags::default(),
-                Graphic {
-                    id: CORPSE_GRAPHIC_ID,
-                    hue: character.hue,
-                },
-                Quantity { quantity: character.body_type },
+                Graphic(CORPSE_GRAPHIC_ID),
+                Hue(**hue),
+                Quantity { quantity: **body_type },
                 Container {
                     gump_id: CORPSE_BOX_GUMP_ID,
                 },

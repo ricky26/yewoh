@@ -370,14 +370,14 @@ pub fn update_entity_surfaces(
     }
 
     for (entity, position, graphic, impassable) in surfaces.iter() {
-        let tile_data = match tile_data.items.get(graphic.id as usize) {
+        let tile_data = match tile_data.items.get(**graphic as usize) {
             Some(x) => x,
             None => continue,
         };
 
         let kind = SurfaceKind::Item {
             position: position.position.truncate(),
-            tile_id: graphic.id,
+            tile_id: **graphic,
             impassable: impassable.is_some(),
             min_z: position.position.z,
             max_z: position.position.z + tile_data.height as i32,

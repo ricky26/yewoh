@@ -1,29 +1,10 @@
 import bevy_fabricator::operations::Fabricate;
 import "player.fab" as playerPrefab;
 
-in hue: u16 = 0x909;
-in shirt_hue: u16 = 1;
-in pants_hue: u16 = 1;
-in hair: u16 = 0;
-in hair_hue: u16 = 1;
-in beard: u16 = 0;
-in beard_hue: u16 = 1;
-
+local hue: u16 = 0x909;
 local body_type: u16 = 605;
-local top_id: u16 = 0x1517;
-local bottom_id: u16 = 0x1516;
-local shoes_id: u16 = 0x170f;
 
 $ <- Fabricate(playerPrefab, {
     body_type,
-    top_id,
-    bottom_id,
-    shoes_id,
     hue,
-    shirt_hue,
-    pants_hue,
-    hair,
-    hair_hue,
-    beard,
-    beard_hue,
 });

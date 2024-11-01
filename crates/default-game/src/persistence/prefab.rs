@@ -1,23 +1,17 @@
-use bevy::ecs::entity::Entity;
-use bevy::ecs::query::With;
-use bevy::ecs::world::{FromWorld, World};
-use crate::data::prefabs::{PrefabLibraryEntityExt, PrefabLibraryRequest};
+use bevy::prelude::*;
+
+use crate::data::prefabs::{PrefabLibraryEntityExt};
 use crate::entities::{Persistent, PrefabInstance};
 
 use super::BundleSerializer;
 
+#[derive(Default)]
 pub struct PrefabSerializer;
-
-impl FromWorld for PrefabSerializer {
-    fn from_world(_world: &mut World) -> Self {
-        Self
-    }
-}
 
 impl BundleSerializer for PrefabSerializer {
     type Query = &'static PrefabInstance;
     type Filter = With<Persistent>;
-    type Bundle = PrefabInstance;
+    type Bundle = String;
 
     fn id() -> &'static str {
         "Prefab"
@@ -28,14 +22,11 @@ impl BundleSerializer for PrefabSerializer {
     }
 
     fn extract(item: &PrefabInstance) -> Self::Bundle {
-        item.clone()
+        item.prefab_name.clone()
     }
 
     fn insert(world: &mut World, entity: Entity, bundle: Self::Bundle) {
         world.entity_mut(entity)
-            .fabricate_from_library(PrefabLibraryRequest {
-                prefab_name: bundle.prefab_name,
-                parameters: bundle.parameters,
-            });
+            .fabricate_prefab(bundle);
     }
 }

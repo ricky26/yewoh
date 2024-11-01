@@ -95,10 +95,9 @@ pub fn spawn(
         // TODO: check whether location is obstructed.
 
         let map_id = view_state.map_id();
-
         commands
             .spawn_empty()
-            .fabricate_from_library(&spawn.prefab_name)
+            .fabricate_prefab(&spawn.prefab_name)
             .insert((
                 MapPosition {
                     map_id,
@@ -131,7 +130,7 @@ pub fn spawn(
 
         commands
             .spawn_empty()
-            .fabricate_from_library(&spawn.prefab_name)
+            .fabricate_prefab(&spawn.prefab_name)
             .insert((
                 ContainerPosition {
                     position: IVec2::ZERO,

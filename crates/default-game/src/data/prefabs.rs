@@ -80,9 +80,22 @@ pub fn fabricate_from_library(
     world.entity_mut(entity)
         .insert((
             fabricated,
+        ));
+    Ok(())
+}
+
+pub fn fabricate_prefab(
+    world: &mut World, entity: Entity, prefab_name: String,
+) -> anyhow::Result<()> {
+    let library = world.resource::<PrefabLibrary>();
+    let request = PrefabLibraryRequest::from(prefab_name);
+    let fabricate_request = library.request_for(&request)?;
+    let fabricated = fabricate_request.fabricate(world, entity)?;
+    world.entity_mut(entity)
+        .insert((
+            fabricated,
             PrefabInstance {
                 prefab_name: request.prefab_name.clone(),
-                parameters: request.parameters.clone(),
             },
         ));
     Ok(())
@@ -92,6 +105,8 @@ pub trait PrefabLibraryWorldExt {
     type EntityMut<'a> where Self: 'a;
 
     fn fabricate_from_library(&mut self, request: impl Into<PrefabLibraryRequest>) -> Self::EntityMut<'_>;
+
+    fn fabricate_prefab(&mut self, prefab_name: impl Into<String>) -> Self::EntityMut<'_>;
 }
 
 impl PrefabLibraryWorldExt for World {
@@ -100,6 +115,12 @@ impl PrefabLibraryWorldExt for World {
     fn fabricate_from_library(&mut self, request: impl Into<PrefabLibraryRequest>) -> Self::EntityMut<'_> {
         let mut commands = self.spawn_empty();
         commands.fabricate_from_library(request);
+        commands
+    }
+
+    fn fabricate_prefab(&mut self, prefab_name: impl Into<String>) -> Self::EntityMut<'_> {
+        let mut commands = self.spawn_empty();
+        commands.fabricate_prefab(prefab_name);
         commands
     }
 }
@@ -112,10 +133,18 @@ impl PrefabLibraryWorldExt for Commands<'_, '_> {
         commands.fabricate_from_library(request);
         commands
     }
+
+    fn fabricate_prefab(&mut self, prefab_name: impl Into<String>) -> Self::EntityMut<'_> {
+        let mut commands = self.spawn_empty();
+        commands.fabricate_prefab(prefab_name);
+        commands
+    }
 }
 
 pub trait PrefabLibraryEntityExt {
     fn fabricate_from_library(&mut self, request: impl Into<PrefabLibraryRequest>) -> &mut Self;
+
+    fn fabricate_prefab(&mut self, prefab_name: impl Into<String>) -> &mut Self;
 }
 
 impl PrefabLibraryEntityExt for EntityCommands<'_> {
@@ -123,6 +152,15 @@ impl PrefabLibraryEntityExt for EntityCommands<'_> {
         let request = request.into();
         self.queue(move |entity, world: &mut World| {
             if let Err(err) = fabricate_from_library(world, entity, request) {
+                warn!("failed to fabricate: {err}");
+            }
+        })
+    }
+
+    fn fabricate_prefab(&mut self, prefab_name: impl Into<String>) -> &mut Self {
+        let prefab_name = prefab_name.into();
+        self.queue(move |entity, world: &mut World| {
+            if let Err(err) = fabricate_prefab(world, entity, prefab_name) {
                 warn!("failed to fabricate: {err}");
             }
         })
@@ -135,6 +173,17 @@ impl PrefabLibraryEntityExt for EntityWorldMut<'_> {
         let request = request.into();
         self.world_scope(move |world| {
             if let Err(err) = fabricate_from_library(world, entity, request) {
+                warn!("failed to fabricate: {err}");
+            }
+        });
+        self
+    }
+
+    fn fabricate_prefab(&mut self, prefab_name: impl Into<String>) -> &mut Self {
+        let entity = self.id();
+        let prefab_name = prefab_name.into();
+        self.world_scope(move |world| {
+            if let Err(err) = fabricate_prefab(world, entity, prefab_name) {
                 warn!("failed to fabricate: {err}");
             }
         });

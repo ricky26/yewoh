@@ -49,15 +49,13 @@ impl DerefMut for Notorious {
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
 
-#[derive(Default, Debug, Clone, Eq, PartialEq, Component, Reflect)]
-#[reflect(Component)]
-pub struct Character {
-    pub body_type: u16,
-    pub hue: u16,
-}
+#[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Deref, Component, Reflect, Serialize, Deserialize)]
+#[reflect(Component, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct BodyType(pub u16);
 
-#[derive(Debug, Clone, Default, Eq, PartialEq, Component, Reflect)]
-#[reflect(Component)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Component, Reflect, Serialize, Deserialize)]
+#[reflect(Component, Serialize, Deserialize)]
 pub struct EquippedPosition {
     #[reflect(remote = crate::remote_reflect::EquipmentSlotRemote)]
     pub slot: EquipmentSlot,
@@ -75,12 +73,15 @@ impl Default for Quantity {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Component, Reflect, Serialize, Deserialize)]
-#[reflect(Component)]
-pub struct Graphic {
-    pub id: u16,
-    pub hue: u16,
-}
+#[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Deref, Component, Reflect, Serialize, Deserialize)]
+#[reflect(Component, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Hue(pub u16);
+
+#[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Deref, Component, Reflect, Serialize, Deserialize)]
+#[reflect(Component, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Graphic(pub u16);
 
 #[derive(Debug, Default, Clone, Copy, Component, Reflect)]
 #[reflect(Component)]
@@ -118,15 +119,15 @@ pub struct Container {
     pub gump_id: u16,
 }
 
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Component, Reflect)]
-#[reflect(Default, Component)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Component, Reflect, Serialize, Deserialize)]
+#[reflect(Default, Component, Serialize, Deserialize)]
 pub struct ContainerPosition {
     pub position: IVec2,
     pub grid_index: u8,
 }
 
 #[derive(Debug, Clone, Default, Component, Reflect, Eq, PartialEq, Serialize, Deserialize)]
-#[reflect(Component)]
+#[reflect(Component, Serialize, Deserialize)]
 pub struct Stats {
     pub name: String,
     pub female: bool,

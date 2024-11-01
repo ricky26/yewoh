@@ -2,22 +2,25 @@ use bevy::prelude::*;
 use glam::IVec3;
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 use yewoh::Direction;
 
-use yewoh::protocol::{CharacterFromList, CharacterList, CharacterListFlags, Race};
+use yewoh::protocol::{CharacterFromList, CharacterList, CharacterListFlags, EquipmentSlot, Race};
 use yewoh::types::FixedString;
 use yewoh_server::async_runtime::AsyncRuntime;
-use yewoh_server::world::entity::{Character, MapPosition, Stats};
+use yewoh_server::world::entity::{BodyType, Graphic, Hue, MapPosition, Stats};
 use yewoh_server::world::events::{CharacterListEvent, CreateCharacterEvent, DeleteCharacterEvent, SelectCharacterEvent};
 use yewoh_server::world::net::{NetClient, OwningClient, Possessing, User};
 
 use crate::accounts::repository::{AccountCharacters, AccountRepository, CharacterInfo, CharacterToSpawn};
-use crate::data::prefabs::{PrefabLibraryRequest, PrefabLibraryWorldExt};
+use crate::characters::persistence::CustomStats;
+use crate::characters::player::NewPlayerCharacter;
+use crate::data::prefabs::PrefabLibraryWorldExt;
 use crate::data::static_data::StaticData;
+use crate::entities::persistence::CustomHue;
+use crate::entities::position::PositionExt;
 use crate::entities::UniqueId;
 
 pub mod repository;
@@ -81,7 +84,7 @@ pub fn handle_list_characters_callback(
     clients: Query<&NetClient>,
     static_data: Res<StaticData>,
     mut pending: ResMut<PendingCharacterLists>,
-    players_query: Query<(Entity, &UniqueId, &Stats), With<Character>>,
+    players_query: Query<(Entity, &UniqueId, &Stats), With<BodyType>>,
     mut all_players: Local<HashMap<Uuid, (Entity, String)>>,
 ) {
     let mut first = true;
@@ -237,23 +240,49 @@ pub fn create_new_character(
         true => "female",
     };
 
-    let prefab_name = format!("player_{race_name}_{gender_name}");
-    let request = PrefabLibraryRequest {
-        prefab_name: prefab_name.clone(),
-        parameters: Arc::new(info.clone()),
+    let new_character = NewPlayerCharacter {
+        shirt_hue: info.shirt_hue,
+        pants_hue: info.pants_hue,
     };
 
-    commands
-        .fabricate_from_library(request)
+    let prefab_name = format!("player_{race_name}_{gender_name}");
+    let entity = commands
+        .fabricate_prefab(prefab_name)
         .insert((
+            CustomStats,
+            CustomHue,
+            Hue(info.hue),
             MapPosition {
                 map_id: 1,
                 position: IVec3::new(1325, 1624, 55),
                 direction: Direction::North,
             },
             info.stats,
+            new_character,
         ))
-        .id()
+        .id();
+
+    if info.hair != 0 {
+        commands
+            .fabricate_prefab("hair")
+            .insert((
+                Graphic(info.hair),
+                Hue(info.hair_hue),
+            ))
+            .move_to_equipped_position(entity, EquipmentSlot::Hair);
+    }
+
+    if info.beard != 0 {
+        commands
+            .fabricate_prefab("hair")
+            .insert((
+                Graphic(info.beard),
+                Hue(info.beard_hue),
+            ))
+            .move_to_equipped_position(entity, EquipmentSlot::FacialHair);
+    }
+
+    entity
 }
 
 pub fn handle_spawn_character<T: AccountRepository>(
@@ -261,7 +290,7 @@ pub fn handle_spawn_character<T: AccountRepository>(
     mut pending: ResMut<PendingCharacterInfo>,
     pending_list: ResMut<PendingCharacterLists>,
     mut commands: Commands,
-    existing_players_query: Query<(Entity, &UniqueId), With<Character>>,
+    existing_players_query: Query<(Entity, &UniqueId), With<BodyType>>,
     mut all_players: Local<HashMap<Uuid, Entity>>,
     users: Query<&User>,
     account_repository: Res<T>,

@@ -1,6 +1,5 @@
 use bevy::prelude::*;
 
-use crate::items::persistence::ItemSerializer;
 use crate::persistence::SerializationSetupExt;
 
 pub mod prefabs;
@@ -15,6 +14,7 @@ impl Plugin for ItemsPlugin {
         app
             .register_type::<prefabs::ItemPrefab>()
             .register_type::<prefabs::ContainerPrefab>()
-            .register_serializer::<ItemSerializer>();
+            .register_type::<persistence::CustomGraphic>()
+            .register_serializer::<persistence::CustomGraphicSerializer>();
     }
 }

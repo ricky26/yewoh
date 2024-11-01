@@ -6,7 +6,7 @@ use bevy::reflect::ReflectDeserialize;
 use serde::{Deserialize, Serialize};
 use bevy_fabricator::Fabricated;
 use bevy_fabricator::traits::{Apply, ReflectApply};
-use yewoh_server::world::entity::{Container, Flags, Graphic, Tooltip, TooltipLine};
+use yewoh_server::world::entity::{Container, Flags, Graphic, Hue, Tooltip, TooltipLine};
 
 #[derive(Debug, Clone, Default, Reflect, Serialize, Deserialize)]
 #[reflect(Default, Serialize, Deserialize, Apply)]
@@ -21,11 +21,11 @@ impl Apply for ItemPrefab {
         &self, world: &mut World, entity: Entity, _fabricated: &mut Fabricated,
     ) -> anyhow::Result<()> {
         world.entity_mut(entity)
-            .insert(Graphic {
-                id: self.graphic,
-                hue: self.hue,
-            })
-            .insert(Flags::default());
+            .insert((
+                Graphic(self.graphic),
+                Hue(self.hue),
+                Flags::default(),
+            ));
         Ok(())
     }
 }

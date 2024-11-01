@@ -16,7 +16,7 @@ use yewoh::{EntityKind, Notoriety};
 use yewoh::protocol::{CharacterEquipment, DeleteEntity, EntityFlags, EntityTooltipVersion, EquipmentSlot, OpenContainer, UpdateCharacter, UpsertContainerContents, UpsertEntityCharacter, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityWorld, UpsertLocalPlayer};
 use yewoh::protocol::{BeginEnterWorld, ChangeSeason, EndEnterWorld, ExtendedCommand};
 
-use crate::world::entity::{Character, Container, ContainerPosition, EquippedPosition, Flags, Graphic, MapPosition, Notorious, Quantity, Stats, Tooltip};
+use crate::world::entity::{BodyType, Container, ContainerPosition, EquippedPosition, Flags, Graphic, Hue, MapPosition, Notorious, Quantity, Stats, Tooltip};
 use crate::world::net::{NetClient, NetId, OwningClient};
 use crate::world::net::connection::Possessing;
 use crate::world::spatial::{EntityPositions, view_aabb};
@@ -95,7 +95,8 @@ enum ItemPositionState {
 #[derive(Debug, Clone)]
 struct ItemState {
     dirty_flags: ItemDirtyFlags,
-    graphic: Graphic,
+    graphic: u16,
+    hue: u16,
     position: ItemPositionState,
     quantity: u16,
     container_gump: Option<u16>,
@@ -387,8 +388,8 @@ pub fn send_ghost_updates(
                             equipment.push(CharacterEquipment {
                                 id: child_id,
                                 slot: by.slot,
-                                graphic_id: item.graphic.id,
-                                hue: item.graphic.hue,
+                                graphic_id: item.graphic,
+                                hue: item.hue,
                             });
                         }
 
@@ -439,12 +440,12 @@ pub fn send_ghost_updates(
                                 client.send_packet(UpsertEntityWorld {
                                     id,
                                     kind: EntityKind::Item,
-                                    graphic_id: item.graphic.id,
+                                    graphic_id: item.graphic,
                                     graphic_inc: 0,
                                     direction: world.location.direction,
                                     quantity: item.quantity,
                                     position: world.location.position,
-                                    hue: item.graphic.hue,
+                                    hue: item.hue,
                                     flags: world.flags,
                                 }.into());
                             }
@@ -453,13 +454,13 @@ pub fn send_ghost_updates(
                             if let Ok(parent_id) = net_ids.get(*parent) {
                                 client.send_packet(UpsertEntityContained {
                                     id,
-                                    graphic_id: item.graphic.id,
+                                    graphic_id: item.graphic,
                                     graphic_inc: 0,
                                     quantity: item.quantity,
                                     position: container.position,
                                     grid_index: container.grid_index,
                                     parent_id: parent_id.id,
-                                    hue: item.graphic.hue,
+                                    hue: item.hue,
                                 }.into());
                             }
                         }
@@ -470,8 +471,8 @@ pub fn send_ghost_updates(
                                         id,
                                         parent_id: parent_id.id,
                                         slot: by.slot,
-                                        graphic_id: item.graphic.id,
-                                        hue: item.graphic.hue,
+                                        graphic_id: item.graphic,
+                                        hue: item.hue,
                                     }.into());
                                 }
                             }
@@ -492,10 +493,10 @@ pub fn send_ghost_updates(
 
 #[derive(SystemParam)]
 pub struct WorldObserver<'w, 's> {
-    characters: Query<'w, 's, (&'static Character, &'static Flags, &'static MapPosition, &'static Notorious, &'static Stats, Option<&'static Children>)>,
-    world_items: Query<'w, 's, (&'static Graphic, &'static Flags, &'static MapPosition, Option<&'static Tooltip>, Option<&'static Quantity>, Option<&'static Container>, Option<&'static Children>)>,
-    child_items: Query<'w, 's, (&'static Graphic, &'static Parent, &'static ContainerPosition, Option<&'static Tooltip>, Option<&'static Quantity>, Option<&'static Container>, Option<&'static Children>)>,
-    equipped_items: Query<'w, 's, (&'static Graphic, &'static Parent, &'static EquippedPosition, Option<&'static Tooltip>, Option<&'static Quantity>, Option<&'static Container>, Option<&'static Children>)>,
+    characters: Query<'w, 's, (&'static BodyType, &'static Hue, &'static Flags, &'static MapPosition, &'static Notorious, &'static Stats, Option<&'static Children>)>,
+    world_items: Query<'w, 's, (&'static Graphic, &'static Hue, &'static Flags, &'static MapPosition, Option<&'static Tooltip>, Option<&'static Quantity>, Option<&'static Container>, Option<&'static Children>)>,
+    child_items: Query<'w, 's, (&'static Graphic, &'static Hue, &'static Parent, &'static ContainerPosition, Option<&'static Tooltip>, Option<&'static Quantity>, Option<&'static Container>, Option<&'static Children>)>,
+    equipped_items: Query<'w, 's, (&'static Graphic, &'static Hue, &'static Parent, &'static EquippedPosition, Option<&'static Tooltip>, Option<&'static Quantity>, Option<&'static Container>, Option<&'static Children>)>,
 }
 
 impl<'w, 's> WorldObserver<'w, 's> {
@@ -507,10 +508,11 @@ impl<'w, 's> WorldObserver<'w, 's> {
         };
 
         for child in children {
-            if let Ok((graphic, parent, position, tooltip, quantity, container, sub_children)) = self.child_items.get(*child) {
+            if let Ok((graphic, hue, parent, position, tooltip, quantity, container, sub_children)) = self.child_items.get(*child) {
                 view_state.upsert_ghost(*child, GhostState::Item(ItemState {
                     dirty_flags: ItemDirtyFlags::empty(),
-                    graphic: *graphic,
+                    graphic: **graphic,
+                    hue: **hue,
                     position: ItemPositionState::Contained(parent.get(), position.clone()),
                     quantity: quantity.map_or(1, |q| q.quantity),
                     tooltip: Default::default(),
@@ -532,13 +534,14 @@ impl<'w, 's> WorldObserver<'w, 's> {
     fn observe_equipped(
         &self, viewer: Entity, view_state: &mut Mut<ViewState>, parent: Entity,
         entity: Entity, slot: EquipmentSlot,
-        graphic: &Graphic, tooltip: Option<&Tooltip>,
+        graphic: &Graphic, hue: &Hue, tooltip: Option<&Tooltip>,
         quantity: Option<&Quantity>, container: Option<&Container>,
         children: Option<&Children>,
     ) {
         view_state.upsert_ghost(entity, GhostState::Item(ItemState {
             dirty_flags: ItemDirtyFlags::empty(),
-            graphic: *graphic,
+            graphic: **graphic,
+            hue: **hue,
             position: ItemPositionState::Equipped(parent, EquippedPosition {
                 slot,
             }),
@@ -559,14 +562,14 @@ impl<'w, 's> WorldObserver<'w, 's> {
 
     fn observe_character(
         &self, viewer: Entity, view_state: &mut Mut<ViewState>, entity: Entity,
-        character: &Character, flags: EntityFlags, location: &MapPosition, notoriety: Notoriety,
-        stats: &Stats, children: Option<&Children>,
+        body_type: &BodyType, hue: &Hue, flags: EntityFlags, location: &MapPosition,
+        notoriety: Notoriety, stats: &Stats, children: Option<&Children>,
     ) {
         view_state.upsert_ghost(entity, GhostState::Character(CharacterState {
             dirty_flags: CharacterDirtyFlags::empty(),
             location: *location,
-            body_type: character.body_type,
-            hue: character.hue,
+            body_type: **body_type,
+            hue: **hue,
             notoriety,
             stats: stats.clone(),
             flags,
@@ -574,10 +577,10 @@ impl<'w, 's> WorldObserver<'w, 's> {
 
         if let Some(children) = children {
             for equipped in children {
-                if let Ok((graphic, _, position, tooltip, quantity, container, sub_children)) = self.equipped_items.get(*equipped) {
+                if let Ok((graphic, hue, _, position, tooltip, quantity, container, sub_children)) = self.equipped_items.get(*equipped) {
                     self.observe_equipped(
                         viewer, view_state, entity, *equipped, position.slot,
-                        graphic, tooltip, quantity, container, sub_children,
+                        graphic, hue, tooltip, quantity, container, sub_children,
                     );
                 }
             }
@@ -586,12 +589,14 @@ impl<'w, 's> WorldObserver<'w, 's> {
 
     fn observe_world_item(
         &self, viewer: Entity, view_state: &mut Mut<ViewState>, entity: Entity,
-        graphic: &Graphic, flags: EntityFlags, location: &MapPosition, tooltip: Option<&Tooltip>,
-        quantity: Option<&Quantity>, container: Option<&Container>, children: Option<&Children>,
+        graphic: &Graphic, hue: &Hue, flags: EntityFlags, location: &MapPosition,
+        tooltip: Option<&Tooltip>, quantity: Option<&Quantity>, container: Option<&Container>,
+        children: Option<&Children>,
     ) {
         view_state.upsert_ghost(entity, GhostState::Item(ItemState {
             dirty_flags: ItemDirtyFlags::empty(),
-            graphic: *graphic,
+            graphic: **graphic,
+            hue: **hue,
             position: ItemPositionState::World(WorldItemState {
                 location: *location,
                 flags,
@@ -612,12 +617,12 @@ impl<'w, 's> WorldObserver<'w, 's> {
     }
 
     fn observe_entity(&self, viewer: Entity, view_state: &mut Mut<ViewState>, entity: Entity) {
-        if let Ok((character, flags, location, notorious, stats, children)) = self.characters.get(entity) {
-            self.observe_character(viewer, view_state, entity, character, flags.flags, location, notorious.0, stats, children);
+        if let Ok((character, hue, flags, location, notorious, stats, children)) = self.characters.get(entity) {
+            self.observe_character(viewer, view_state, entity, character, hue, flags.flags, location, notorious.0, stats, children);
         }
 
-        if let Ok((graphic, flags, location, tooltip, quantity, container, children)) = self.world_items.get(entity) {
-            self.observe_world_item(viewer, view_state, entity, graphic, flags.flags, location, tooltip, quantity, container, children);
+        if let Ok((graphic, hue, flags, location, tooltip, quantity, container, children)) = self.world_items.get(entity) {
+            self.observe_world_item(viewer, view_state, entity, graphic, hue, flags.flags, location, tooltip, quantity, container, children);
         }
     }
 }
@@ -645,7 +650,7 @@ pub fn observe_ghosts(
 
 pub fn start_synchronizing(
     clients: Query<(Entity, &ViewState, Ref<Possessing>), (With<NetClient>, Without<Synchronizing>)>,
-    characters: Query<&MapPosition, (With<OwningClient>, With<NetId>, With<MapPosition>, With<Character>)>,
+    characters: Query<&MapPosition, (With<OwningClient>, With<NetId>, With<MapPosition>, With<BodyType>)>,
     mut commands: Commands,
 ) {
     for (entity, view_state, possessing) in &clients {
@@ -666,11 +671,11 @@ pub fn start_synchronizing(
 
 pub fn send_change_map(
     mut clients: Query<(&NetClient, &mut ViewState, Ref<Possessing>), With<Synchronizing>>,
-    characters: Query<(&NetId, &MapPosition, Ref<Character>)>,
+    characters: Query<(&NetId, &MapPosition, Ref<BodyType>)>,
     maps: Res<MapInfos>,
 ) {
     for (client, mut view_state, possessing) in clients.iter_mut() {
-        let (possessed_net, map_position, character) = match characters.get(possessing.entity) {
+        let (possessed_net, map_position, body_type) = match characters.get(possessing.entity) {
             Ok(x) => x,
             _ => continue,
         };
@@ -692,7 +697,7 @@ pub fn send_change_map(
 
         client.send_packet(BeginEnterWorld {
             entity_id: possessed_net.id,
-            body_type: character.body_type,
+            body_type: **body_type,
             position: map_position.position,
             direction: map_position.direction,
             map_size: map.size,
@@ -759,13 +764,13 @@ pub fn send_opened_containers(
 
                 contents.push(UpsertEntityContained {
                     id: child_id,
-                    graphic_id: item.graphic.id,
+                    graphic_id: item.graphic,
                     graphic_inc: 0,
                     quantity: item.quantity,
                     position,
                     grid_index,
                     parent_id: id,
-                    hue: item.graphic.hue,
+                    hue: item.hue,
                 });
             }
         }

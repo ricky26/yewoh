@@ -49,7 +49,7 @@ pub struct DeserializeContext<'a> {
 #[derive(ScheduleLabel, Hash, Debug, Clone, PartialEq, Eq)]
 pub struct SerializeSchedule;
 
-pub trait BundleSerializer: FromWorld + Send + 'static {
+pub trait BundleSerializer: Send + 'static {
     type Query: ReadOnlyQueryData;
     type Filter: QueryFilter;
     type Bundle: Typed + FromReflect + GetTypeRegistration;
