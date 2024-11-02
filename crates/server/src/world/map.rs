@@ -1,14 +1,10 @@
 use std::ops::Deref;
 use std::path::Path;
 
-use bevy::ecs::world::CommandQueue;
 use bevy::prelude::*;
-use futures::{future, TryFutureExt};
 use glam::IVec3;
-use tokio::spawn;
-use tokio::sync::mpsc;
-
-use yewoh::assets::map::{load_map, load_statics, MapChunk, CHUNK_SIZE};
+use tokio::task::JoinSet;
+use yewoh::assets::map::{load_map, load_statics, map_chunk_count, MapChunk, StaticVisitor, CHUNK_SIZE};
 use yewoh::assets::multi::MultiData;
 use yewoh::assets::tiles::{TileData, TileFlags};
 use yewoh::Direction;
@@ -28,12 +24,8 @@ pub struct Chunk {
 pub struct Static;
 
 #[derive(Debug, Clone, Default, Component, Reflect)]
-#[reflect(Component)]
-pub struct Surface;
-
-#[derive(Debug, Clone, Default, Component, Reflect)]
-#[reflect(Component)]
-pub struct Impassable;
+#[reflect(Default, Component)]
+pub struct HasCollision;
 
 #[derive(Debug, Clone, Default, Resource, Reflect)]
 #[reflect(Resource)]
@@ -65,97 +57,164 @@ impl Deref for MultiDataResource {
     }
 }
 
-pub fn spawn_chunk(commands: &mut Commands, map_id: u8, chunk_x: usize, chunk_y: usize, map_chunk: MapChunk) {
-    let x = (chunk_x * CHUNK_SIZE) as i32;
-    let y = (chunk_y * CHUNK_SIZE) as i32;
-    let position = IVec3::new(x, y, 0);
-
-    commands.spawn((
-        Chunk { map_chunk },
-        MapPosition { map_id, position, direction: Direction::default() },
-    ));
+pub struct MapChunkData {
+    pub map_id: u8,
+    pub x: usize,
+    pub y: usize,
+    pub chunk: MapChunk,
 }
 
-pub async fn create_map_entities(world: &mut World, map_infos: &MapInfos, uo_data_path: &Path) -> anyhow::Result<()> {
-    let (tx, mut rx) = mpsc::channel(128);
+pub async fn load_map_entities(
+    map_infos: &MapInfos,
+    uo_data_path: &Path,
+) -> anyhow::Result<Vec<MapChunkData>> {
+    let mut set = JoinSet::new();
 
-    let tasks = map_infos.maps.iter()
-        .filter(|(_, m)| !m.is_virtual)
-        .map(|(map_id, info)| {
-            let map_id = *map_id;
-            let width = info.size.x as usize;
-            let height = info.size.y as usize;
-            let tx = tx.clone();
-            let uo_data_path = uo_data_path.to_path_buf();
-            spawn(async move {
-                load_map(&uo_data_path, map_id as usize, width, height, |x, y, chunk| {
-                    tx.send((map_id, x, y, chunk)).map_err(Into::into)
-                }).await
-            })
-        })
-        .collect::<Vec<_>>();
-    drop(tx);
+    for (map_id, map) in map_infos.maps.iter() {
+        if map.is_virtual {
+            continue;
+        }
 
-    let mut queue = CommandQueue::default();
-    let mut commands = Commands::new(&mut queue, world);
-
-    while let Some((map_id, x, y, chunk)) = rx.recv().await {
-        spawn_chunk(&mut commands, map_id, x, y, chunk);
+        let map_id = *map_id;
+        let width = map.size.x as usize;
+        let height = map.size.y as usize;
+        let (width_chunks, height_chunks) = map_chunk_count(width, height);
+        let num_chunks = width_chunks * height_chunks;
+        let uo_data_path = uo_data_path.to_path_buf();
+        set.spawn(async move {
+            let mut data = Vec::with_capacity(num_chunks);
+            load_map(&uo_data_path, map_id as usize, width, height, |x, y, chunk| {
+                data.push(MapChunkData {
+                    map_id,
+                    x,
+                    y,
+                    chunk,
+                });
+                Ok(())
+            }).await?;
+            Ok::<_, anyhow::Error>(data)
+        });
     }
 
-    future::try_join_all(tasks).await?;
-    queue.apply(world);
-    Ok(())
+    let mut data = Vec::new();
+    while let Some(result) = set.join_next().await {
+        let item = result??;
+        data.extend(item);
+    }
+    Ok(data)
 }
 
-pub async fn create_statics(
+pub fn spawn_map_entities(
     world: &mut World,
-    map_infos: &MapInfos,
-    tile_data: &TileData,
-    uo_data_path: &Path,
-) -> anyhow::Result<()> {
-    let (tx, mut rx) = mpsc::channel(128);
-
-    let tasks = map_infos.maps.iter()
-        .filter(|(_, m)| !m.is_virtual)
-        .map(|(map_id, info)| {
-            let map_id = *map_id;
-            let width = info.size.x as usize;
-            let height = info.size.y as usize;
-            let tx = tx.clone();
-            let uo_data_path = uo_data_path.to_path_buf();
-            spawn(async move {
-                load_statics(&uo_data_path, map_id as usize, width, height, |s| {
-                    tx.send((map_id, s)).map_err(Into::into)
-                }).await
-            })
-        })
-        .collect::<Vec<_>>();
-    drop(tx);
-
-    let mut queue = CommandQueue::default();
-    let mut commands = Commands::new(&mut queue, world);
-
-    while let Some((map_id, s)) = rx.recv().await {
-        let mut entity = commands.spawn((
-            MapPosition { map_id, position: s.position, direction: Direction::default() },
-            Graphic(s.graphic_id),
-            Hue(s.hue),
+    map_data: impl Iterator<Item=MapChunkData>,
+) {
+    world.spawn_batch(map_data.map(|chunk| {
+        let x = (chunk.x * CHUNK_SIZE) as i32;
+        let y = (chunk.y * CHUNK_SIZE) as i32;
+        let position = IVec3::new(x, y, 0);
+        (
+            Chunk { map_chunk: chunk.chunk },
+            MapPosition { map_id: chunk.map_id, position, direction: Direction::default() },
             Static,
-        ));
+        )
+    }));
+}
 
-        if let Some(info) = tile_data.items.get(s.graphic_id as usize) {
-            if info.flags.contains(TileFlags::SURFACE) {
-                entity.insert(Surface);
-            }
+#[derive(Clone, Debug)]
+pub struct StaticData {
+    pub map_id: u8,
+    pub position: IVec3,
+    pub graphic_id: u16,
+    pub hue: u16,
+}
 
-            if info.flags.contains(TileFlags::IMPASSABLE) {
-                entity.insert(Impassable);
+pub async fn load_static_entities(
+    map_infos: &MapInfos,
+    uo_data_path: &Path,
+) -> anyhow::Result<Vec<StaticData>> {
+    struct Visit {
+        map_id: u8,
+        statics: Vec<StaticData>,
+    }
+
+    impl StaticVisitor for Visit {
+        fn start_chunk(&mut self, num: usize) -> anyhow::Result<()> {
+            self.statics.reserve(num);
+            Ok(())
+        }
+
+        fn item(&mut self, item: yewoh::assets::map::Static) -> anyhow::Result<()> {
+            self.statics.push(StaticData {
+                map_id: self.map_id,
+                position: item.position,
+                graphic_id: item.graphic_id,
+                hue: item.hue,
+            });
+            Ok(())
+        }
+    }
+
+    let mut set = JoinSet::new();
+
+    for (map_id, map) in map_infos.maps.iter() {
+        if map.is_virtual {
+            continue;
+        }
+
+        let map_id = *map_id;
+        let width = map.size.x as usize;
+        let height = map.size.y as usize;
+        let uo_data_path = uo_data_path.to_path_buf();
+        set.spawn(async move {
+            let mut visitor = Visit {
+                map_id,
+                statics: Vec::new(),
+            };
+            load_statics(&uo_data_path, map_id as usize, width, height, &mut visitor).await?;
+            Ok::<_, anyhow::Error>(visitor.statics)
+        });
+    }
+
+    let mut data = Vec::new();
+    while let Some(result) = set.join_next().await {
+        let item = result??;
+        data.extend(item);
+    }
+    Ok(data)
+}
+
+const HAS_COLLISION_FLAGS: TileFlags = TileFlags::from_bits_truncate(TileFlags::SURFACE.bits() |
+    TileFlags::IMPASSABLE.bits() |
+    TileFlags::WALL.bits() |
+    TileFlags::BRIDGE.bits());
+
+pub fn spawn_static_entities(
+    world: &mut World,
+    tile_data: &TileData,
+    statics: &[StaticData],
+) {
+    let hint = statics.len() / 2;
+    let mut out_collision = Vec::with_capacity(hint);
+
+    let entities = world.spawn_batch(statics.iter()
+        .map(|item| (
+            MapPosition {
+                map_id: item.map_id,
+                position: item.position,
+                direction: Direction::default()
+            },
+            Graphic(item.graphic_id),
+            Hue(item.hue),
+            Static,
+        )));
+
+    for (entity, item) in entities.zip(statics.iter()) {
+        if let Some(info) = tile_data.items.get(item.graphic_id as usize) {
+            if info.flags.intersects(HAS_COLLISION_FLAGS) {
+                out_collision.push((entity, HasCollision));
             }
         }
     }
 
-    future::try_join_all(tasks).await?;
-    queue.apply(world);
-    Ok(())
+    world.insert_batch(out_collision);
 }

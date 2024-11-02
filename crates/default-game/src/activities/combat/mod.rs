@@ -1,11 +1,4 @@
-use bevy::app::{App, Last, Plugin, Update};
-use bevy::ecs::entity::Entity;
-use bevy::ecs::event::{EventReader, EventWriter};
-use bevy::ecs::query::{Changed, With, Or};
-use bevy::ecs::schedule::{IntoSystemConfigs};
-use bevy::ecs::system::{Commands, Query, Res};
-use bevy::hierarchy::{Children, DespawnRecursiveExt};
-use bevy::time::{Timer, TimerMode};
+use bevy::prelude::*;
 
 use yewoh::protocol;
 use yewoh::protocol::EquipmentSlot;
@@ -13,7 +6,6 @@ use yewoh_server::world::entity::{AttackTarget, BodyType, Container, EquippedPos
 use yewoh_server::world::events::AttackRequestedEvent;
 use yewoh_server::world::net::{NetClient, NetId, Possessing};
 use yewoh_server::world::ServerSet;
-use yewoh_server::world::spatial::NetClientPositions;
 
 use crate::activities::{CurrentActivity, progress_current_activity};
 use crate::characters::{Alive, CharacterDied, Corpse, CorpseSpawned, DamageDealt, HitAnimation, MeleeWeapon, Unarmed};
@@ -183,9 +175,8 @@ pub fn spawn_corpses(
 
 pub fn send_damage_notices(
     net_ids: Query<&NetId>,
-    client_positions: Res<NetClientPositions>,
-    mut damage_events: EventReader<DamageDealt>,
     clients: Query<&NetClient>,
+    mut damage_events: EventReader<DamageDealt>,
 ) {
     for event in damage_events.read() {
         let target_id = match net_ids.get(event.target) {
@@ -197,13 +188,8 @@ pub fn send_damage_notices(
             .ok()
             .map(|id| id.id);
 
-        for (entity, ..) in client_positions.tree.iter_at_point(event.location.map_id, event.location.position.truncate()) {
-            let client = match clients.get(entity) {
-                Ok(x) => x,
-                _ => continue,
-            };
-
-
+        // TODO: filter clients
+        for client in &clients {
             client.send_packet(protocol::DamageDealt {
                 target_id,
                 damage: event.damage,

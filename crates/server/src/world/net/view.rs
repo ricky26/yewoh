@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bitflags::bitflags;
-use glam::UVec2;
+use glam::{ivec2, UVec2};
 
 use yewoh::{EntityKind, Notoriety};
 use yewoh::protocol::{CharacterEquipment, DeleteEntity, EntityFlags, EntityTooltipVersion, EquipmentSlot, OpenContainer, UpdateCharacter, UpsertContainerContents, UpsertEntityCharacter, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityWorld, UpsertLocalPlayer};
@@ -11,7 +11,7 @@ use yewoh::protocol::{BeginEnterWorld, ChangeSeason, EndEnterWorld, ExtendedComm
 use crate::world::entity::{BodyType, Container, ContainerPosition, EquippedPosition, Flags, Graphic, Hue, MapPosition, Notorious, Quantity, Stats, Tooltip};
 use crate::world::net::{NetClient, NetId, OwningClient};
 use crate::world::net::connection::Possessing;
-use crate::world::spatial::{EntityPositions, view_aabb};
+use crate::world::spatial::SpatialQuery;
 
 #[derive(Debug, Clone, Event)]
 pub struct ContainerOpenedEvent {
@@ -439,16 +439,18 @@ pub fn send_ghost_updates(
                         }
                         ItemPositionState::Contained(parent, container) => {
                             if let Ok(parent_id) = net_ids.get(*parent) {
-                                client.send_packet(UpsertEntityContained {
-                                    id,
-                                    graphic_id: item.graphic,
-                                    graphic_inc: 0,
-                                    quantity: item.quantity,
-                                    position: container.position,
-                                    grid_index: container.grid_index,
-                                    parent_id: parent_id.id,
-                                    hue: item.hue,
-                                }.into());
+                                if !dirty_flags.is_empty() {
+                                    client.send_packet(UpsertEntityContained {
+                                        id,
+                                        graphic_id: item.graphic,
+                                        graphic_inc: 0,
+                                        quantity: item.quantity,
+                                        position: container.position,
+                                        grid_index: container.grid_index,
+                                        parent_id: parent_id.id,
+                                        hue: item.hue,
+                                    }.into());
+                                }
                             }
                         }
                         ItemPositionState::Equipped(parent, by) => {
@@ -614,9 +616,16 @@ impl<'w, 's> WorldObserver<'w, 's> {
     }
 }
 
+fn view_aabb(center: IVec2, range: i32) -> (IVec2, IVec2) {
+    let range2 = IVec2::splat(range.abs());
+    let min = center - range2;
+    let max = center + range2;
+    (min, max)
+}
+
 pub fn observe_ghosts(
     observer: WorldObserver,
-    entities: Res<EntityPositions>,
+    spatial_query: SpatialQuery,
     mut clients: Query<(Entity, &View, &mut ViewState, &Possessing)>,
     owned: Query<&MapPosition, With<OwningClient>>,
 ) {
@@ -629,8 +638,26 @@ pub fn observe_ghosts(
         view_state.mark_unseen();
 
         let (min, max) = view_aabb(location.position.truncate(), view.range);
-        for (visible_entity, ..) in entities.tree.iter_aabb(view_state.map_id, min, max) {
-            observer.observe_entity(entity, &mut view_state, visible_entity);
+
+        let characters = spatial_query.characters.lookup.maps.get(&location.map_id);
+        let items = spatial_query.dynamic_items.lookup.maps.get(&location.map_id);
+
+        for x in min.x..=max.x {
+            for y in min.y..=max.y {
+                let test_pos = ivec2(x, y);
+
+                if let Some(characters) = characters {
+                    for entry in characters.entries_at(test_pos) {
+                        observer.observe_entity(entity, &mut view_state, entry.entity);
+                    }
+                }
+
+                if let Some(items) = items {
+                    for entry in items.entries_at(test_pos) {
+                        observer.observe_entity(entity, &mut view_state, entry.entity);
+                    }
+                }
+            }
         }
     }
 }

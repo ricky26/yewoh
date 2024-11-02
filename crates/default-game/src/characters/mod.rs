@@ -56,6 +56,7 @@ pub struct AnimationDefinition {
 }
 
 #[derive(Debug, Clone, Default, Reflect, Deserialize)]
+#[reflect(Default)]
 pub struct PredefinedAnimation {
     pub kind: u16,
     pub action: u16,

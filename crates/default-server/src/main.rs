@@ -8,17 +8,17 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::anyhow;
-use bevy::asset::{AssetPath, LoadState};
+use bevy::asset::{handle_internal_asset_events, AssetPath, LoadState};
 use bevy::log::LogPlugin;
 use bevy::prelude::*;
+use bevy::tasks::block_on;
 use bevy::time::Time;
 use clap::Parser;
 use futures::future::join;
 use tokio::fs;
 use tokio::net::{lookup_host, TcpListener};
 use tokio::sync::mpsc;
-use tokio::time::sleep;
-use tracing::info;
+use tracing::{event, info, Level};
 
 use yewoh::assets::multi::load_multi_data;
 use yewoh::assets::tiles::load_tile_data;
@@ -28,7 +28,7 @@ use yewoh_default_game::DefaultGamePlugins;
 use yewoh_server::async_runtime::AsyncRuntime;
 use yewoh_server::game_server::listen_for_game;
 use yewoh_server::lobby::{listen_for_lobby, LocalServerRepository};
-use yewoh_server::world::map::{create_map_entities, create_statics, Chunk, MultiDataResource, Static, TileDataResource};
+use yewoh_server::world::map::{self, Chunk, MultiDataResource, Static, TileDataResource};
 use yewoh_server::world::net::NetServer;
 use yewoh_server::world::ServerPlugin;
 
@@ -38,6 +38,7 @@ use sqlx::postgres::PgPool;
 use yewoh_default_game::accounts::sql::{SqlAccountRepository, SqlAccountRepositoryConfig};
 use yewoh_default_game::data::prefabs::PrefabLibrary;
 use yewoh_default_game::persistence::db::WorldRepository;
+use yewoh_server::world::spatial::{ChunkLookup, SpatialCharacterLookup, SpatialDynamicItemLookup, SpatialStaticItemLookup};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
@@ -86,13 +87,22 @@ struct Args {
     auto_create_accounts: bool,
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let args = Args::parse();
-    let pool = Arc::new(PgPool::connect(&args.postgres).await?);
-    migrate(&pool).await?;
+fn main() -> anyhow::Result<()> {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    let _runtime = runtime.enter();
 
-    let external_ip = lookup_host(format!("{}:0", &args.advertise_address)).await?
+    let frame_wait = Duration::from_millis(20);
+    let load_wait = Duration::from_millis(100);
+    let args = Args::parse();
+    let pool = block_on(async move {
+        let pool = Arc::new(PgPool::connect(&args.postgres).await?);
+        migrate(&pool).await?;
+        Ok::<_, anyhow::Error>(pool)
+    })?;
+
+    let external_ip = block_on(lookup_host(format!("{}:0", &args.advertise_address)))?
         .filter_map(|entry| match entry {
             SocketAddr::V4(v4) => Some(*v4.ip()),
             _ => None,
@@ -123,35 +133,59 @@ async fn main() -> anyhow::Result<()> {
             DefaultGamePlugins,
             ServerPlugin,
         ));
+    app.finish();
+    app.cleanup();
 
-    let static_data = static_data::load_from_directory(&args.data_path).await?;
-    let map_infos = static_data.maps.map_infos();
-    let tile_data = load_tile_data(&args.uo_data_path).await?;
-    let multi_data = load_multi_data(&args.uo_data_path).await?;
+    let (static_data, map_infos, tile_data, multi_data, map_entities, static_entities) = block_on(async {
+        let static_data = static_data::load_from_directory(&args.data_path).await?;
+        let map_infos = static_data.maps.map_infos();
+        let tile_data = load_tile_data(&args.uo_data_path).await?;
+        let multi_data = load_multi_data(&args.uo_data_path).await?;
 
-    // Load UO data
-    info!("Loading map data...");
-    create_map_entities(app.world_mut(), &map_infos, &args.uo_data_path).await?;
-    info!("Loading statics...");
-    create_statics(app.world_mut(), &map_infos, &tile_data, &args.uo_data_path).await?;
+        // Load UO data
+        info!("Loading map data...");
+        let map_entities = map::load_map_entities(&map_infos, &args.uo_data_path).await?;
+        info!("Loading statics...");
+        let static_entities = map::load_static_entities(&map_infos, &args.uo_data_path).await?;
+
+        Ok::<_, anyhow::Error>((static_data, map_infos, tile_data, multi_data, map_entities, static_entities))
+    })?;
+
+    // Spawn map
+    info!("Spawning map...");
+    map::spawn_map_entities(app.world_mut(), map_entities.into_iter());
+    info!("Spawning statics...");
+    map::spawn_static_entities(app.world_mut(), &tile_data, &static_entities);
+
+    // Spawn map data
+    {
+        let mut query = app.world_mut().query_filtered::<(), With<Chunk>>();
+        info!("Spawned {} map chunks", query.iter(app.world()).count());
+        let mut query = app.world_mut().query_filtered::<(), With<Static>>();
+        info!("Spawned {} statics", query.iter(app.world()).count());
+    }
+
+    // Initialise spatial lookups
+    app
+        .insert_resource(SpatialCharacterLookup::new(&map_infos))
+        .insert_resource(SpatialDynamicItemLookup::new(&map_infos))
+        .insert_resource(SpatialStaticItemLookup::new(&map_infos))
+        .insert_resource(ChunkLookup::new(&map_infos));
 
     // Load prefabs
-    let (prefabs, prefab_handles) = load_prefabs(&mut app, &args.data_path, "prefabs").await?;
+    info!("Loading prefabs...");
+    let (prefabs, prefab_handles) = load_prefabs(&mut app, load_wait, &args.data_path, "prefabs")?;
     app
         .insert_resource(prefabs)
         .insert_resource(prefab_handles);
 
-    // Spawn map data
-    let mut query = app.world_mut().query_filtered::<(), With<Chunk>>();
-    info!("Spawned {} map chunks", query.iter(app.world()).count());
-    let mut query = app.world_mut().query_filtered::<(), With<Static>>();
-    info!("Spawned {} statics", query.iter(app.world()).count());
-    load_static_entities(&mut app, &args.data_path, "entities").await?;
+    // Spawn static entities
+    load_static_entities(&mut app, load_wait, &args.data_path, "entities")?;
 
-    let (lobby_listener, game_listener) = join(
+    let (lobby_listener, game_listener) = block_on(join(
         TcpListener::bind(&args.lobby_bind),
         TcpListener::bind(&args.game_bind),
-    ).await;
+    ));
 
     let lobby_listener = lobby_listener?;
     let game_listener = game_listener?;
@@ -184,7 +218,7 @@ async fn main() -> anyhow::Result<()> {
         ));
 
     // Load previous state
-    if let Some(contents) = world_repo.get_snapshot().await? {
+    if let Some(contents) = block_on(world_repo.get_snapshot())? {
         let mut d = serde_json::Deserializer::from_reader(Cursor::new(&contents));
         app.world_mut().deserialize(&mut d)?;
     }
@@ -199,12 +233,11 @@ async fn main() -> anyhow::Result<()> {
     info!("Listening for lobby connections on {}", &args.lobby_bind);
     info!("Listening for game connections on {}", &args.game_bind);
 
-    let frame_wait = Duration::from_millis(20);
     loop {
         if SHOULD_EXIT.load(Ordering::Relaxed) {
             let contents = app.world_mut().serialize();
             let repo = app.world().resource::<WorldRepository>();
-            write_save(repo, contents).await?;
+            block_on(write_save(repo, contents))?;
             info!("Saved snapshot");
             return Ok(());
         }
@@ -213,24 +246,28 @@ async fn main() -> anyhow::Result<()> {
         app.update();
 
         if game_handle.is_finished() {
-            game_handle.await??;
+            block_on(game_handle)??;
             return Err(anyhow!("failed to serve game connections"));
         }
 
         if lobby_handle.is_finished() {
-            lobby_handle.await??;
+            block_on(lobby_handle)??;
             return Err(anyhow!("failed to serve lobby"));
         }
 
         if http_server_handle.is_finished() {
-            http_server_handle.await??;
+            block_on(http_server_handle)??;
             return Err(anyhow!("failed to serve http API"));
         }
 
+        #[cfg(feature = "trace_tracy")]
+        event!(Level::INFO, message = "finished frame", tracy.frame_mark = true);
+
+        let _span = info_span!("frame sleep").entered();
         let end_time = Instant::now();
         let frame_duration = end_time - start_time;
         if frame_duration < frame_wait {
-           sleep(frame_wait - frame_duration).await;
+           std::thread::sleep(frame_wait - frame_duration);
         }
     }
 }
@@ -239,8 +276,9 @@ async fn main() -> anyhow::Result<()> {
 #[allow(dead_code)]
 struct PrefabHandles(Vec<Handle<Fabricator>>);
 
-async fn load_prefabs(
+fn load_prefabs(
     app: &mut App,
+    step_duration: Duration,
     root_path: &Path,
     start_path: impl Into<PathBuf>,
 ) -> anyhow::Result<(PrefabLibrary, PrefabHandles)> {
@@ -248,27 +286,31 @@ async fn load_prefabs(
     to_visit.push_back(start_path.into());
 
     let asset_server = app.world().resource::<AssetServer>().clone();
-    let mut queue = Vec::new();
+    let queue = block_on(async {
+        let mut queue = Vec::new();
 
-    while let Some(dir_path) = to_visit.pop_front() {
-        let abs_dir_path = root_path.join(&dir_path);
+        while let Some(dir_path) = to_visit.pop_front() {
+            let abs_dir_path = root_path.join(&dir_path);
 
-        let mut entries = fs::read_dir(&abs_dir_path).await?;
-        while let Some(entry) = entries.next_entry().await? {
-            let metadata = entry.metadata().await?;
-            if metadata.is_dir() {
-                to_visit.push_back(dir_path.join(entry.file_name()));
-            } else if let Some(name) = entry.file_name().to_str() {
-                if name.ends_with(".fab") {
-                    let full_path = dir_path.join(entry.file_name());
-                    let name = full_path.file_stem().unwrap().to_string_lossy().to_string();
-                    let asset_path = AssetPath::from(full_path);
-                    let handle = asset_server.load(asset_path);
-                    queue.push((name, handle));
+            let mut entries = fs::read_dir(&abs_dir_path).await?;
+            while let Some(entry) = entries.next_entry().await? {
+                let metadata = entry.metadata().await?;
+                if metadata.is_dir() {
+                    to_visit.push_back(dir_path.join(entry.file_name()));
+                } else if let Some(name) = entry.file_name().to_str() {
+                    if name.ends_with(".fab") {
+                        let full_path = dir_path.join(entry.file_name());
+                        let name = full_path.file_stem().unwrap().to_string_lossy().to_string();
+                        let asset_path = AssetPath::from(full_path);
+                        let handle = asset_server.load(asset_path);
+                        queue.push((name, handle));
+                    }
                 }
             }
         }
-    }
+
+        Ok::<_, anyhow::Error>(queue)
+    })?;
 
     let mut handles = Vec::new();
     let mut library = PrefabLibrary::default();
@@ -279,7 +321,8 @@ async fn load_prefabs(
             match asset_server.get_load_state(&handle).unwrap() {
                 LoadState::NotLoaded => unreachable!(),
                 LoadState::Loading => {
-                    app.update();
+                    std::thread::sleep(step_duration);
+                    handle_internal_asset_events(app.world_mut());
                     continue;
                 },
                 LoadState::Loaded => break,
@@ -340,8 +383,9 @@ fn update_prefabs(
 #[derive(Component)]
 struct StaticEntity(AssetPath<'static>);
 
-async fn load_static_entities(
+fn load_static_entities(
     app: &mut App,
+    step_duration: Duration,
     root_path: &Path,
     entities_path: impl Into<PathBuf>,
 ) -> anyhow::Result<()> {
@@ -349,35 +393,40 @@ async fn load_static_entities(
     to_visit.push_back(entities_path.into());
 
     let asset_server = app.world().resource::<AssetServer>().clone();
-    let mut count = 0;
-    let mut fab_queue = Vec::new();
+    let fab_queue = block_on(async {
+        let mut fab_queue = Vec::new();
 
-    while let Some(dir_path) = to_visit.pop_front() {
-        let abs_dir_path = root_path.join(&dir_path);
+        while let Some(dir_path) = to_visit.pop_front() {
+            let abs_dir_path = root_path.join(&dir_path);
 
-        let mut entries = fs::read_dir(&abs_dir_path).await?;
-        while let Some(entry) = entries.next_entry().await? {
-            let metadata = entry.metadata().await?;
-            if metadata.is_dir() {
-                to_visit.push_back(dir_path.join(entry.file_name()));
-            } else if let Some(name) = entry.file_name().to_str() {
-                if name.ends_with(".fab") {
-                    let full_path = dir_path.join(entry.file_name());
-                    let name = full_path.file_stem().unwrap().to_string_lossy().to_string();
-                    let asset_path = AssetPath::from(full_path);
-                    let template = asset_server.load(&asset_path);
-                    fab_queue.push((template, name, asset_path));
+            let mut entries = fs::read_dir(&abs_dir_path).await?;
+            while let Some(entry) = entries.next_entry().await? {
+                let metadata = entry.metadata().await?;
+                if metadata.is_dir() {
+                    to_visit.push_back(dir_path.join(entry.file_name()));
+                } else if let Some(name) = entry.file_name().to_str() {
+                    if name.ends_with(".fab") {
+                        let full_path = dir_path.join(entry.file_name());
+                        let name = full_path.file_stem().unwrap().to_string_lossy().to_string();
+                        let asset_path = AssetPath::from(full_path);
+                        let template = asset_server.load(&asset_path);
+                        fab_queue.push((template, name, asset_path));
+                    }
                 }
             }
         }
-    }
 
+        Ok::<_, anyhow::Error>(fab_queue)
+    })?;
+
+    let mut count = 0;
     for (template, name, asset_path) in fab_queue {
         loop {
             match asset_server.get_load_state(&template).unwrap() {
                 LoadState::NotLoaded => unreachable!(),
                 LoadState::Loading => {
-                    app.update();
+                    std::thread::sleep(step_duration);
+                    handle_internal_asset_events(app.world_mut());
                     continue;
                 },
                 LoadState::Loaded => break,

@@ -1,7 +1,7 @@
-use std::future::Future;
 use std::io::Read;
 use std::path::Path;
 
+use bytemuck::{Pod, Zeroable};
 use byteorder::{LittleEndian as Endian, ReadBytesExt};
 use glam::IVec3;
 
@@ -10,51 +10,79 @@ use crate::assets::mul::MulReader;
 pub const CHUNK_SIZE: usize = 8;
 pub const CHUNK_AREA: usize = CHUNK_SIZE * CHUNK_SIZE;
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MapTile {
+    pub tile_id: u16,
+    pub height: i8,
+}
+
 #[derive(Debug, Clone)]
 pub struct MapChunk {
-    pub tile_ids: [u16; CHUNK_AREA],
-    pub heights: [i8; CHUNK_AREA],
+    pub tiles: [MapTile; CHUNK_AREA],
 }
 
 impl Default for MapChunk {
     fn default() -> Self {
         MapChunk {
-            tile_ids: [0; CHUNK_AREA],
-            heights: [0; CHUNK_AREA],
+            tiles: [MapTile { tile_id: 0, height: 0 }; CHUNK_AREA],
         }
     }
 }
 
 impl MapChunk {
-    pub fn get(&self, x: usize, y: usize) -> (u16, i8) {
+    pub fn get(&self, x: usize, y: usize) -> MapTile {
         let index = x + CHUNK_SIZE * y;
-        (self.tile_ids[index], self.heights[index])
+        self.tiles[index]
     }
 }
 
-pub async fn load_map<C: FnMut(usize, usize, MapChunk) -> F, F: Future<Output=anyhow::Result<()>>>(
+pub fn map_chunk_count(width: usize, height: usize) -> (usize, usize) {
+    (width.div_ceil(CHUNK_SIZE), height.div_ceil(CHUNK_SIZE))
+}
+
+#[derive(Clone, Copy, Default, Zeroable, Pod)]
+#[repr(C, packed)]
+struct RawTile {
+    pub tile_id: u16,
+    pub height: i8,
+}
+
+#[derive(Clone, Copy, Zeroable, Pod)]
+#[repr(C, packed)]
+struct RawChunk {
+    pub unused: u32,
+    pub tiles: [RawTile; CHUNK_AREA],
+}
+
+pub async fn load_map(
     data_path: &Path,
     index: usize,
     width: usize,
     height: usize,
-    mut callback: C,
+    mut callback: impl FnMut(usize, usize, MapChunk) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
     let mut reader = MulReader::open(data_path, &format!("map{}", index)).await?;
 
-    let width_blocks = (width + CHUNK_SIZE - 1) / CHUNK_SIZE;
-    let height_blocks = (height + CHUNK_SIZE - 1) / CHUNK_SIZE;
+    let (width_chunks, height_chunks) = map_chunk_count(width, height);
+    let num_chunks = width_chunks * height_chunks;
+    let num_bytes = size_of::<RawChunk>() * num_chunks;
+    let mut bytes = vec![0; num_bytes];
+    reader.read_exact(&mut bytes)?;
+    let mut chunks: &[RawChunk] = bytemuck::cast_slice(&bytes);
 
-    for x in 0..width_blocks {
-        for y in 0..height_blocks {
-            reader.read_u32::<Endian>()?;
+    for x in 0..width_chunks {
+        for y in 0..height_chunks {
+            let (in_chunk, next) = chunks.split_first().unwrap();
+            chunks = next;
 
-            let mut chunk = MapChunk::default();
-            for tile_index in 0..CHUNK_AREA {
-                chunk.tile_ids[tile_index] = reader.read_u16::<Endian>()?;
-                chunk.heights[tile_index] = reader.read_i8()?;
+            let mut out_chunk = MapChunk::default();
+
+            for (in_tile, out_tile) in in_chunk.tiles.iter().zip(out_chunk.tiles.iter_mut()) {
+                out_tile.tile_id = in_tile.tile_id;
+                out_tile.height = in_tile.height;
             }
 
-            (callback)(x, y, chunk).await?;
+            callback(x, y, out_chunk)?;
         }
     }
 
@@ -68,12 +96,28 @@ pub struct Static {
     pub hue: u16,
 }
 
-pub async fn load_statics<C: FnMut(Static) -> F, F: Future<Output=anyhow::Result<()>>>(
+#[derive(Clone, Copy, Default, Zeroable, Pod)]
+#[repr(C, packed)]
+struct RawStatic {
+    pub graphic_id: u16,
+    pub x_off: i8,
+    pub y_off: i8,
+    pub z: i8,
+    pub hue: u16,
+}
+
+pub trait StaticVisitor {
+    fn start_chunk(&mut self, num: usize) -> anyhow::Result<()>;
+
+    fn item(&mut self, item: Static) -> anyhow::Result<()>;
+}
+
+pub async fn load_statics(
     data_path: &Path,
     index: usize,
     width: usize,
     height: usize,
-    mut callback: C,
+    visitor: &mut impl StaticVisitor,
 ) -> anyhow::Result<()> {
     let mut index_reader = MulReader::open(data_path, &format!("staidx{}", index)).await?;
     let data = {
@@ -82,10 +126,8 @@ pub async fn load_statics<C: FnMut(Static) -> F, F: Future<Output=anyhow::Result
         data_reader.read_to_end(&mut data)?;
         data
     };
-
-    let width_blocks = (width + CHUNK_SIZE - 1) / CHUNK_SIZE;
-    let height_blocks = (height + CHUNK_SIZE - 1) / CHUNK_SIZE;
-
+    
+    let (width_blocks, height_blocks) = map_chunk_count(width, height);
     for block_x in 0..width_blocks {
         for block_y in 0..height_blocks {
             let offset = index_reader.read_u32::<Endian>()?;
@@ -101,22 +143,18 @@ pub async fn load_statics<C: FnMut(Static) -> F, F: Future<Output=anyhow::Result
             let start = offset as usize;
             let end = start + (length as usize);
 
-            let mut bytes = &data[start..end];
+            let bytes = &data[start..end];
+            let statics: &[RawStatic] = bytemuck::cast_slice(bytes);
 
-            while !bytes.is_empty() {
-                let graphic_id = bytes.read_u16::<Endian>()?;
-                let x_off = bytes.read_i8()? as i32;
-                let y_off = bytes.read_i8()? as i32;
-                let z = bytes.read_i8()? as i32;
-                let hue = bytes.read_u16::<Endian>()?;
-
-                let x = x_base + x_off;
-                let y = y_base + y_off;
-                (callback)(Static {
-                    position: IVec3::new(x, y, z),
-                    graphic_id,
-                    hue,
-                }).await?;
+            visitor.start_chunk(statics.len())?;
+            for item in statics {
+                let x = x_base + item.x_off as i32;
+                let y = y_base + item.y_off as i32;
+                visitor.item(Static {
+                    position: IVec3::new(x, y, item.z as i32),
+                    graphic_id: item.graphic_id,
+                    hue: item.hue,
+                })?;
             }
         }
     }

@@ -4,7 +4,7 @@ use crate::world::entity::{AttackTarget, BodyType, Container, ContainerPosition,
 use crate::world::events::{AttackRequestedEvent, CharacterListEvent, ChatRequestEvent, ContextMenuEvent, CreateCharacterEvent, DeleteCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::input::{handle_attack_packets, handle_context_menu_packets, send_context_menu, update_targets};
 use crate::world::net::{accept_new_clients, assign_net_ids, finish_synchronizing, handle_input_packets, handle_login_packets, handle_new_packets, handle_tooltip_packets, observe_ghosts, send_change_map, send_ghost_updates, send_opened_containers, send_tooltips, send_updated_attack_target, start_synchronizing, ContainerOpenedEvent, MapInfos, NetEntityLookup, NetIdAllocator};
-use crate::world::spatial::{update_client_positions, update_entity_positions, update_entity_surfaces, EntityPositions, EntitySurfaces, NetClientPositions};
+use crate::world::spatial::{update_character_lookup, update_chunk_lookup, update_dynamic_item_lookup, update_static_item_lookup, ChunkLookup, SpatialCharacterLookup, SpatialDynamicItemLookup, SpatialStaticItemLookup};
 
 pub mod net;
 
@@ -42,9 +42,10 @@ impl Plugin for ServerPlugin {
             .init_resource::<MapInfos>()
             .init_resource::<NetIdAllocator>()
             .init_resource::<NetEntityLookup>()
-            .init_resource::<EntitySurfaces>()
-            .init_resource::<EntityPositions>()
-            .init_resource::<NetClientPositions>()
+            .init_resource::<SpatialCharacterLookup>()
+            .init_resource::<SpatialDynamicItemLookup>()
+            .init_resource::<SpatialStaticItemLookup>()
+            .init_resource::<ChunkLookup>()
             .register_type::<Flags>()
             .register_type::<Notorious>()
             .register_type::<BodyType>()
@@ -123,9 +124,10 @@ impl Plugin for ServerPlugin {
                 update_targets,
             ).in_set(ServerSet::Send))
             .add_systems(PostUpdate, (
-                update_entity_surfaces,
-                update_entity_positions,
-                update_client_positions,
+                update_character_lookup,
+                update_dynamic_item_lookup,
+                update_static_item_lookup,
+                update_chunk_lookup,
             ).in_set(ServerSet::UpdateVisibility));
     }
 

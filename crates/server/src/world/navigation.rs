@@ -1,10 +1,11 @@
-use bevy::ecs::entity::Entity;
+use bevy::prelude::*;
+use yewoh::assets::map::MapTile;
 use yewoh::assets::tiles::{TileData, TileFlags};
-
 use yewoh::Direction;
 
 use crate::world::entity::MapPosition;
-use crate::world::spatial::{EntitySurfaces, SurfaceKind};
+use crate::world::map::Chunk;
+use crate::world::spatial::{Collider, SpatialQuery};
 
 #[derive(Debug, Clone)]
 pub enum MoveError {
@@ -12,35 +13,51 @@ pub enum MoveError {
     Obstructed(Entity),
 }
 
-pub fn try_move_in_direction(surfaces: &EntitySurfaces, tile_data: &TileData, position: MapPosition, direction: Direction, ignore: Option<Entity>) -> Result<MapPosition, MoveError> {
+pub fn try_move_in_direction(
+    query: &SpatialQuery,
+    chunk_query: &Query<(&MapPosition, &Chunk)>,
+    tile_data: &TileData,
+    position: MapPosition,
+    direction: Direction,
+    ignore: Option<Entity>,
+) -> Result<MapPosition, MoveError> {
     // Step forward and up 10 units, then drop the character down onto their destination.
     let mut test_position = position.position + direction.as_vec2().extend(10);
     let mut new_z = -1;
 
-    for (entity, kind) in surfaces.tree.iter_at_point(position.map_id, test_position.truncate()) {
-        if Some(entity) == ignore {
+    for collider in query.iter_colliders(position.map_id, test_position.truncate()) {
+        if Some(collider.entity()) == ignore {
             continue;
         }
 
-        match kind {
-            SurfaceKind::Chunk { position, chunk } => {
-                let chunk_pos = test_position.truncate() - *position;
-                let (tile_id, z) = chunk.get(chunk_pos.x as usize, chunk_pos.y as usize);
+        match collider {
+            Collider::Chunk(entity) => {
+                let Ok((chunk_pos, chunk)) = chunk_query.get(entity) else {
+                    continue;
+                };
+
+                let chunk_off = test_position.truncate() - chunk_pos.position.truncate();
+                let MapTile { tile_id, height } = chunk.map_chunk
+                    .get(chunk_off.x as usize, chunk_off.y as usize);
 
                 if !tile_data.land[tile_id as usize].flags.contains(TileFlags::IMPASSABLE) {
-                    let z = z as i32;
+                    let z = height as i32;
                     if z <= test_position.z {
                         new_z = new_z.max(z);
                     }
                 }
             }
-            SurfaceKind::Item { min_z, max_z, impassable, .. } => {
-                if *impassable {
-                    if test_position.z >= *min_z && test_position.z <= *max_z {
-                        return Err(MoveError::Obstructed(entity));
+            Collider::StaticItem(entry) | Collider::DynamicItem(entry) => {
+                let Some(tile_data) = tile_data.items.get(entry.graphic as usize) else {
+                    continue;
+                };
+
+                if tile_data.flags.contains(TileFlags::IMPASSABLE) {
+                    if test_position.z >= entry.z_min && test_position.z <= entry.z_max {
+                        return Err(MoveError::Obstructed(entry.entity));
                     }
-                } else if *max_z <= test_position.z {
-                    new_z = new_z.max(*max_z);
+                } else if tile_data.flags.contains(TileFlags::SURFACE) && entry.z_max <= test_position.z {
+                    new_z = new_z.max(entry.z_max);
                 }
             }
         }

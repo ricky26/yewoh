@@ -10,7 +10,7 @@ use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, CharacterProfile, Clie
 use crate::async_runtime::AsyncRuntime;
 use crate::game_server::NewSessionAttempt;
 use crate::lobby::{NewSessionRequest, SessionAllocator};
-use crate::world::entity::{Tooltip, TooltipRequest, TooltipRequests};
+use crate::world::entity::{TooltipRequest, TooltipRequests};
 use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DeleteCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::input::Targeting;
 use crate::world::net::entity::NetEntityLookup;
@@ -440,6 +440,7 @@ pub fn handle_input_packets(
 
 pub fn handle_tooltip_packets(
     lookup: Res<NetEntityLookup>,
+    clients: Query<&NetClient>,
     mut tooltips: Query<&mut TooltipRequests>,
     mut events: EventReader<ReceivedPacketEvent>,
 ) {
@@ -447,6 +448,11 @@ pub fn handle_tooltip_packets(
         let connection = *connection;
         let request = match packet.downcast::<EntityTooltip>() {
             Some(x) => x,
+            _ => continue,
+        };
+
+        let client = match clients.get(connection) {
+            Ok(x) => x,
             _ => continue,
         };
 
@@ -459,6 +465,11 @@ pub fn handle_tooltip_packets(
                                 client: connection,
                                 entries: Vec::new(),
                             });
+                        } else {
+                            client.send_packet(EntityTooltip::Response {
+                                id,
+                                entries: Vec::new(),
+                            }.into());
                         }
                     }
                 }
@@ -470,7 +481,7 @@ pub fn handle_tooltip_packets(
 
 pub fn send_tooltips(
     clients: Query<&NetClient>,
-    mut tooltips: Query<(&NetId, &mut TooltipRequests), Changed<Tooltip>>,
+    mut tooltips: Query<(&NetId, &mut TooltipRequests), Changed<TooltipRequests>>,
 ) {
     for (net_id, mut tooltip) in &mut tooltips {
         if tooltip.requests.is_empty() {

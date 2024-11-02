@@ -7,9 +7,9 @@ use bevy_fabricator::Fabricated;
 use bevy_fabricator::traits::{Apply, ReflectApply};
 use yewoh::Direction;
 use yewoh_server::world::entity::MapPosition;
-use yewoh_server::world::map::TileDataResource;
+use yewoh_server::world::map::{Chunk, TileDataResource};
 use yewoh_server::world::navigation::try_move_in_direction;
-use yewoh_server::world::spatial::EntitySurfaces;
+use yewoh_server::world::spatial::SpatialQuery;
 
 #[derive(Debug, Clone, Component, Reflect)]
 pub struct Wander;
@@ -20,8 +20,11 @@ pub struct MoveTimer {
 }
 
 pub fn wander(
-    time: Res<Time>, tile_data: Res<TileDataResource>, surfaces: Res<EntitySurfaces>,
-    mut npcs: Query<(Entity, &mut MapPosition, &mut MoveTimer), With<Wander>>,
+    time: Res<Time>,
+    tile_data: Res<TileDataResource>,
+    spatial_query: SpatialQuery,
+    chunk_query: Query<(&MapPosition, &Chunk)>,
+    mut npcs: Query<(Entity, &mut MapPosition, &mut MoveTimer), (Without<Chunk>, With<Wander>)>,
 ) {
     let mut rng = thread_rng();
 
@@ -31,7 +34,7 @@ pub fn wander(
         }
 
         let direction = Direction::from_repr(rng.gen_range(0..8)).unwrap();
-        if let Ok(new_position) = try_move_in_direction(&surfaces, &tile_data, *position, direction, Some(entity)) {
+        if let Ok(new_position) = try_move_in_direction(&spatial_query, &chunk_query, &tile_data, *position, direction, Some(entity)) {
             *position = new_position;
         }
     }

@@ -7,6 +7,9 @@ license = "MIT"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+trace_tracy = [ "bevy/trace_tracy" ]
+
 [dependencies]
 yewoh = { path = "../core" }
 yewoh-server = { path = "../server" }

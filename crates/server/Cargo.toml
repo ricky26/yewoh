@@ -17,5 +17,5 @@ async-trait = { workspace = true }
 tracing = { workspace = true }
 bevy = { workspace = true, default-features = false }
 glam = { workspace = true }
-rstar = { workspace = true }
 bitflags = { workspace = true }
+smallvec = { workspace = true }

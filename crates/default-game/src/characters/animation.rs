@@ -1,12 +1,9 @@
-use crate::characters::Animation;
-use bevy::ecs::entity::Entity;
-use bevy::ecs::event::{Event, EventReader};
-use bevy::ecs::query::With;
-use bevy::ecs::system::{Query, Res};
+use bevy::prelude::*;
 use yewoh::protocol::{CharacterAnimation, CharacterPredefinedAnimation};
 use yewoh_server::world::entity::MapPosition;
 use yewoh_server::world::net::{NetClient, NetId, Synchronized};
-use yewoh_server::world::spatial::NetClientPositions;
+
+use crate::characters::Animation;
 
 #[derive(Debug, Clone, Event)]
 pub struct AnimationStartedEvent {
@@ -17,7 +14,6 @@ pub struct AnimationStartedEvent {
 
 pub fn send_animations(
     net_ids: Query<&NetId>,
-    client_positions: Res<NetClientPositions>,
     clients: Query<&NetClient, With<Synchronized>>,
     mut events: EventReader<AnimationStartedEvent>,
 ) {
@@ -27,12 +23,8 @@ pub fn send_animations(
             _ => continue,
         };
 
-        for (client_entity, ..) in client_positions.tree.iter_at_point(event.location.map_id, event.location.position.truncate()) {
-            let client = match clients.get(client_entity) {
-                Ok(x) => x,
-                _ => continue,
-            };
-
+        // TODO: filter these
+        for client in &clients {
             let packet = match &event.animation {
                 Animation::Inline(animation) => CharacterAnimation {
                     target_id,

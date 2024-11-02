@@ -1,8 +1,9 @@
 use bevy::prelude::*;
-use yewoh_server::world::entity::{TooltipLine, TooltipRequests};
+use yewoh_server::world::entity::{Tooltip, TooltipLine, TooltipRequests};
 
 #[derive(Clone, Debug, Reflect, Component)]
 #[reflect(Component)]
+#[require(Tooltip)]
 pub struct StaticTooltips {
     pub entries: Vec<TooltipLine>,
 }

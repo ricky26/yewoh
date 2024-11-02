@@ -2,12 +2,13 @@ import yewoh_server::world::entity::{Graphic, Hue};
 import yewoh_default_game::activities::combat::prefabs::MeleeWeaponPrefab;
 import yewoh_default_game::characters::Animation;
 import yewoh_default_game::items::tooltips::StaticTooltips;
+import bevy_fabricator::humantime::HumanDuration;
 
 $ <- Graphic(0x97f);
 $ <- Hue(0x7d0);
 $ <- MeleeWeaponPrefab({
     damage: 10,
-    delay: "3s",
+    delay: HumanDuration("3s"),
     range: 4,
     swing_animation: Animation::Predefined({ kind: 0, action: 4 }),
 });

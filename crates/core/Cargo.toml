@@ -8,8 +8,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+async-trait = { workspace = true }
 byteorder = { workspace = true }
 anyhow = { workspace = true }
+bytemuck = { workspace = true }
 flate2 = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true, default_features = false, features = ["fs", "net", "io-util", "sync"] }

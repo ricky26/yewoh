@@ -5,10 +5,10 @@ use yewoh::types::FixedString;
 use yewoh_server::world::entity::{AttackTarget, BodyType, EquippedPosition, Container, Flags, MapPosition, Notorious, ContainerPosition};
 use yewoh_server::world::events::{ContextMenuEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SingleClickEvent};
 use yewoh_server::world::input::ContextMenuRequest;
-use yewoh_server::world::map::TileDataResource;
+use yewoh_server::world::map::{Chunk, TileDataResource};
 use yewoh_server::world::navigation::try_move_in_direction;
 use yewoh_server::world::net::{ContainerOpenedEvent, NetClient, NetId, Possessing};
-use yewoh_server::world::spatial::EntitySurfaces;
+use yewoh_server::world::spatial::SpatialQuery;
 
 #[derive(Debug, Clone, Component, Reflect)]
 pub struct Held {
@@ -22,10 +22,11 @@ pub struct Holder {
 
 pub fn handle_move(
     mut events: EventReader<MoveEvent>,
-    surfaces: Res<EntitySurfaces>,
+    spatial_query: SpatialQuery,
+    chunk_query: Query<(&MapPosition, &Chunk)>,
     tile_data: Res<TileDataResource>,
     connection_query: Query<(&NetClient, &Possessing)>,
-    mut characters: Query<(&mut MapPosition, &Notorious)>,
+    mut characters: Query<(&mut MapPosition, &Notorious), Without<Chunk>>,
 ) {
     for MoveEvent { client_entity: connection, request } in events.read() {
         let connection = *connection;
@@ -43,7 +44,7 @@ pub fn handle_move(
         if map_position.direction != request.direction {
             map_position.direction = request.direction;
         } else {
-            match try_move_in_direction(&surfaces, &tile_data, *map_position, request.direction, Some(primary_entity)) {
+            match try_move_in_direction(&spatial_query, &chunk_query, &tile_data, *map_position, request.direction, Some(primary_entity)) {
                 Ok(new_position) => {
                     *map_position = new_position;
                 }

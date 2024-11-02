@@ -5,8 +5,7 @@ use clap::Parser;
 use yewoh::protocol::TargetType;
 use yewoh_server::world::input::{EntityTargetRequest, EntityTargetResponse, WorldTargetRequest, WorldTargetResponse};
 use yewoh_server::world::net::{NetClient, ViewState};
-use yewoh_server::world::spatial::EntityPositions;
-
+use yewoh_server::world::spatial::SpatialQuery;
 use crate::commands::{TextCommand, TextCommandQueue};
 use crate::networking::NetClientExt;
 
@@ -82,7 +81,7 @@ fn send_entity_info(world: &World, type_registry: &TypeRegistry, client: &NetCli
 pub fn info(
     world: &World,
     type_registry: Res<AppTypeRegistry>,
-    entity_positions: Res<EntityPositions>,
+    spatial_query: SpatialQuery,
     clients: Query<(&NetClient, &ViewState)>,
     completed_tile: Query<(Entity, &WorldTargetRequest, &WorldTargetResponse), With<ShowInfoCommand>>,
     completed_entity: Query<(Entity, &EntityTargetRequest, &EntityTargetResponse), With<ShowInfoCommand>>,
@@ -100,7 +99,7 @@ pub fn info(
         let map_id = view_state.map_id();
 
         if let Some(position) = response.position {
-            for (target, ..) in entity_positions.tree.iter_at_point(map_id, position.truncate()) {
+            for target in spatial_query.iter_at(map_id, position.truncate()) {
                 send_entity_info(world, &type_registry, client, target);
             }
         }
