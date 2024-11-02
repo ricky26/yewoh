@@ -70,6 +70,7 @@ where
 
 #[derive(Clone)]
 struct PacketRegistration {
+    type_name: &'static str,
     packet_kind: u8,
     size: usize,
     drop: fn(*mut ()),
@@ -88,7 +89,6 @@ impl PacketRegistration {
 
         fn decode_packet<T: Packet>(client_version: ClientVersion, from_client: bool,
                                     payload: &[u8]) -> anyhow::Result<AnyPacket> {
-            trace!("Decoding {}", type_name::<T>());
             Ok(AnyPacket::from_packet(T::decode(client_version, from_client, payload)?))
         }
 
@@ -109,6 +109,7 @@ impl PacketRegistration {
         }
 
         PacketRegistration {
+            type_name: type_name::<T>(),
             packet_kind: T::packet_kind(),
             size: size_of::<T>(),
             drop: drop_packet::<T>,
@@ -385,7 +386,7 @@ impl Reader {
             Endian::read_u16(&bytes) as usize - 3
         };
 
-        trace!("Beginning {packet_kind:2x} length {length}");
+        trace!("RECV: {packet_kind:2x} {} length={length}", registration.type_name);
 
         self.buffer.resize(length, 0u8);
         self.reader.read_exact(&mut self.buffer[..]).await?;
@@ -461,6 +462,8 @@ impl Writer {
     }
 
     pub async fn send<T: Packet>(&mut self, client_version: ClientVersion, packet: &T) -> anyhow::Result<()> {
+        trace!("SEND: {:2x} {}", T::packet_kind(), type_name::<T>());
+        
         if let Some(length) = T::fixed_length(client_version) {
             self.buffer.reserve(length);
             self.buffer.push(T::packet_kind());
@@ -477,6 +480,9 @@ impl Writer {
     }
 
     pub async fn send_any(&mut self, client_version: ClientVersion, packet: &AnyPacket) -> anyhow::Result<()> {
+        let registration = packet.registration();
+        trace!("SEND: {:2x} {}", registration.packet_kind, registration.type_name);
+        
         if let Some(length) = packet.fixed_length(client_version) {
             self.buffer.reserve(length);
             self.buffer.push(packet.packet_kind());
