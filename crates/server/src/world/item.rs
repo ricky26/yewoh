@@ -273,14 +273,14 @@ pub fn detect_item_changes(
     delta_version: Res<DeltaVersion>,
     mut delta_grid: ResMut<DeltaGrid>,
     changed_items: Query<
-        (Entity, &NetId, ItemQuery, &RootPosition),
+        (Entity, Ref<NetId>, ItemQuery, &RootPosition),
         (ValidItemPosition, Or<(Changed<NetId>, ChangedItemFilter, ChangedPositionFilter)>),
     >,
     net_ids: Query<&NetId>,
     removed_items: Res<RemovedNetIds>,
 ) {
     for (entity, net_id, item, position) in &changed_items {
-        if item.is_item_changed() || item.position.is_changed() {
+        if net_id.is_changed() || item.is_item_changed() || item.position.is_changed() {
             let parent_id = item.parent()
                 .and_then(|e| net_ids.get(e).ok())
                 .map(|id| id.id);
@@ -293,8 +293,6 @@ pub fn detect_item_changes(
             let packet = Arc::new(packet);
             let grid_cell = delta_grid_cell(position.position.truncate());
             let delta = delta_version.new_delta(DeltaEntry::ItemChanged { entity, parent, packet });
-
-            info!("item changed {entity} cell={grid_cell:?}");
 
             let mut position_entry = cache.last_position.entry(entity);
             if let Entry::Occupied(entry) = &mut position_entry {
@@ -315,7 +313,7 @@ pub fn detect_item_changes(
             position_entry.insert(**position);
         }
 
-        if item.tooltip.is_changed() {
+        if net_id.is_changed() || item.tooltip.is_changed() {
             let grid_cell = delta_grid_cell(position.position.truncate());
             let packet = AnyPacket::from_packet(EntityTooltipVersion {
                 id: net_id.id,

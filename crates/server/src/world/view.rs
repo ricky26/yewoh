@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use glam::ivec2;
-use bevy::ecs::entity::EntityHashSet;
+use bevy::ecs::entity::{EntityHashMap, EntityHashSet};
 use yewoh::protocol::{AnyPacket, BeginEnterWorld, ChangeSeason, EndEnterWorld, ExtendedCommand};
 use yewoh::protocol::{CharacterEquipment, OpenContainer, UpsertContainerContents};
 
@@ -63,6 +63,48 @@ impl FromWorld for ViewKey {
 pub struct SeenEntities {
     pub seen_entities: EntityHashSet,
     pub open_containers: EntityHashSet,
+    pub parents: EntityHashMap<Entity>,
+    pub children: EntityHashMap<EntityHashSet>,
+}
+
+impl SeenEntities {
+    fn children_mut(&mut self, entity: Entity) -> &mut EntityHashSet {
+        self.children.entry(entity).or_default()
+    }
+
+    pub fn insert_entity(&mut self, entity: Entity, parent: Option<Entity>) {
+        self.seen_entities.insert(entity);
+
+        let existing_parent = self.parents.get(&entity).copied();
+        if existing_parent == parent {
+            return;
+        }
+
+        if let Some(parent) = existing_parent {
+            let children = self.children_mut(parent);
+            children.remove(&entity);
+            if children.is_empty() {
+                self.children.remove(&parent);
+            }
+        }
+
+        if let Some(parent) = parent {
+            self.parents.insert(entity, parent);
+            self.children_mut(parent).insert(entity);
+        }
+    }
+
+    pub fn remove_entity(&mut self, entity: Entity) {
+        self.seen_entities.remove(&entity);
+        self.open_containers.remove(&entity);
+        self.parents.remove(&entity);
+
+        if let Some(children) = self.children.remove(&entity) {
+            for child in children {
+                self.remove_entity(child);
+            }
+        }
+    }
 }
 
 fn view_aabb(center: IVec2, range: i32) -> (IVec2, IVec2) {
@@ -114,27 +156,23 @@ pub fn send_deltas(
 
             match delta.entry {
                 DeltaEntry::ItemChanged { entity, parent, packet } => {
-                    info!("item changed {entity} {parent:?}");
                     if seen.seen_entities.contains(&entity) {
+                        seen.insert_entity(entity, parent);
                         client.send_packet_arc(packet);
                     } else {
                         if let Some(parent) = parent {
                             if seen.open_containers.contains(&parent) {
-                                seen.seen_entities.insert(entity);
+                                seen.insert_entity(entity, Some(parent));
                                 client.send_packet_arc(packet);
-                            } else {
-                                info!("skipped update for {entity} {parent:?}");
                             }
                         } else {
-                            seen.seen_entities.insert(entity);
+                            seen.insert_entity(entity, None);
                             client.send_packet_arc(packet);
                         }
                     }
                 }
                 DeltaEntry::ItemRemoved { entity, packet, .. } => {
-                    // TODO: remove recursive
-                    seen.seen_entities.remove(&entity);
-                    seen.open_containers.remove(&entity);
+                    seen.remove_entity(entity);
                     client.send_packet_arc(packet);
                 }
                 DeltaEntry::CharacterChanged { entity, update_packet, .. } => {
@@ -166,14 +204,12 @@ pub fn send_deltas(
 
                         let packet = character.to_upsert(id.id, equipment);
                         client.send_packet(AnyPacket::from_packet(packet));
-                        seen.seen_entities.insert(entity);
+                        seen.insert_entity(entity, None);
                         seen.open_containers.insert(entity);
                     }
                 }
                 DeltaEntry::CharacterRemoved { packet, .. } => {
-                    // TODO: remove recursive
-                    seen.seen_entities.remove(&entity);
-                    seen.open_containers.remove(&entity);
+                    seen.remove_entity(entity);
                     client.send_packet_arc(packet);
                 }
                 DeltaEntry::TooltipChanged { entity, packet, .. } => {
@@ -215,7 +251,7 @@ pub fn sync_visible_entities(
                             continue;
                         };
 
-                        seen.seen_entities.insert(entry.entity);
+                        seen.insert_entity(entry.entity, None);
                         seen.open_containers.insert(entry.entity);
 
                         let mut equipment = Vec::new();
@@ -231,7 +267,7 @@ pub fn sync_visible_entities(
                                     continue;
                                 };
 
-                                seen.seen_entities.insert(*child);
+                                seen.insert_entity(*child, Some(entry.entity));
                                 equipment.push(CharacterEquipment {
                                     id: child_id.id,
                                     graphic_id: **item.graphic,
@@ -256,7 +292,7 @@ pub fn sync_visible_entities(
                             continue;
                         };
 
-                        seen.seen_entities.insert(entry.entity);
+                        seen.insert_entity(entry.entity, None);
                         client.send_packet(packet);
                     }
                 }
@@ -363,7 +399,6 @@ pub fn send_opened_containers(
         };
 
         seen.open_containers.insert(event.container);
-        info!("Opened container {}", event.container);
 
         let mut contents = Vec::new();
         if let Some(children) = children {
@@ -373,7 +408,7 @@ pub fn send_opened_containers(
                 let Ok((child, child_id, item)) = contained_items.get(*child) else {
                     continue;
                 };
-                seen.seen_entities.insert(child);
+                seen.insert_entity(child, Some(event.container));
                 contents.push(item.to_upsert_contained(child_id.id, id).unwrap());
             }
         }
@@ -398,7 +433,6 @@ pub fn plugin(app: &mut App) {
             send_change_map,
         ).in_set(ServerSet::SendFirst))
         .add_systems(Last, (
-            // observe_ghosts,
             send_deltas,
             sync_visible_entities,
         ).in_set(ServerSet::SendGhosts))

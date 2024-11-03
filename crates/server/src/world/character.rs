@@ -80,13 +80,13 @@ pub fn detect_character_changes(
     delta_version: Res<DeltaVersion>,
     mut delta_grid: ResMut<DeltaGrid>,
     characters_query: Query<
-        (Entity, &NetId, CharacterQuery),
+        (Entity, Ref<NetId>, CharacterQuery),
         (ValidItemPosition, Or<(Changed<NetId>, ChangedCharacterFilter)>),
     >,
     removed_characters: Res<RemovedNetIds>,
 ) {
     for (entity, net_id, character) in &characters_query {
-        if character.is_character_changed() || character.position.is_changed() {
+        if net_id.is_changed() || character.is_character_changed() || character.position.is_changed() {
             let update_packet = Arc::new(AnyPacket::from_packet(character.to_update(net_id.id)));
             let map_id = character.position.map_id;
             let position = character.position.position;
