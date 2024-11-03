@@ -3,9 +3,10 @@ use bevy::reflect::TypeRegistry;
 use clap::Parser;
 
 use yewoh::protocol::TargetType;
+use yewoh_server::world::connection::NetClient;
 use yewoh_server::world::input::{EntityTargetRequest, EntityTargetResponse, WorldTargetRequest, WorldTargetResponse};
-use yewoh_server::world::net::{NetClient, ViewState};
 use yewoh_server::world::spatial::SpatialQuery;
+use yewoh_server::world::view::ViewKey;
 use crate::commands::{TextCommand, TextCommandQueue};
 use crate::networking::NetClientExt;
 
@@ -82,7 +83,7 @@ pub fn info(
     world: &World,
     type_registry: Res<AppTypeRegistry>,
     spatial_query: SpatialQuery,
-    clients: Query<(&NetClient, &ViewState)>,
+    clients: Query<(&NetClient, &ViewKey)>,
     completed_tile: Query<(Entity, &WorldTargetRequest, &WorldTargetResponse), With<ShowInfoCommand>>,
     completed_entity: Query<(Entity, &EntityTargetRequest, &EntityTargetResponse), With<ShowInfoCommand>>,
     mut commands: Commands,
@@ -92,11 +93,11 @@ pub fn info(
     for (entity, request, response) in completed_tile.iter() {
         commands.entity(entity).despawn();
 
-        let (client, view_state) = match clients.get(request.client_entity) {
+        let (client, view_key) = match clients.get(request.client_entity) {
             Ok(x) => x,
             _ => continue,
         };
-        let map_id = view_state.map_id();
+        let map_id = view_key.map_id;
 
         if let Some(position) = response.position {
             for target in spatial_query.iter_at(map_id, position.truncate()) {

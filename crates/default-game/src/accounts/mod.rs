@@ -10,9 +10,9 @@ use yewoh::Direction;
 use yewoh::protocol::{CharacterFromList, CharacterList, CharacterListFlags, EquipmentSlot, Race};
 use yewoh::types::FixedString;
 use yewoh_server::async_runtime::AsyncRuntime;
+use yewoh_server::world::connection::{NetClient, OwningClient, Possessing, User};
 use yewoh_server::world::entity::{BodyType, Graphic, Hue, MapPosition, Stats};
 use yewoh_server::world::events::{CharacterListEvent, CreateCharacterEvent, DeleteCharacterEvent, SelectCharacterEvent};
-use yewoh_server::world::net::{NetClient, OwningClient, Possessing, User};
 
 use crate::accounts::repository::{AccountCharacters, AccountRepository, CharacterInfo, CharacterToSpawn};
 use crate::characters::persistence::CustomStats;

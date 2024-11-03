@@ -3,7 +3,7 @@ use bevy::ecs::reflect::ReflectMapEntities;
 use bevy::ecs::query::WorldQuery;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
-use yewoh_server::world::entity::{ContainerPosition, EquippedPosition, MapPosition, Hue};
+use yewoh_server::world::entity::{ContainedPosition, EquippedPosition, MapPosition, Hue};
 
 use crate::entities::{Persistent, UniqueId};
 use crate::persistence::BundleSerializer;
@@ -34,7 +34,7 @@ impl BundleSerializer for UniqueIdSerializer {
 pub enum PositionDto {
     Map(MapPosition),
     Equipped { parent: Entity, #[serde(flatten)] position: EquippedPosition },
-    Contained { parent: Entity, #[serde(flatten)] position: ContainerPosition },
+    Contained { parent: Entity, #[serde(flatten)] position: ContainedPosition },
 }
 
 impl MapEntities for PositionDto {
@@ -58,13 +58,13 @@ impl BundleSerializer for PositionSerializer {
     type Query = (
         Option<&'static MapPosition>,
         Option<&'static Parent>,
-        Option<&'static ContainerPosition>,
+        Option<&'static ContainedPosition>,
         Option<&'static EquippedPosition>,
     );
     type Filter = (
         Or<(
             With<MapPosition>,
-            (With<Parent>, With<ContainerPosition>),
+            (With<Parent>, With<ContainedPosition>),
             (With<Parent>, With<EquippedPosition>),
         )>,
         With<Persistent>,

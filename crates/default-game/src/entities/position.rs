@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use yewoh::protocol::EquipmentSlot;
-use yewoh_server::world::entity::{ContainerPosition, EquippedPosition, MapPosition};
+use yewoh_server::world::entity::{ContainedPosition, EquippedPosition, MapPosition};
 
 pub struct MoveToMapPosition {
     pub map_position: MapPosition,
@@ -10,7 +10,7 @@ impl EntityCommand for MoveToMapPosition {
     fn apply(self, entity: Entity, world: &mut World) {
         world.entity_mut(entity)
             .remove_parent()
-            .remove::<(ContainerPosition, EquippedPosition)>()
+            .remove::<(ContainedPosition, EquippedPosition)>()
             .insert(self.map_position);
     }
 }
@@ -24,14 +24,14 @@ impl EntityCommand for MoveToEquippedPosition {
     fn apply(self, entity: Entity, world: &mut World) {
         world.entity_mut(entity)
             .set_parent(self.parent)
-            .remove::<(ContainerPosition, MapPosition)>()
+            .remove::<(ContainedPosition, MapPosition)>()
             .insert(EquippedPosition { slot: self.slot });
     }
 }
 
 pub struct MoveToContainerPosition {
     pub parent: Entity,
-    pub position: ContainerPosition,
+    pub position: ContainedPosition,
 }
 
 impl EntityCommand for MoveToContainerPosition {
@@ -49,7 +49,7 @@ pub trait PositionExt {
     fn move_to_equipped_position(&mut self, parent: Entity, slot: EquipmentSlot) -> &mut Self;
 
     fn move_to_container_position(
-        &mut self, parent: Entity, position: ContainerPosition,
+        &mut self, parent: Entity, position: ContainedPosition,
     ) -> &mut Self;
 }
 
@@ -63,7 +63,7 @@ impl PositionExt for EntityCommands<'_> {
     }
 
     fn move_to_container_position(
-        &mut self, parent: Entity, position: ContainerPosition,
+        &mut self, parent: Entity, position: ContainedPosition,
     ) -> &mut Self {
         self.queue(MoveToContainerPosition { parent, position })
     }
@@ -87,7 +87,7 @@ impl PositionExt for EntityWorldMut<'_> {
     }
 
     fn move_to_container_position(
-        &mut self, parent: Entity, position: ContainerPosition,
+        &mut self, parent: Entity, position: ContainedPosition,
     ) -> &mut Self {
         entity_world_apply(self, MoveToContainerPosition { parent, position })
     }

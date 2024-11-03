@@ -7,8 +7,8 @@ use smallvec::SmallVec;
 use yewoh::assets::map::CHUNK_SIZE;
 
 use crate::world::entity::{BodyType, Graphic, MapPosition};
-use crate::world::map::{Chunk, Static, TileDataResource};
-use crate::world::net::MapInfos;
+use crate::world::map::{Chunk, MapInfos, Static, TileDataResource};
+use crate::world::ServerSet;
 
 fn cell_index(size: IVec2, position: IVec2) -> Option<usize> {
     if position.x < 0 ||
@@ -566,4 +566,18 @@ impl<'w> SpatialQuery<'w> {
             characters,
         }
     }
+}
+
+pub fn plugin(app: &mut App) {
+    app
+        .init_resource::<SpatialCharacterLookup>()
+        .init_resource::<SpatialDynamicItemLookup>()
+        .init_resource::<SpatialStaticItemLookup>()
+        .init_resource::<ChunkLookup>()
+        .add_systems(PostUpdate, (
+            update_character_lookup,
+            update_dynamic_item_lookup,
+            update_static_item_lookup,
+            update_chunk_lookup,
+        ).in_set(ServerSet::UpdateVisibility));
 }

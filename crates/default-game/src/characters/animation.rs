@@ -1,7 +1,9 @@
 use bevy::prelude::*;
 use yewoh::protocol::{CharacterAnimation, CharacterPredefinedAnimation};
+use yewoh_server::world::connection::NetClient;
 use yewoh_server::world::entity::MapPosition;
-use yewoh_server::world::net::{NetClient, NetId, Synchronized};
+use yewoh_server::world::net_id::NetId;
+use yewoh_server::world::view::Synchronized;
 
 use crate::characters::Animation;
 

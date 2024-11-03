@@ -9,7 +9,7 @@ use bevy::ecs::system::{Resource, SystemParam};
 use clap::Parser;
 
 use yewoh::protocol::{MessageKind, UnicodeTextMessage};
-use yewoh_server::world::net::NetClient;
+use yewoh_server::world::connection::NetClient;
 
 pub trait TextCommand: Parser + Resource {
     fn aliases() -> &'static [&'static str];

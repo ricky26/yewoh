@@ -7,6 +7,8 @@ use std::collections::HashMap;
 use yewoh::{EntityId, MIN_ITEM_ID};
 
 use crate::world::entity::{BodyType, Graphic};
+use crate::world::map::Static;
+use crate::world::ServerSet;
 
 #[derive(Debug, Clone, Copy, Default, Reflect)]
 #[reflect(opaque, Default, Component)]
@@ -35,9 +37,15 @@ impl Component for NetId {
         });
         hooks.on_remove(|mut world, entity, _| {
             let id = world.get::<NetId>(entity).unwrap().id;
-            let mut lookup = world.resource_mut::<NetEntityLookup>();
-            if lookup.net_to_ecs.remove(&id).is_none() {
-                warn!("duplicate net ID removal: {id:?} (entity={entity:?})");
+            {
+                let mut lookup = world.resource_mut::<NetEntityLookup>();
+                if lookup.net_to_ecs.remove(&id).is_none() {
+                    warn!("duplicate net ID removal: {id:?} (entity={entity:?})");
+                }
+            }
+            {
+                let mut removed = world.resource_mut::<RemovedNetIds>();
+                removed.entries.push((entity, id));
             }
         });
     }
@@ -50,11 +58,6 @@ pub struct CharacterNetId;
 #[derive(Debug, Clone, Default, Component, Reflect)]
 #[reflect(Default, Component)]
 pub struct ItemNetId;
-
-#[derive(Debug, Clone, Copy, Component, Reflect)]
-pub struct OwningClient {
-    pub client_entity: Entity,
-}
 
 #[derive(Debug, Resource)]
 pub struct NetIdAllocator {
@@ -100,8 +103,8 @@ impl NetEntityLookup {
 pub fn assign_net_ids(
     mut commands: Commands,
     mut id_allocator: ResMut<NetIdAllocator>,
-    new_characters: Query<Entity, (With<BodyType>, Without<Graphic>, Without<CharacterNetId>)>,
-    new_items: Query<Entity, (With<Graphic>, Without<BodyType>, Without<ItemNetId>)>,
+    new_characters: Query<Entity, (Without<Static>, With<BodyType>, Without<Graphic>, Without<CharacterNetId>)>,
+    new_items: Query<Entity, (Without<Static>, With<Graphic>, Without<BodyType>, Without<ItemNetId>)>,
 ) {
     for entity in &new_characters {
         commands.entity(entity)
@@ -120,4 +123,35 @@ pub fn assign_net_ids(
                 ItemNetId,
             ));
     }
+}
+
+#[derive(Debug, Default, Resource)]
+pub struct RemovedNetIds {
+    entries: Vec<(Entity, EntityId)>,
+}
+
+impl RemovedNetIds {
+    pub fn removed_ids(&self) -> &[(Entity, EntityId)] {
+        &self.entries
+    }
+}
+
+pub fn reset_removed_net_ids(
+    mut removed: ResMut<RemovedNetIds>,
+) {
+    removed.entries.clear();
+}
+
+pub fn plugin(app: &mut App) {
+    app
+        .register_type::<NetId>()
+        .init_resource::<NetIdAllocator>()
+        .init_resource::<NetEntityLookup>()
+        .init_resource::<RemovedNetIds>()
+        .add_systems(Last, (
+            assign_net_ids,
+        ).in_set(ServerSet::SendFirst))
+    .add_systems(Last, (
+        reset_removed_net_ids,
+    ).in_set(ServerSet::SendLast));
 }

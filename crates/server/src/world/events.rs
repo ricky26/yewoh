@@ -111,3 +111,31 @@ pub struct AttackRequestedEvent {
     pub client_entity: Entity,
     pub target: Entity,
 }
+
+#[derive(Debug, Clone, Event)]
+pub struct ContainerOpenedEvent {
+    pub client_entity: Entity,
+    pub container: Entity,
+}
+
+pub fn plugin(app: &mut App) {
+    app
+        .add_event::<ReceivedPacketEvent>()
+        .add_event::<SentPacketEvent>()
+        .add_event::<CharacterListEvent>()
+        .add_event::<CreateCharacterEvent>()
+        .add_event::<SelectCharacterEvent>()
+        .add_event::<DeleteCharacterEvent>()
+        .add_event::<MoveEvent>()
+        .add_event::<SingleClickEvent>()
+        .add_event::<DoubleClickEvent>()
+        .add_event::<PickUpEvent>()
+        .add_event::<DropEvent>()
+        .add_event::<EquipEvent>()
+        .add_event::<ContextMenuEvent>()
+        .add_event::<ProfileEvent>()
+        .add_event::<RequestSkillsEvent>()
+        .add_event::<ChatRequestEvent>()
+        .add_event::<AttackRequestedEvent>()
+        .add_event::<ContainerOpenedEvent>();
+}

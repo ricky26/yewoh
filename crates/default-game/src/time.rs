@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use yewoh::protocol::{GlobalLightLevel, Packet, SetTime};
-
-use yewoh_server::world::net::{NetClient, Synchronizing};
+use yewoh_server::world::connection::NetClient;
+use yewoh_server::world::view::Synchronizing;
 
 pub const MULTIPLIER: f64 = 12.;
 

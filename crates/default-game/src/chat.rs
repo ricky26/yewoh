@@ -4,7 +4,8 @@ use yewoh::protocol::{MessageKind, Packet, UnicodeTextMessage};
 use yewoh::types::FixedString;
 use yewoh_server::world::entity::Stats;
 use yewoh_server::world::events::ChatRequestEvent;
-use yewoh_server::world::net::{broadcast, NetClient, NetId, Possessing};
+use yewoh_server::world::connection::{broadcast, NetClient, Possessing};
+use yewoh_server::world::net_id::{NetId};
 
 use crate::commands::TextCommandExecutor;
 

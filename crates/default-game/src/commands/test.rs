@@ -4,8 +4,8 @@ use glam::IVec2;
 use tracing::info;
 use yewoh::protocol::{GumpLayout, OpenGump};
 use yewoh::Direction;
+use yewoh_server::world::connection::{NetClient, Possessing};
 use yewoh_server::world::entity::{Graphic, Hue, MapPosition};
-use yewoh_server::world::net::{NetClient, Possessing};
 
 use crate::commands::{TextCommand, TextCommandQueue};
 

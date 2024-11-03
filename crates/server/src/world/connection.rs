@@ -13,11 +13,9 @@ use crate::lobby::{NewSessionRequest, SessionAllocator};
 use crate::world::entity::{TooltipRequest, TooltipRequests};
 use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DeleteCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
 use crate::world::input::Targeting;
-use crate::world::net::entity::NetEntityLookup;
-use crate::world::net::view::View;
-use crate::world::net::{NetId, ViewState};
-
-pub const DEFAULT_VIEW_RANGE: i32 = 18;
+use crate::world::net_id::{NetEntityLookup, NetId};
+use crate::world::view::View;
+use crate::world::ServerSet;
 
 pub enum WriterAction {
     Send(ClientVersion, AnyPacket),
@@ -34,6 +32,11 @@ pub struct NetClient {
 #[derive(Debug, Clone, Component, Reflect)]
 pub struct Possessing {
     pub entity: Entity,
+}
+
+#[derive(Debug, Clone, Copy, Component, Reflect)]
+pub struct OwningClient {
+    pub client_entity: Entity,
 }
 
 #[derive(Debug, Clone, Component, Reflect)]
@@ -215,8 +218,7 @@ pub fn accept_new_clients(
                 client.clone(),
                 User { username },
                 Targeting::default(),
-                View { range: DEFAULT_VIEW_RANGE },
-                ViewState::new(),
+                View::default(),
             ))
             .id();
 
@@ -508,4 +510,22 @@ pub fn send_tooltips(
             client.send_packet(EntityTooltip::Response { id, entries }.into());
         }
     }
+}
+
+pub fn plugin(app: &mut App) {
+    app
+        .register_type::<OwningClient>()
+        .add_systems(First, (
+            (accept_new_clients, handle_new_packets)
+                .chain()
+                .in_set(ServerSet::Receive),
+        ))
+        .add_systems(First, (
+            handle_login_packets,
+            handle_input_packets,
+            handle_tooltip_packets,
+        ).in_set(ServerSet::HandlePackets))
+        .add_systems(Last, (
+            send_tooltips,
+        ).in_set(ServerSet::Send));
 }

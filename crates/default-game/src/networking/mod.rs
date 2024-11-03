@@ -1,6 +1,7 @@
 use yewoh::protocol::{MessageKind, UnicodeTextMessage};
 use yewoh::types::FixedString;
-use yewoh_server::world::net::NetClient;
+use yewoh_server::world::connection::NetClient;
+
 use crate::hues;
 
 pub trait NetClientExt {

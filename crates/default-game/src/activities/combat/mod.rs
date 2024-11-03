@@ -2,14 +2,15 @@ use bevy::prelude::*;
 
 use yewoh::protocol;
 use yewoh::protocol::EquipmentSlot;
+use yewoh_server::world::connection::{NetClient, Possessing};
 use yewoh_server::world::entity::{AttackTarget, BodyType, Container, EquippedPosition, Graphic, Hue, MapPosition, Quantity, Stats};
 use yewoh_server::world::events::AttackRequestedEvent;
-use yewoh_server::world::net::{NetClient, NetId, Possessing};
+use yewoh_server::world::net_id::NetId;
 use yewoh_server::world::ServerSet;
 
-use crate::activities::{CurrentActivity, progress_current_activity};
-use crate::characters::{Alive, CharacterDied, Corpse, CorpseSpawned, DamageDealt, HitAnimation, MeleeWeapon, Unarmed};
+use crate::activities::{progress_current_activity, CurrentActivity};
 use crate::characters::animation::AnimationStartedEvent;
+use crate::characters::{Alive, CharacterDied, Corpse, CorpseSpawned, DamageDealt, HitAnimation, MeleeWeapon, Unarmed};
 
 mod prefabs;
 
@@ -159,7 +160,7 @@ pub fn spawn_corpses(
                 *map_position,
                 Graphic(CORPSE_GRAPHIC_ID),
                 Hue(**hue),
-                Quantity { quantity: **body_type },
+                Quantity(**body_type),
                 Container {
                     gump_id: CORPSE_BOX_GUMP_ID,
                 },

@@ -4,8 +4,10 @@ use bevy::prelude::*;
 use tracing::debug;
 use yewoh::protocol::{AttackRequest, ContextMenu, ContextMenuEntry, ExtendedCommand, PickTarget, SetAttackTarget, TargetType};
 
+use crate::world::connection::NetClient;
 use crate::world::events::{AttackRequestedEvent, ContextMenuEvent, ReceivedPacketEvent};
-use crate::world::net::{NetClient, NetEntityLookup, NetId};
+use crate::world::net_id::{NetEntityLookup, NetId};
+use crate::world::ServerSet;
 
 #[derive(Debug, Clone, Component)]
 pub struct WorldTargetRequest {
@@ -267,4 +269,16 @@ pub fn handle_attack_packets(
             target,
         });
     }
+}
+
+pub fn plugin(app: &mut App) {
+    app
+        .add_systems(First, (
+            handle_context_menu_packets,
+            handle_attack_packets,
+        ).in_set(ServerSet::HandlePackets))
+        .add_systems(Last, (
+            send_context_menu,
+            update_targets,
+        ).in_set(ServerSet::Send));
 }

@@ -2,12 +2,14 @@ use bevy::prelude::*;
 
 use yewoh::protocol::{CharacterAnimation, CharacterProfile, ContextMenuEntry, DamageDealt, EntityFlags, MoveConfirm, MoveEntityReject, MoveReject, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, Swing, WarMode};
 use yewoh::types::FixedString;
-use yewoh_server::world::entity::{AttackTarget, BodyType, EquippedPosition, Container, Flags, MapPosition, Notorious, ContainerPosition};
+use yewoh_server::world::connection::{NetClient, Possessing};
+use yewoh_server::world::entity::{AttackTarget, BodyType, Container, ContainedPosition, EquippedPosition, Flags, MapPosition, Notorious};
+use yewoh_server::world::events::ContainerOpenedEvent;
 use yewoh_server::world::events::{ContextMenuEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SingleClickEvent};
 use yewoh_server::world::input::ContextMenuRequest;
 use yewoh_server::world::map::{Chunk, TileDataResource};
 use yewoh_server::world::navigation::try_move_in_direction;
-use yewoh_server::world::net::{ContainerOpenedEvent, NetClient, NetId, Possessing};
+use yewoh_server::world::net_id::NetId;
 use yewoh_server::world::spatial::SpatialQuery;
 
 #[derive(Debug, Clone, Component, Reflect)]
@@ -127,7 +129,7 @@ pub fn handle_pick_up(
     mut events: EventReader<PickUpEvent>,
     clients: Query<(&NetClient, &Possessing)>,
     characters: Query<Option<&Held>>,
-    targets: Query<(Entity, Option<&MapPosition>, Option<&ContainerPosition>, Option<&EquippedPosition>)>,
+    targets: Query<(Entity, Option<&MapPosition>, Option<&ContainedPosition>, Option<&EquippedPosition>)>,
     mut commands: Commands,
 ) {
     for event in events.read() {
@@ -163,7 +165,7 @@ pub fn handle_pick_up(
             commands.entity(entity)
                 .insert(Holder { held_by: character })
                 .remove_parent()
-                .remove::<ContainerPosition>();
+                .remove::<ContainedPosition>();
         } else if let Some(_) = equipped {
             commands.entity(entity)
                 .insert(Holder { held_by: character })
@@ -211,7 +213,7 @@ pub fn handle_drop(
                 commands.entity(target)
                     .remove::<Holder>()
                     .set_parent(event.dropped_on.unwrap())
-                    .insert(ContainerPosition {
+                    .insert(ContainedPosition {
                         position: event.position.truncate(),
                         grid_index: event.grid_index,
                     });

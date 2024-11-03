@@ -4,10 +4,10 @@ use bevy::ecs::system::{Commands, Query, Res, Resource};
 use bevy::hierarchy::BuildChildren;
 use clap::Parser;
 use yewoh::protocol::TargetType;
-use yewoh_server::world::entity::{Container, ContainerPosition, MapPosition};
+use yewoh_server::world::entity::{Container, ContainedPosition, MapPosition};
 use yewoh_server::world::input::{EntityTargetRequest, EntityTargetResponse, WorldTargetRequest, WorldTargetResponse};
-use yewoh_server::world::net::{NetClient, ViewState};
-
+use yewoh_server::world::connection::{NetClient};
+use yewoh_server::world::view::ViewKey;
 use crate::commands::{TextCommand, TextCommandQueue};
 use crate::data::prefabs::{PrefabLibrary, PrefabLibraryEntityExt};
 use crate::entities::Persistent;
@@ -37,11 +37,11 @@ pub fn start_spawn(
     mut exec: TextCommandQueue<Spawn>,
     mut commands: Commands,
     prefabs: Res<PrefabLibrary>,
-    clients: Query<(&NetClient, &ViewState)>,
+    clients: Query<&NetClient>,
 ) {
     for (from, request) in exec.iter() {
         if prefabs.get(&request.prefab).is_none() {
-            let (client, ..) = match clients.get(from) {
+            let client = match clients.get(from) {
                 Ok(x) => x,
                 _ => continue,
             };
@@ -75,7 +75,7 @@ pub fn start_spawn(
 pub fn spawn(
     completed_position: Query<(Entity, &SpawnRequest, &WorldTargetRequest, &WorldTargetResponse)>,
     completed_entity: Query<(Entity, &SpawnRequest, &EntityTargetRequest, &EntityTargetResponse)>,
-    clients: Query<(&NetClient, &ViewState)>,
+    clients: Query<(&NetClient, &ViewKey)>,
     mut containers: Query<&mut Container>,
     mut commands: Commands,
 ) {
@@ -86,14 +86,14 @@ pub fn spawn(
             None => continue,
         };
 
-        let (_, view_state, ..) = match clients.get(request.client_entity) {
+        let (_, view_key, ..) = match clients.get(request.client_entity) {
             Ok(x) => x,
             _ => continue,
         };
 
         // TODO: check whether location is obstructed.
 
-        let map_id = view_state.map_id();
+        let map_id = view_key.map_id;
         commands
             .spawn_empty()
             .fabricate_prefab(&spawn.prefab_name)
@@ -133,7 +133,7 @@ pub fn spawn(
             .fabricate_prefab(&spawn.prefab_name)
             .insert((
                 Persistent,
-                ContainerPosition::default(),
+                ContainedPosition::default(),
             ))
             .set_parent(target);
     }

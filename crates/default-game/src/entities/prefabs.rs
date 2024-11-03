@@ -3,7 +3,7 @@ use bevy_fabricator::Fabricated;
 use yewoh::protocol::EquipmentSlot;
 use bevy_fabricator::traits::{Apply, ReflectApply};
 use yewoh::Direction;
-use yewoh_server::world::entity::{ContainerPosition, MapPosition};
+use yewoh_server::world::entity::{ContainedPosition, MapPosition};
 use crate::data::prefabs::PrefabLibraryEntityExt;
 use crate::entities::position::PositionExt;
 
@@ -42,7 +42,7 @@ impl Apply for EquippedBy {
 pub struct ContainedBy {
     pub parent: Entity,
     #[reflect(default)]
-    pub position: ContainerPosition,
+    pub position: ContainedPosition,
 }
 
 impl Apply for ContainedBy {

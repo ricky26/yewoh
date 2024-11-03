@@ -28,8 +28,8 @@ use yewoh_default_game::DefaultGamePlugins;
 use yewoh_server::async_runtime::AsyncRuntime;
 use yewoh_server::game_server::listen_for_game;
 use yewoh_server::lobby::{listen_for_lobby, LocalServerRepository};
+use yewoh_server::world::connection::NetServer;
 use yewoh_server::world::map::{self, Chunk, MultiDataResource, Static, TileDataResource};
-use yewoh_server::world::net::NetServer;
 use yewoh_server::world::ServerPlugin;
 
 use bevy_fabricator::hot_reload::{FabricatorChanged, WatchForFabricatorChanges};
@@ -38,6 +38,7 @@ use sqlx::postgres::PgPool;
 use yewoh_default_game::accounts::sql::{SqlAccountRepository, SqlAccountRepositoryConfig};
 use yewoh_default_game::data::prefabs::PrefabLibrary;
 use yewoh_default_game::persistence::db::WorldRepository;
+use yewoh_server::world::delta_grid::DeltaGrid;
 use yewoh_server::world::spatial::{ChunkLookup, SpatialCharacterLookup, SpatialDynamicItemLookup, SpatialStaticItemLookup};
 
 #[derive(Parser, Debug)]
@@ -170,7 +171,8 @@ fn main() -> anyhow::Result<()> {
         .insert_resource(SpatialCharacterLookup::new(&map_infos))
         .insert_resource(SpatialDynamicItemLookup::new(&map_infos))
         .insert_resource(SpatialStaticItemLookup::new(&map_infos))
-        .insert_resource(ChunkLookup::new(&map_infos));
+        .insert_resource(ChunkLookup::new(&map_infos))
+        .insert_resource(DeltaGrid::new(&map_infos));
 
     // Load prefabs
     info!("Loading prefabs...");

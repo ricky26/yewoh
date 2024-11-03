@@ -1,10 +1,10 @@
-use bevy::ecs::query::Changed;
-use bevy::ecs::removal_detection::RemovedComponents;
-use bevy::ecs::system::Query;
+use bevy::prelude::*;
 use yewoh::protocol::SetAttackTarget;
 
+use crate::world::connection::{NetClient, OwningClient};
 use crate::world::entity::AttackTarget;
-use crate::world::net::{NetClient, NetId, OwningClient};
+use crate::world::net_id::NetId;
+use crate::world::ServerSet;
 
 pub fn send_updated_attack_target(
     net_ids: Query<&NetId>,
@@ -40,4 +40,11 @@ pub fn send_updated_attack_target(
             target_id: None,
         }.into());
     }
+}
+
+pub fn plugin(app: &mut App) {
+    app
+        .add_systems(Last, (
+            send_updated_attack_target.in_set(ServerSet::Send),
+        ).in_set(ServerSet::Send));
 }

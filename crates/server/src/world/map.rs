@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::ops::Deref;
 use std::path::Path;
 
@@ -10,7 +11,20 @@ use yewoh::assets::tiles::{TileData, TileFlags};
 use yewoh::Direction;
 
 use crate::world::entity::{Graphic, Hue, MapPosition};
-use crate::world::net::MapInfos;
+
+#[derive(Debug, Clone, Default, Reflect)]
+#[reflect(Default)]
+pub struct MapInfo {
+    pub size: UVec2,
+    pub season: u8,
+    pub is_virtual: bool,
+}
+
+#[derive(Debug, Clone, Default, Reflect, Resource)]
+#[reflect(Default, Resource)]
+pub struct MapInfos {
+    pub maps: HashMap<u8, MapInfo>,
+}
 
 #[derive(Debug, Clone, Default, Component, Reflect)]
 #[reflect(Component)]
@@ -217,4 +231,16 @@ pub fn spawn_static_entities(
     }
 
     world.insert_batch(out_collision);
+}
+
+pub fn plugin(app: &mut App) {
+    app
+        .register_type::<MapInfo>()
+        .register_type::<MapInfos>()
+        .register_type::<Chunk>()
+        .register_type::<Static>()
+        .register_type::<HasCollision>()
+        .register_type::<TileDataResource>()
+        .init_resource::<MapInfos>()
+        .init_resource::<TileDataResource>();
 }
