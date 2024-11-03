@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use yewoh::{EntityId, MIN_ITEM_ID};
 
 use crate::world::entity::{BodyType, Graphic};
+use crate::world::events::NetEntityDestroyed;
 use crate::world::map::Static;
 use crate::world::ServerSet;
 
@@ -44,8 +45,8 @@ impl Component for NetId {
                 }
             }
             {
-                let mut removed = world.resource_mut::<RemovedNetIds>();
-                removed.entries.push((entity, id));
+                let mut removed = world.resource_mut::<Events<NetEntityDestroyed>>();
+                removed.send(NetEntityDestroyed { entity, id });
             }
         });
     }
@@ -125,33 +126,12 @@ pub fn assign_net_ids(
     }
 }
 
-#[derive(Debug, Default, Resource)]
-pub struct RemovedNetIds {
-    entries: Vec<(Entity, EntityId)>,
-}
-
-impl RemovedNetIds {
-    pub fn removed_ids(&self) -> &[(Entity, EntityId)] {
-        &self.entries
-    }
-}
-
-pub fn reset_removed_net_ids(
-    mut removed: ResMut<RemovedNetIds>,
-) {
-    removed.entries.clear();
-}
-
 pub fn plugin(app: &mut App) {
     app
         .register_type::<NetId>()
         .init_resource::<NetIdAllocator>()
         .init_resource::<NetEntityLookup>()
-        .init_resource::<RemovedNetIds>()
         .add_systems(Last, (
             assign_net_ids,
-        ).in_set(ServerSet::SendFirst))
-    .add_systems(Last, (
-        reset_removed_net_ids,
-    ).in_set(ServerSet::SendLast));
+        ).in_set(ServerSet::SendFirst));
 }

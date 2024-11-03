@@ -9,8 +9,9 @@ use yewoh::{EntityId, EntityKind};
 
 use crate::world::delta_grid::{delta_grid_cell, DeltaEntry, DeltaGrid, DeltaVersion};
 use crate::world::entity::{ContainedPosition, Container, EquippedPosition, Flags, Graphic, Hue, MapPosition, Quantity, RootPosition, Tooltip};
+use crate::world::events::NetEntityDestroyed;
 use crate::world::map::Static;
-use crate::world::net_id::{NetId, RemovedNetIds};
+use crate::world::net_id::NetId;
 use crate::world::ServerSet;
 
 #[derive(Clone, Debug, )]
@@ -277,7 +278,7 @@ pub fn detect_item_changes(
         (ValidItemPosition, Or<(Changed<NetId>, ChangedItemFilter, ChangedPositionFilter)>),
     >,
     net_ids: Query<&NetId>,
-    removed_items: Res<RemovedNetIds>,
+    mut removed_items: EventReader<NetEntityDestroyed>,
 ) {
     for (entity, net_id, item, position) in &changed_items {
         if net_id.is_changed() || item.is_item_changed() || item.position.is_changed() {
@@ -327,7 +328,8 @@ pub fn detect_item_changes(
         }
     }
 
-    for (entity, id) in removed_items.removed_ids().iter().copied() {
+    for event in removed_items.read() {
+        let NetEntityDestroyed { entity, id } = event.clone();
         if let Some(last_position) = cache.last_position.remove(&entity) {
             let grid_cell = delta_grid_cell(last_position.position.truncate());
             let packet = Arc::new(AnyPacket::from_packet(DeleteEntity {

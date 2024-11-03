@@ -116,13 +116,13 @@ fn view_aabb(center: IVec2, range: i32) -> (IVec2, IVec2) {
 
 pub fn send_deltas(
     delta_grid: Res<DeltaGrid>,
-    mut clients: Query<(Entity, &NetClient, &View, &mut SeenEntities, &Possessing), With<Synchronized>>,
+    mut clients: Query<(&NetClient, &View, &mut SeenEntities, &Possessing), With<Synchronized>>,
     owned: Query<&MapPosition, With<OwningClient>>,
     mut deltas: Local<Vec<Delta>>,
     character_query: Query<(&NetId, CharacterQuery, Option<&Children>)>,
     equipment_query: Query<(&NetId, ItemQuery), With<EquippedPosition>>,
 ) {
-    for (entity, client, view, mut seen, possessing) in &mut clients {
+    for (client, view, mut seen, possessing) in &mut clients {
         let location = match owned.get(possessing.entity) {
             Ok(x) => *x,
             _ => continue,
@@ -208,7 +208,7 @@ pub fn send_deltas(
                         seen.open_containers.insert(entity);
                     }
                 }
-                DeltaEntry::CharacterRemoved { packet, .. } => {
+                DeltaEntry::CharacterRemoved { entity, packet, .. } => {
                     seen.remove_entity(entity);
                     client.send_packet_arc(packet);
                 }

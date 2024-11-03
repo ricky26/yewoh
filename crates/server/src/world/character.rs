@@ -9,8 +9,9 @@ use yewoh::EntityId;
 
 use crate::world::delta_grid::{delta_grid_cell, DeltaEntry, DeltaGrid, DeltaVersion};
 use crate::world::entity::{BodyType, Flags, Hue, MapPosition, Notorious, Stats, Tooltip};
+use crate::world::events::NetEntityDestroyed;
 use crate::world::item::ValidItemPosition;
-use crate::world::net_id::{NetId, RemovedNetIds};
+use crate::world::net_id::NetId;
 use crate::world::ServerSet;
 
 #[derive(QueryData)]
@@ -83,7 +84,7 @@ pub fn detect_character_changes(
         (Entity, Ref<NetId>, CharacterQuery),
         (ValidItemPosition, Or<(Changed<NetId>, ChangedCharacterFilter)>),
     >,
-    removed_characters: Res<RemovedNetIds>,
+    mut removed_characters: EventReader<NetEntityDestroyed>,
 ) {
     for (entity, net_id, character) in &characters_query {
         if net_id.is_changed() || character.is_character_changed() || character.position.is_changed() {
@@ -127,7 +128,8 @@ pub fn detect_character_changes(
         }
     }
 
-    for (entity, id) in removed_characters.removed_ids().iter().copied() {
+    for event in removed_characters.read() {
+        let NetEntityDestroyed { entity, id } = event.clone();
         if let Some(last_position) = cache.last_position.remove(&entity) {
             let grid_cell = delta_grid_cell(last_position.position.truncate());
             let packet = Arc::new(AnyPacket::from_packet(DeleteEntity {

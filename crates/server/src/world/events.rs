@@ -1,8 +1,14 @@
 use std::sync::Arc;
 
 use bevy::prelude::*;
-
+use yewoh::EntityId;
 use yewoh::protocol::{AnyPacket, CreateCharacter, DeleteCharacter, EquipmentSlot, Move, SelectCharacter, UnicodeTextMessageRequest};
+
+#[derive(Clone, Debug, Event)]
+pub struct NetEntityDestroyed {
+    pub entity: Entity,
+    pub id: EntityId,
+}
 
 #[derive(Debug, Event)]
 pub struct ReceivedPacketEvent {
@@ -120,6 +126,7 @@ pub struct ContainerOpenedEvent {
 
 pub fn plugin(app: &mut App) {
     app
+        .add_event::<NetEntityDestroyed>()
         .add_event::<ReceivedPacketEvent>()
         .add_event::<SentPacketEvent>()
         .add_event::<CharacterListEvent>()
