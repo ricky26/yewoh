@@ -11,7 +11,7 @@ use crate::world::delta_grid::{delta_grid_cell, DeltaEntry, DeltaGrid, DeltaVers
 use crate::world::entity::{BodyType, Flags, Hue, MapPosition, Notorious, Stats, Tooltip};
 use crate::world::events::NetEntityDestroyed;
 use crate::world::item::ValidItemPosition;
-use crate::world::net_id::NetId;
+use crate::world::net_id::{assign_net_ids, NetId};
 use crate::world::ServerSet;
 
 #[derive(QueryData)]
@@ -147,6 +147,8 @@ pub fn detect_character_changes(
 pub fn plugin(app: &mut App) {
     app
         .add_systems(Last, (
-            detect_character_changes.in_set(ServerSet::SendFirst),
+            detect_character_changes
+                .after(assign_net_ids)
+                .in_set(ServerSet::SendFirst),
         ));
 }

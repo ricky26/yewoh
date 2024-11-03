@@ -11,7 +11,7 @@ use crate::world::delta_grid::{delta_grid_cell, DeltaEntry, DeltaGrid, DeltaVers
 use crate::world::entity::{ContainedPosition, Container, EquippedPosition, Flags, Graphic, Hue, MapPosition, Quantity, RootPosition, Tooltip};
 use crate::world::events::NetEntityDestroyed;
 use crate::world::map::Static;
-use crate::world::net_id::NetId;
+use crate::world::net_id::{assign_net_ids, NetId};
 use crate::world::ServerSet;
 
 #[derive(Clone, Debug, )]
@@ -353,6 +353,8 @@ pub fn plugin(app: &mut App) {
             ).in_set(ServerSet::UpdateVisibility),
         ))
         .add_systems(Last, (
-            detect_item_changes.in_set(ServerSet::SendFirst),
+            detect_item_changes
+                .after(assign_net_ids)
+                .in_set(ServerSet::SendFirst),
         ));
 }
