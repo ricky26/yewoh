@@ -60,6 +60,7 @@ impl Plugin for ServerPlugin {
                 delta_grid::plugin,
                 items::plugin,
                 characters::plugin,
+                account::plugin,
             ))
             .configure_sets(First, (
                 ServerSet::Receive,

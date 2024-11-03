@@ -47,13 +47,11 @@ impl NetClient {
     pub fn client_version(&self) -> ClientVersion { self.client_version }
 
     pub fn send_packet(&self, packet: AnyPacket) {
-        trace!("OUT ({:?}): {:?}", self.address, packet);
         self.tx.send(WriterAction::Send(self.client_version, packet)).ok();
     }
 
     pub fn send_packet_arc(&self, packet: impl Into<Arc<AnyPacket>>) {
         let packet = packet.into();
-        trace!("OUT ({:?}): {:?}", self.address, packet);
         self.tx.send(WriterAction::SendArc(self.client_version, packet)).ok();
     }
 }
@@ -62,12 +60,6 @@ impl NetClient {
 pub struct ReceivedPacketEvent {
     pub client_entity: Entity,
     pub packet: AnyPacket,
-}
-
-#[derive(Debug, Event)]
-pub struct SentPacketEvent {
-    pub client_entity: Option<Entity>,
-    pub packet: Arc<AnyPacket>,
 }
 
 #[derive(Resource)]
@@ -206,11 +198,13 @@ pub fn accept_new_clients(
             while let Some(action) = rx.recv().await {
                 match action {
                     WriterAction::Send(client_version, packet) => {
+                        trace!("OUT ({address:?}): {packet:?}");
                         if let Err(err) = writer.send_any(client_version, &packet).await {
                             warn!("Error sending packet {err}");
                         }
                     }
                     WriterAction::SendArc(client_version, packet) => {
+                        trace!("OUT ({address:?}): {packet:?}");
                         if let Err(err) = writer.send_any(client_version, &packet).await {
                             warn!("Error sending packet {err}");
                         }
@@ -236,7 +230,7 @@ pub fn accept_new_clients(
             loop {
                 match reader.recv(client_version).await {
                     Ok(Some(packet)) => {
-                        trace!("IN ({:?}): {:?}", address, packet);
+                        trace!("IN ({address:?}): {packet:?}");
                         if let Err(err) = internal_tx.send((entity, packet)) {
                             warn!("Error forwarding packet {err}");
                             break;
@@ -267,23 +261,10 @@ pub fn accept_new_clients(
 
 pub fn handle_new_packets(
     mut server: ResMut<NetServer>,
-    clients: Query<&NetClient>,
-    mut write_events: EventReader<SentPacketEvent>,
     mut read_events: EventWriter<ReceivedPacketEvent>,
 ) {
     while let Ok((connection, packet)) = server.received_packets_rx.try_recv() {
         read_events.send(ReceivedPacketEvent { client_entity: connection, packet });
-    }
-
-    for SentPacketEvent { client_entity: connection, packet } in write_events.read() {
-        match connection {
-            Some(entity) => {
-                if let Ok(client) = clients.get(*entity) {
-                    client.send_packet_arc(packet.clone());
-                }
-            }
-            None => broadcast(clients.iter(), packet.clone()),
-        }
     }
 }
 
@@ -524,7 +505,6 @@ pub fn plugin(app: &mut App) {
     app
         .register_type::<OwningClient>()
         .add_event::<ReceivedPacketEvent>()
-        .add_event::<SentPacketEvent>()
         .add_systems(First, (
             (accept_new_clients, handle_new_packets)
                 .chain()
