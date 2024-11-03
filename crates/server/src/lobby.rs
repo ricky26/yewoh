@@ -33,8 +33,7 @@ pub async fn serve_lobby(
 ) -> anyhow::Result<()> {
     let (mut reader, mut writer) = new_io(stream, true);
     let seed = reader.recv(ClientVersion::default()).await?
-        .into_downcast::<Seed>()
-        .ok()
+        .and_then(|r| r.into_downcast::<Seed>().ok())
         .ok_or_else(|| anyhow!("expected seed as first packet"))?;
 
     if encrypted {
@@ -43,8 +42,7 @@ pub async fn serve_lobby(
     }
 
     let login = reader.recv(seed.client_version).await?
-        .into_downcast::<AccountLogin>()
-        .ok()
+        .and_then(|r| r.into_downcast::<AccountLogin>().ok())
         .ok_or_else(|| anyhow!("expected account login attempt"))?;
 
     if let Err(err) = accounts.login(&login.username, &login.password).await {
@@ -55,8 +53,7 @@ pub async fn serve_lobby(
     let server_list = servers.list_servers(&login.username).await?;
     writer.send(seed.client_version, &server_list).await?;
 
-    loop {
-        let packet = reader.recv(seed.client_version).await?;
+    while let Some(packet) = reader.recv(seed.client_version).await? {
         if let Some(login_packet) = packet.downcast::<SelectGameServer>() {
             let session = servers.allocate_session(
                 &login.username,
@@ -70,6 +67,8 @@ pub async fn serve_lobby(
             return Err(anyhow!("unexpected lobby packet {:?}", packet));
         }
     }
+    
+    Ok(())
 }
 
 pub async fn listen_for_lobby<

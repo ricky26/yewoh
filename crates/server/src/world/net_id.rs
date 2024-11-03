@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use yewoh::{EntityId, MIN_ITEM_ID};
 
 use crate::world::entity::{BodyType, Graphic};
-use crate::world::events::NetEntityDestroyed;
 use crate::world::map::Static;
 use crate::world::ServerSet;
 
@@ -50,6 +49,12 @@ impl Component for NetId {
             }
         });
     }
+}
+
+#[derive(Clone, Debug, Event)]
+pub struct NetEntityDestroyed {
+    pub entity: Entity,
+    pub id: EntityId,
 }
 
 #[derive(Debug, Clone, Default, Component, Reflect)]
@@ -129,9 +134,10 @@ pub fn assign_net_ids(
 pub fn plugin(app: &mut App) {
     app
         .register_type::<NetId>()
+        .add_event::<NetEntityDestroyed>()
         .init_resource::<NetIdAllocator>()
         .init_resource::<NetEntityLookup>()
         .add_systems(Last, (
             assign_net_ids,
-        ).in_set(ServerSet::SendFirst));
+        ).in_set(ServerSet::AssignNetIds));
 }

@@ -2,11 +2,12 @@ use bevy::prelude::*;
 
 use yewoh::protocol::{CharacterAnimation, CharacterProfile, ContextMenuEntry, DamageDealt, EntityFlags, MoveConfirm, MoveEntityReject, MoveReject, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, Swing, WarMode};
 use yewoh::types::FixedString;
-use yewoh_server::world::connection::{NetClient, Possessing};
-use yewoh_server::world::entity::{AttackTarget, BodyType, Container, ContainedPosition, EquippedPosition, Flags, MapPosition, Notorious};
-use yewoh_server::world::events::ContainerOpenedEvent;
-use yewoh_server::world::events::{ContextMenuEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SingleClickEvent};
-use yewoh_server::world::input::ContextMenuRequest;
+use yewoh_server::world::characters::{ProfileEvent, RequestSkillsEvent};
+use yewoh_server::world::combat::AttackTarget;
+use yewoh_server::world::connection::{NetClient, Possessing, ReceivedPacketEvent};
+use yewoh_server::world::entity::{BodyType, Container, ContainedPosition, EquippedPosition, Flags, MapPosition, Notorious};
+use yewoh_server::world::input::{ContextMenuEvent, ContextMenuRequest, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, SingleClickEvent};
+use yewoh_server::world::items::ContainerOpenedEvent;
 use yewoh_server::world::map::{Chunk, TileDataResource};
 use yewoh_server::world::navigation::try_move_in_direction;
 use yewoh_server::world::net_id::NetId;

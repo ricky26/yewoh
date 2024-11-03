@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use uuid::Uuid;
 
 use yewoh::protocol::{CreateCharacter, DeleteCharacter};
-use yewoh_server::world::entity::Stats;
+use yewoh_server::world::characters::Stats;
 
 #[derive(Debug, Clone, Default, Reflect)]
 #[reflect(Default)]

@@ -2,12 +2,53 @@ use std::collections::VecDeque;
 
 use bevy::prelude::*;
 use tracing::debug;
-use yewoh::protocol::{AttackRequest, ContextMenu, ContextMenuEntry, ExtendedCommand, PickTarget, SetAttackTarget, TargetType};
+use yewoh::protocol::{AttackRequest, ContextMenu, ContextMenuEntry, EquipmentSlot, ExtendedCommand, Move, PickTarget, SetAttackTarget, TargetType};
 
-use crate::world::connection::NetClient;
-use crate::world::events::{AttackRequestedEvent, ContextMenuEvent, ReceivedPacketEvent};
+use crate::world::combat::AttackRequestedEvent;
+use crate::world::connection::{NetClient, ReceivedPacketEvent};
 use crate::world::net_id::{NetEntityLookup, NetId};
 use crate::world::ServerSet;
+
+#[derive(Debug, Clone, Event)]
+pub struct MoveEvent {
+    pub client_entity: Entity,
+    pub request: Move,
+}
+
+#[derive(Debug, Clone, Event)]
+pub struct SingleClickEvent {
+    pub client_entity: Entity,
+    pub target: Option<Entity>,
+}
+
+#[derive(Debug, Clone, Event)]
+pub struct DoubleClickEvent {
+    pub client_entity: Entity,
+    pub target: Option<Entity>,
+}
+
+#[derive(Debug, Clone, Event)]
+pub struct PickUpEvent {
+    pub client_entity: Entity,
+    pub target: Entity,
+}
+
+#[derive(Debug, Clone, Event)]
+pub struct DropEvent {
+    pub client_entity: Entity,
+    pub target: Entity,
+    pub position: IVec3,
+    pub grid_index: u8,
+    pub dropped_on: Option<Entity>,
+}
+
+#[derive(Debug, Clone, Event)]
+pub struct EquipEvent {
+    pub client_entity: Entity,
+    pub target: Entity,
+    pub character: Entity,
+    pub slot: EquipmentSlot,
+}
 
 #[derive(Debug, Clone, Component)]
 pub struct WorldTargetRequest {
@@ -47,6 +88,23 @@ pub struct ContextMenuRequest {
     pub client_entity: Entity,
     pub target: Entity,
     pub entries: Vec<ContextMenuEntry>,
+}
+
+impl FromWorld for ContextMenuRequest {
+    fn from_world(_world: &mut World) -> Self {
+        ContextMenuRequest {
+            client_entity: Entity::PLACEHOLDER,
+            target: Entity::PLACEHOLDER,
+            entries: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Event)]
+pub struct ContextMenuEvent {
+    pub client_entity: Entity,
+    pub target: Entity,
+    pub option: u16,
 }
 
 pub fn update_targets(
@@ -273,6 +331,13 @@ pub fn handle_attack_packets(
 
 pub fn plugin(app: &mut App) {
     app
+        .add_event::<MoveEvent>()
+        .add_event::<SingleClickEvent>()
+        .add_event::<DoubleClickEvent>()
+        .add_event::<PickUpEvent>()
+        .add_event::<DropEvent>()
+        .add_event::<EquipEvent>()
+        .add_event::<ContextMenuEvent>()
         .add_systems(First, (
             handle_context_menu_packets,
             handle_attack_packets,

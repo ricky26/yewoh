@@ -4,12 +4,11 @@ use bevy::ecs::entity::{EntityHashMap, EntityHashSet};
 use yewoh::protocol::{AnyPacket, BeginEnterWorld, ChangeSeason, EndEnterWorld, ExtendedCommand};
 use yewoh::protocol::{CharacterEquipment, OpenContainer, UpsertContainerContents};
 
-use crate::world::character::CharacterQuery;
+use crate::world::characters::CharacterQuery;
 use crate::world::connection::{NetClient, OwningClient, Possessing};
 use crate::world::delta_grid::{delta_grid_cell, Delta, DeltaEntry, DeltaGrid};
 use crate::world::entity::{BodyType, Container, ContainedPosition, EquippedPosition, MapPosition};
-use crate::world::events::ContainerOpenedEvent;
-use crate::world::item::ItemQuery;
+use crate::world::items::{ContainerOpenedEvent, ItemQuery};
 use crate::world::map::MapInfos;
 use crate::world::net_id::NetId;
 use crate::world::ServerSet;
@@ -211,6 +210,21 @@ pub fn send_deltas(
                 DeltaEntry::CharacterRemoved { entity, packet, .. } => {
                     seen.remove_entity(entity);
                     client.send_packet_arc(packet);
+                }
+                DeltaEntry::CharacterAnimation { entity, packet } => {
+                    if seen.seen_entities.contains(&entity) {
+                        client.send_packet_arc(packet);
+                    }
+                }
+                DeltaEntry::CharacterDamaged { entity, packet } => {
+                    if seen.seen_entities.contains(&entity) {
+                        client.send_packet_arc(packet);
+                    }
+                }
+                DeltaEntry::CharacterSwing { entity, packet, .. } => {
+                    if seen.seen_entities.contains(&entity) {
+                        client.send_packet_arc(packet);
+                    }
                 }
                 DeltaEntry::TooltipChanged { entity, packet, .. } => {
                     if seen.seen_entities.contains(&entity) {
@@ -435,7 +449,7 @@ pub fn plugin(app: &mut App) {
         .add_systems(Last, (
             send_deltas,
             sync_visible_entities,
-        ).in_set(ServerSet::SendGhosts))
+        ).in_set(ServerSet::SendEntities))
         .add_systems(Last, (
             send_opened_containers,
             finish_synchronizing,

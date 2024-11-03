@@ -1,6 +1,6 @@
 import yewoh_server::world::entity::{Graphic, Hue};
+import yewoh_server::world::characters::Animation;
 import yewoh_default_game::activities::combat::prefabs::MeleeWeaponPrefab;
-import yewoh_default_game::characters::Animation;
 import yewoh_default_game::items::tooltips::StaticTooltips;
 import bevy_fabricator::humantime::HumanDuration;
 

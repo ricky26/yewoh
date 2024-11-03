@@ -1,7 +1,7 @@
 use std::any::type_name;
 use std::fmt;
 use std::fmt::Debug;
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 use std::mem::{size_of, transmute, MaybeUninit};
 use std::sync::Arc;
 
@@ -348,8 +348,12 @@ impl Reader {
     }
 
     pub async fn recv(&mut self, client_version: ClientVersion)
-                      -> anyhow::Result<AnyPacket> {
-        let mut packet_kind = self.reader.read_u8().await?;
+                      -> anyhow::Result<Option<AnyPacket>> {
+        let mut packet_kind = match self.reader.read_u8().await {
+            Ok(v) => v,
+            Err(err) if err.kind() == ErrorKind::UnexpectedEof => return Ok(None),
+            Err(err) => return Err(err.into()),
+        };
 
         if let Some(encryption) = self.encryption.as_mut() {
             let mut cell = [packet_kind];
@@ -401,7 +405,7 @@ impl Reader {
 
         let decoded = (registration.decode)(client_version, self.from_client, &self.buffer);
         self.buffer.clear();
-        Ok(decoded?)
+        Ok(Some(decoded?))
     }
 }
 

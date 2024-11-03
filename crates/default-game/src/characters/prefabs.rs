@@ -3,10 +3,11 @@ use bevy_fabricator::traits::{Apply, ReflectApply};
 use bevy_fabricator::Fabricated;
 use serde::Deserialize;
 use yewoh::Notoriety;
-use yewoh_server::world::entity::{BodyType, Hue, MapPosition, Notorious, Stats};
+use yewoh_server::world::characters::Stats;
+use yewoh_server::world::entity::{BodyType, Hue, MapPosition, Notorious};
 
 use crate::activities::CurrentActivity;
-use crate::characters::{Alive, Animation, HitAnimation};
+use crate::characters::{Animation, HitAnimation};
 
 #[derive(Default, Clone, Reflect, Deserialize)]
 #[reflect(Default, Apply, Deserialize)]
@@ -38,7 +39,6 @@ impl Apply for CharacterPrefab {
                     ..Default::default()
                 },
                 CurrentActivity::Idle,
-                Alive,
             ));
 
         if let Some(hit_animation) = self.hit_animation.clone() {

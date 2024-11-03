@@ -4,11 +4,11 @@ pub mod entity;
 
 pub mod position;
 
-pub mod character;
+pub mod characters;
 
-pub mod item;
+pub mod items;
 
-pub mod events;
+pub mod chat;
 
 pub mod spatial;
 
@@ -28,13 +28,17 @@ pub mod connection;
 
 pub mod view;
 
+pub mod account;
+
 #[derive(SystemSet, Hash, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerSet {
     Receive,
     HandlePackets,
     UpdateVisibility,
+    AssignNetIds,
     SendFirst,
-    SendGhosts,
+    DetectChanges,
+    SendEntities,
     Send,
     SendLast,
 }
@@ -51,13 +55,13 @@ impl Plugin for ServerPlugin {
                 map::plugin,
                 spatial::plugin,
                 entity::plugin,
-                events::plugin,
+                chat::plugin,
                 view::plugin,
                 input::plugin,
                 combat::plugin,
                 delta_grid::plugin,
-                item::plugin,
-                character::plugin,
+                items::plugin,
+                characters::plugin,
             ))
             .configure_sets(First, (
                 ServerSet::Receive,
@@ -65,10 +69,12 @@ impl Plugin for ServerPlugin {
             ).chain())
             .configure_sets(PostUpdate, (
                 ServerSet::UpdateVisibility,
+                ServerSet::AssignNetIds,
             ))
             .configure_sets(Last, (
                 ServerSet::SendFirst,
-                ServerSet::SendGhosts,
+                ServerSet::DetectChanges,
+                ServerSet::SendEntities,
                 ServerSet::Send,
                 ServerSet::SendLast,
             ).chain());

@@ -2,15 +2,15 @@ use bevy::prelude::*;
 
 use yewoh::protocol;
 use yewoh::protocol::EquipmentSlot;
+use yewoh_server::world::characters::{AnimationStartedEvent, Stats};
+use yewoh_server::world::combat::{AttackRequestedEvent, AttackTarget};
 use yewoh_server::world::connection::{NetClient, Possessing};
-use yewoh_server::world::entity::{AttackTarget, BodyType, Container, EquippedPosition, Graphic, Hue, MapPosition, Quantity, Stats};
-use yewoh_server::world::events::AttackRequestedEvent;
+use yewoh_server::world::entity::{BodyType, Container, EquippedPosition, Graphic, Hue, MapPosition, Quantity};
 use yewoh_server::world::net_id::NetId;
 use yewoh_server::world::ServerSet;
 
 use crate::activities::{progress_current_activity, CurrentActivity};
-use crate::characters::animation::AnimationStartedEvent;
-use crate::characters::{Alive, CharacterDied, Corpse, CorpseSpawned, DamageDealt, HitAnimation, MeleeWeapon, Unarmed};
+use crate::characters::{CharacterDied, Corpse, CorpseSpawned, DamageDealt, HitAnimation, Invulnerable, MeleeWeapon, Unarmed};
 
 mod prefabs;
 
@@ -71,8 +71,11 @@ pub fn update_weapon_stats(
 pub fn attack_current_target(
     mut damage_events: EventWriter<DamageDealt>,
     mut animation_events: EventWriter<AnimationStartedEvent>,
-    mut actors: Query<(Entity, &mut CurrentActivity, &mut AttackTarget, &MapPosition, &MeleeWeapon), With<Alive>>,
-    mut targets: Query<(&MapPosition, Option<&HitAnimation>), With<Alive>>,
+    mut actors: Query<
+        (Entity, &mut CurrentActivity, &mut AttackTarget, &MapPosition, &MeleeWeapon),
+        Without<Invulnerable>,
+    >,
+    mut targets: Query<(&MapPosition, Option<&HitAnimation>), Without<Invulnerable>>,
 ) {
     for (entity, mut current_activity, current_target, location, weapon) in &mut actors {
         if !current_activity.is_idle() {
@@ -114,10 +117,9 @@ pub fn attack_current_target(
 }
 
 pub fn apply_damage(
-    mut commands: Commands,
     mut damage_events: EventReader<DamageDealt>,
     mut died_events: EventWriter<CharacterDied>,
-    mut characters: Query<&mut Stats, With<Alive>>,
+    mut characters: Query<&mut Stats, Without<Invulnerable>>,
 ) {
     for event in damage_events.read() {
         let mut stats = match characters.get_mut(event.target) {
@@ -130,7 +132,6 @@ pub fn apply_damage(
             continue;
         }
 
-        commands.entity(event.target).remove::<Alive>();
         died_events.send(CharacterDied {
             character: event.target,
         });

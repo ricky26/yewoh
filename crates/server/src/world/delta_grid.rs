@@ -35,6 +35,9 @@ pub enum DeltaEntry {
     ItemRemoved { entity: Entity, packet: Arc<AnyPacket> },
     CharacterChanged { entity: Entity, update_packet: Arc<AnyPacket> },
     CharacterRemoved { entity: Entity, packet: Arc<AnyPacket> },
+    CharacterAnimation { entity: Entity, packet: Arc<AnyPacket> },
+    CharacterDamaged { entity: Entity, packet: Arc<AnyPacket> },
+    CharacterSwing { entity: Entity, target: Entity, packet: Arc<AnyPacket> },
     TooltipChanged { entity: Entity, packet: Arc<AnyPacket> },
 }
 

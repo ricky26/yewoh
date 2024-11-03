@@ -1,6 +1,6 @@
 import yewoh_default_game::ai::behaviours::wander::WanderPrefab;
 import yewoh_default_game::characters::prefabs::CharacterPrefab;
-import yewoh_default_game::characters::Animation;
+import yewoh_server::world::characters::Animation;
 import bevy_fabricator::humantime::HumanDuration;
 import bevy_fabricator::values::Some;
 

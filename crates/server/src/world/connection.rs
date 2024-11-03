@@ -10,9 +10,11 @@ use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, CharacterProfile, Clie
 use crate::async_runtime::AsyncRuntime;
 use crate::game_server::NewSessionAttempt;
 use crate::lobby::{NewSessionRequest, SessionAllocator};
+use crate::world::account::{CharacterListEvent, CreateCharacterEvent, DeleteCharacterEvent, SelectCharacterEvent, SentCharacterList, User};
+use crate::world::characters::{ProfileEvent, RequestSkillsEvent};
+use crate::world::chat::ChatRequestEvent;
 use crate::world::entity::{TooltipRequest, TooltipRequests};
-use crate::world::events::{CharacterListEvent, ChatRequestEvent, CreateCharacterEvent, DeleteCharacterEvent, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, ProfileEvent, ReceivedPacketEvent, RequestSkillsEvent, SelectCharacterEvent, SentPacketEvent, SingleClickEvent};
-use crate::world::input::Targeting;
+use crate::world::input::{DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, SingleClickEvent, Targeting};
 use crate::world::net_id::{NetEntityLookup, NetId};
 use crate::world::view::View;
 use crate::world::ServerSet;
@@ -39,11 +41,6 @@ pub struct OwningClient {
     pub client_entity: Entity,
 }
 
-#[derive(Debug, Clone, Component, Reflect)]
-pub struct User {
-    pub username: String,
-}
-
 impl NetClient {
     pub fn address(&self) -> SocketAddr { self.address }
 
@@ -61,8 +58,17 @@ impl NetClient {
     }
 }
 
-#[derive(Debug, Clone, Component, Reflect)]
-pub struct SentCharacterList;
+#[derive(Debug, Event)]
+pub struct ReceivedPacketEvent {
+    pub client_entity: Entity,
+    pub packet: AnyPacket,
+}
+
+#[derive(Debug, Event)]
+pub struct SentPacketEvent {
+    pub client_entity: Option<Entity>,
+    pub packet: Arc<AnyPacket>,
+}
 
 #[derive(Resource)]
 pub struct NetServer {
@@ -154,7 +160,8 @@ pub fn accept_new_clients(
                 }
             };
 
-            let login = match packet.into_downcast::<GameServerLogin>().ok() {
+            let packet = packet.and_then(|r| r.into_downcast::<GameServerLogin>().ok());
+            let login = match packet {
                 Some(packet) => packet,
                 None => {
                     warn!("From ({address}): expected login as first game server connection message");
@@ -228,13 +235,14 @@ pub fn accept_new_clients(
         runtime.spawn(async move {
             loop {
                 match reader.recv(client_version).await {
-                    Ok(packet) => {
+                    Ok(Some(packet)) => {
                         trace!("IN ({:?}): {:?}", address, packet);
                         if let Err(err) = internal_tx.send((entity, packet)) {
                             warn!("Error forwarding packet {err}");
                             break;
                         }
                     }
+                    Ok(None) => break,
                     Err(err) => {
                         warn!("Error receiving packet {err}");
                         break;
@@ -515,6 +523,8 @@ pub fn send_tooltips(
 pub fn plugin(app: &mut App) {
     app
         .register_type::<OwningClient>()
+        .add_event::<ReceivedPacketEvent>()
+        .add_event::<SentPacketEvent>()
         .add_systems(First, (
             (accept_new_clients, handle_new_packets)
                 .chain()

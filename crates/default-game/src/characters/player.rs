@@ -1,11 +1,12 @@
 use bevy::prelude::*;
 use yewoh::protocol::EquipmentSlot;
-use yewoh_server::world::entity::{Hue, Stats};
+use yewoh_server::world::characters::Stats;
+use yewoh_server::world::entity::Hue;
 
 use crate::data::prefabs::PrefabLibraryWorldExt;
 use crate::entities::persistence::CustomHue;
-use crate::entities::Persistent;
 use crate::entities::position::PositionExt;
+use crate::entities::Persistent;
 
 #[derive(Clone, Debug, Reflect, Component)]
 #[reflect(Component)]

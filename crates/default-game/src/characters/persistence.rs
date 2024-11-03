@@ -1,6 +1,7 @@
 use bevy::ecs::query::WorldQuery;
 use bevy::prelude::*;
-use yewoh_server::world::entity::Stats;
+use yewoh_server::world::characters::Stats;
+
 use crate::entities::Persistent;
 use crate::persistence::BundleSerializer;
 
