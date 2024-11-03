@@ -2,8 +2,6 @@ use bevy::prelude::*;
 
 pub mod entity;
 
-pub mod position;
-
 pub mod characters;
 
 pub mod items;
