@@ -18,7 +18,7 @@ use futures::future::join;
 use tokio::fs;
 use tokio::net::{lookup_host, TcpListener};
 use tokio::sync::mpsc;
-use tracing::{event, info, Level};
+use tracing::info;
 
 use yewoh::assets::multi::load_multi_data;
 use yewoh::assets::tiles::load_tile_data;
@@ -263,13 +263,13 @@ fn main() -> anyhow::Result<()> {
         }
 
         #[cfg(feature = "trace_tracy")]
-        event!(Level::INFO, message = "finished frame", tracy.frame_mark = true);
+        tracing::event!(tracing::Level::INFO, message = "finished frame", tracy.frame_mark = true);
 
         let _span = info_span!("frame sleep").entered();
         let end_time = Instant::now();
         let frame_duration = end_time - start_time;
         if frame_duration < frame_wait {
-           std::thread::sleep(frame_wait - frame_duration);
+            std::thread::sleep(frame_wait - frame_duration);
         }
     }
 }
@@ -326,12 +326,12 @@ fn load_prefabs(
                     std::thread::sleep(step_duration);
                     handle_internal_asset_events(app.world_mut());
                     continue;
-                },
+                }
                 LoadState::Loaded => break,
                 LoadState::Failed(err) => {
                     warn!("failed to load asset: {err}");
                     break;
-                },
+                }
             }
         }
 
@@ -430,12 +430,12 @@ fn load_static_entities(
                     std::thread::sleep(step_duration);
                     handle_internal_asset_events(app.world_mut());
                     continue;
-                },
+                }
                 LoadState::Loaded => break,
                 LoadState::Failed(err) => {
                     error!("failed to load static entity: {err}");
                     break;
-                },
+                }
             }
         }
 
@@ -458,7 +458,7 @@ fn load_static_entities(
             Ok(Some(request)) => {
                 entity.fabricate(request);
             }
-            Ok(None) => {},
+            Ok(None) => {}
             Err(err) => error!("failed to spawn static entity: {err}"),
         }
         count += 1;
