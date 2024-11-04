@@ -14,7 +14,7 @@ use uuid::Uuid;
 use yewoh::protocol::{CreateCharacter, DeleteCharacter};
 use yewoh_server::lobby;
 
-use crate::accounts::repository::{AccountCharacter, AccountCharacters, AccountRepository, CharacterInfo, CharacterToSpawn};
+use crate::accounts::repository::{AccountCharacter, AccountCharacters, AccountRepository, NewCharacterInfo, CharacterToSpawn};
 use crate::accounts::DEFAULT_CHARACTER_SLOTS;
 use crate::entities::new_uuid;
 
@@ -114,7 +114,7 @@ impl AccountRepository for SqlAccountRepository {
     }
 
     async fn create_character(&self, username: &str, request: CreateCharacter) -> anyhow::Result<CharacterToSpawn> {
-        let info = CharacterInfo::from_request(&request);
+        let info = NewCharacterInfo::from_request(&request);
         let account = self.get_account(username).await?;
         let mut tx = self.inner.pool.begin().await?;
 

@@ -1,19 +1,10 @@
-import yewoh_default_game::ai::behaviours::wander::WanderPrefab;
-import yewoh_default_game::characters::prefabs::CharacterPrefab;
+import yewoh_server::world::characters::{CharacterBodyType, CharacterName};
 import yewoh_server::world::characters::Animation;
+import yewoh_default_game::ai::behaviours::wander::WanderPrefab;
 import bevy_fabricator::humantime::HumanDuration;
-import bevy_fabricator::values::Some;
 
-$ <- CharacterPrefab {
-    name: "Rat",
-    body_type: 0xee,
-    hit_animation: Some(Animation::Predefined({
-        kind: 4,
-        action: 0,
-        variant: 0,
-    })),
-};
-
+$ <- CharacterName("Rat");
+$ <- CharacterBodyType(0xee);
 $ <- WanderPrefab {
     interval: HumanDuration("2s"),
 };

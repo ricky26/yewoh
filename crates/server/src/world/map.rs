@@ -10,7 +10,8 @@ use yewoh::assets::multi::MultiData;
 use yewoh::assets::tiles::{TileData, TileFlags};
 use yewoh::Direction;
 
-use crate::world::entity::{Graphic, Hue, MapPosition};
+use crate::world::entity::{Hue, MapPosition};
+use crate::world::items::ItemGraphic;
 
 #[derive(Debug, Clone, Default, Reflect)]
 #[reflect(Default)]
@@ -217,7 +218,7 @@ pub fn spawn_static_entities(
                 position: item.position,
                 direction: Direction::default()
             },
-            Graphic(item.graphic_id),
+            ItemGraphic(item.graphic_id),
             Hue(item.hue),
             Static,
         )));

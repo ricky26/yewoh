@@ -1,6 +1,6 @@
 use bevy::ecs::query::WorldQuery;
 use bevy::prelude::*;
-use yewoh_server::world::entity::Graphic;
+use yewoh_server::world::items::ItemGraphic;
 
 use crate::entities::Persistent;
 use crate::persistence::BundleSerializer;
@@ -13,7 +13,7 @@ pub struct CustomGraphic;
 pub struct CustomGraphicSerializer;
 
 impl BundleSerializer for CustomGraphicSerializer {
-    type Query = &'static Graphic;
+    type Query = &'static ItemGraphic;
     type Filter = (With<CustomGraphic>, With<Persistent>);
     type Bundle = u16;
 
@@ -29,7 +29,7 @@ impl BundleSerializer for CustomGraphicSerializer {
         world.entity_mut(entity)
             .insert((
                 CustomGraphic,
-                Graphic(bundle),
+                ItemGraphic(bundle),
             ));
     }
 }

@@ -1,6 +1,6 @@
-import yewoh_server::world::entity::{Graphic, Container};
+import yewoh_server::world::items::{ItemGraphic, Container};
 
-$ <- Graphic(0xe75);
+$ <- ItemGraphic(0xe75);
 $ <- Container {
     gump_id: 0x3c,
 };

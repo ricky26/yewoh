@@ -1,4 +1,5 @@
-import yewoh_server::world::entity::{Graphic, Hue};
+import yewoh_server::world::items::ItemGraphic;
+import yewoh_server::world::entity::Hue;
 
-$ <- Graphic(0x1539);
+$ <- ItemGraphic(0x1539);
 $ <- Hue(2);

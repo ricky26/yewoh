@@ -1,10 +1,11 @@
-import yewoh_server::world::entity::{Graphic, Hue};
+import yewoh_server::world::items::ItemGraphic;
+import yewoh_server::world::entity::Hue;
 import yewoh_server::world::characters::Animation;
 import yewoh_default_game::activities::combat::prefabs::MeleeWeaponPrefab;
 import yewoh_default_game::items::tooltips::StaticTooltips;
 import bevy_fabricator::humantime::HumanDuration;
 
-$ <- Graphic(0x97f);
+$ <- ItemGraphic(0x97f);
 $ <- Hue(0x7d0);
 $ <- MeleeWeaponPrefab({
     damage: 10,

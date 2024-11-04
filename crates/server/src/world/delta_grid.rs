@@ -38,6 +38,7 @@ pub enum DeltaEntry {
     CharacterAnimation { entity: Entity, packet: Arc<AnyPacket> },
     CharacterDamaged { entity: Entity, packet: Arc<AnyPacket> },
     CharacterSwing { entity: Entity, target: Entity, packet: Arc<AnyPacket> },
+    CharacterStatusChanged { entity: Entity, packet: Arc<AnyPacket> },
     TooltipChanged { entity: Entity, packet: Arc<AnyPacket> },
 }
 

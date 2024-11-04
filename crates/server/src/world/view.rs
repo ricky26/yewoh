@@ -4,11 +4,11 @@ use bevy::ecs::entity::{EntityHashMap, EntityHashSet};
 use yewoh::protocol::{AnyPacket, BeginEnterWorld, ChangeSeason, EndEnterWorld, ExtendedCommand};
 use yewoh::protocol::{CharacterEquipment, OpenContainer, UpsertContainerContents};
 
-use crate::world::characters::CharacterQuery;
+use crate::world::characters::{CharacterBodyType, CharacterQuery};
 use crate::world::connection::{NetClient, OwningClient, Possessing};
 use crate::world::delta_grid::{delta_grid_cell, Delta, DeltaEntry, DeltaGrid};
-use crate::world::entity::{BodyType, Container, ContainedPosition, EquippedPosition, MapPosition};
-use crate::world::items::{ContainerOpenedEvent, ItemQuery};
+use crate::world::entity::{ContainedPosition, EquippedPosition, MapPosition};
+use crate::world::items::{Container, ContainerOpenedEvent, ItemQuery};
 use crate::world::map::MapInfos;
 use crate::world::net_id::NetId;
 use crate::world::ServerSet;
@@ -226,6 +226,11 @@ pub fn send_deltas(
                         client.send_packet_arc(packet);
                     }
                 }
+                DeltaEntry::CharacterStatusChanged { entity, packet } => {
+                    if entity != possessing.entity && seen.seen_entities.contains(&entity) {
+                        client.send_packet_arc(packet);
+                    }
+                }
                 DeltaEntry::TooltipChanged { entity, packet, .. } => {
                     if seen.seen_entities.contains(&entity) {
                         client.send_packet_arc(packet);
@@ -293,6 +298,13 @@ pub fn sync_visible_entities(
 
                         let packet = character.to_upsert(id.id, equipment);
                         client.send_packet(AnyPacket::from_packet(packet));
+                        
+                        let packet = if entry.entity == possessing.entity {
+                            character.to_full_status_packet(id.id)
+                        } else {
+                            character.to_status_packet(id.id)
+                        };
+                        client.send_packet(AnyPacket::from_packet(packet));
                     }
                 }
 
@@ -320,7 +332,7 @@ pub fn start_synchronizing(
         (Entity, Option<&ViewKey>, Ref<Possessing>),
         (With<NetClient>, Without<Synchronizing>),
     >,
-    characters: Query<&MapPosition, (With<OwningClient>, With<NetId>, With<MapPosition>, With<BodyType>)>,
+    characters: Query<&MapPosition, (With<OwningClient>, With<NetId>, With<MapPosition>, With<CharacterBodyType>)>,
     mut commands: Commands,
 ) {
     for (entity, view_key, possessing) in &clients {
@@ -345,7 +357,7 @@ pub fn start_synchronizing(
 
 pub fn send_change_map(
     mut clients: Query<(&NetClient, &mut SeenEntities, Ref<Possessing>), With<Synchronizing>>,
-    characters: Query<(&NetId, &MapPosition, Ref<BodyType>)>,
+    characters: Query<(&NetId, &MapPosition, Ref<CharacterBodyType>)>,
     maps: Res<MapInfos>,
 ) {
     for (client, mut seen_entities, possessing) in clients.iter_mut() {

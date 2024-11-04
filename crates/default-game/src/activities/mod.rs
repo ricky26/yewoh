@@ -1,7 +1,5 @@
-use bevy::app::{App, Plugin, Update};
-use bevy::ecs::component::Component;
-use bevy::ecs::system::{Query, Res};
-use bevy::time::{Time, Timer};
+use bevy::prelude::*;
+use yewoh_server::world::characters::CharacterBodyType;
 
 use crate::activities::combat::CombatPlugin;
 
@@ -38,6 +36,16 @@ pub fn progress_current_activity(time: Res<Time>, mut actors: Query<&mut Current
     }
 }
 
+pub fn init_characters(
+    mut commands: Commands,
+    characters_query: Query<Entity, (With<CharacterBodyType>, Without<CurrentActivity>)>,
+) {
+    for entity in &characters_query {
+        commands.entity(entity)
+            .insert(CurrentActivity::Idle);
+    }
+}
+
 #[derive(Default)]
 pub struct ActivitiesPlugin;
 
@@ -49,6 +57,7 @@ impl Plugin for ActivitiesPlugin {
             ))
             .add_systems(Update, (
                 progress_current_activity,
+                init_characters,
             ));
     }
 }

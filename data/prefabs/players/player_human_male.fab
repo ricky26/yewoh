@@ -1,10 +1,16 @@
 import bevy_fabricator::operations::Fabricate;
+import yewoh_server::world::characters::CharacterSex;
+import yewoh_server::remote_reflect::RaceRemote;
 import "player.fab" as playerPrefab;
 
 local hue: u16 = 0x909;
 local body_type: u16 = 605;
+local race = RaceRemote::Human;
+local sex = CharacterSex::Male;
 
 $ <- Fabricate(playerPrefab, {
     body_type,
     hue,
+    race,
+    sex,
 });

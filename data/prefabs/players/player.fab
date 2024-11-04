@@ -1,10 +1,14 @@
-import yewoh_default_game::characters::prefabs::CharacterPrefab;
+import yewoh_server::world::entity::Hue;
+import yewoh_server::world::characters::{CharacterBodyType, CharacterName, CharacterRace, CharacterSex};
+import yewoh_server::remote_reflect::RaceRemote;
 
 in body_type: u16;
 in hue: u16 = 0x909;
+in race: RaceRemote;
+in sex: CharacterSex;
 
-$ <- CharacterPrefab {
-    name: "Player",
-    body_type,
-    hue,
-};
+$ <- CharacterName("Player");
+$ <- CharacterBodyType(body_type);
+$ <- CharacterRace(race);
+$ <- sex;
+$ <- Hue(hue);

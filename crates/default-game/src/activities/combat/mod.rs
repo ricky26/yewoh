@@ -2,10 +2,11 @@ use bevy::prelude::*;
 
 use yewoh::protocol;
 use yewoh::protocol::EquipmentSlot;
-use yewoh_server::world::characters::{AnimationStartedEvent, Stats};
+use yewoh_server::world::characters::{AnimationStartedEvent, CharacterBodyType, Health};
 use yewoh_server::world::combat::{AttackRequestedEvent, AttackTarget};
 use yewoh_server::world::connection::{NetClient, Possessing};
-use yewoh_server::world::entity::{BodyType, Container, EquippedPosition, Graphic, Hue, MapPosition, Quantity};
+use yewoh_server::world::entity::{EquippedPosition, Hue, MapPosition};
+use yewoh_server::world::items::{Container, ItemGraphic, ItemQuantity};
 use yewoh_server::world::net_id::NetId;
 use yewoh_server::world::ServerSet;
 
@@ -38,7 +39,7 @@ pub fn update_weapon_stats(
     mut commands: Commands,
     mut characters: Query<
         (Entity, Option<&Children>, Option<&Unarmed>),
-        (With<BodyType>, Or<(Changed<BodyType>, Changed<Unarmed>)>),
+        (With<CharacterBodyType>, Or<(Changed<CharacterBodyType>, Changed<Unarmed>)>),
     >,
     weapons: Query<(&EquippedPosition, &MeleeWeapon)>,
 ) {
@@ -119,16 +120,16 @@ pub fn attack_current_target(
 pub fn apply_damage(
     mut damage_events: EventReader<DamageDealt>,
     mut died_events: EventWriter<CharacterDied>,
-    mut characters: Query<&mut Stats, Without<Invulnerable>>,
+    mut characters: Query<&mut Health, Without<Invulnerable>>,
 ) {
     for event in damage_events.read() {
-        let mut stats = match characters.get_mut(event.target) {
+        let mut health = match characters.get_mut(event.target) {
             Ok(x) => x,
             _ => continue,
         };
 
-        stats.hp = stats.hp.saturating_sub(event.damage);
-        if stats.hp > 0 {
+        health.hp = health.hp.saturating_sub(event.damage);
+        if health.hp > 0 {
             continue;
         }
 
@@ -148,7 +149,7 @@ pub fn spawn_corpses(
     mut commands: Commands,
     mut died_events: EventReader<CharacterDied>,
     mut corpse_events: EventWriter<CorpseSpawned>,
-    characters: Query<(&BodyType, &Hue, &MapPosition)>,
+    characters: Query<(&CharacterBodyType, &Hue, &MapPosition)>,
 ) {
     for event in died_events.read() {
         let (body_type, hue, map_position) = match characters.get(event.character) {
@@ -159,9 +160,9 @@ pub fn spawn_corpses(
         let corpse = commands
             .spawn((
                 *map_position,
-                Graphic(CORPSE_GRAPHIC_ID),
+                ItemGraphic(CORPSE_GRAPHIC_ID),
+                ItemQuantity(**body_type),
                 Hue(**hue),
-                Quantity(**body_type),
                 Container {
                     gump_id: CORPSE_BOX_GUMP_ID,
                 },

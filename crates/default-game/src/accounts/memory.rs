@@ -9,7 +9,7 @@ use uuid::Uuid;
 use yewoh::protocol::{CreateCharacter, DeleteCharacter};
 
 use crate::accounts::DEFAULT_CHARACTER_SLOTS;
-use crate::accounts::repository::{AccountCharacter, AccountCharacters, AccountRepository, CharacterInfo, CharacterToSpawn};
+use crate::accounts::repository::{AccountCharacter, AccountCharacters, AccountRepository, NewCharacterInfo, CharacterToSpawn};
 use crate::entities::new_uuid;
 
 #[derive(Debug, Clone, Default)]
@@ -46,7 +46,7 @@ impl AccountRepository for MemoryAccountRepository {
     }
 
     async fn create_character(&self, username: &str, request: CreateCharacter) -> anyhow::Result<CharacterToSpawn> {
-        let info = CharacterInfo::from_request(&request);
+        let info = NewCharacterInfo::from_request(&request);
         let mut locked = self.locked.lock().await;
         let user = locked.users.entry(username.to_string())
             .or_insert_with(Default::default);

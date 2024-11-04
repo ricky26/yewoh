@@ -1,17 +1,14 @@
-import yewoh_server::world::entity::{Graphic, Hue};
+import yewoh_server::world::entity::{Hue, MapPosition};
+import yewoh_server::world::characters::{CharacterBodyType, CharacterName};
 import yewoh_default_game::ai::behaviours::wander::WanderPrefab;
-import yewoh_default_game::characters::prefabs::CharacterPrefab;
-import yewoh_server::world::entity::MapPosition;
 import yewoh::protocol::entity::EquipmentSlot;
 import bevy_fabricator::humantime::HumanDuration;
 import yewoh_default_game::entities::prefabs::{Prefab, EquippedBy};
 import bevy_fabricator::operations::Spawn;
 
-$ <- CharacterPrefab {
-    name: "Gerome",
-    body_type: 0x190,
-    hue: 0x909,
-};
+$ <- CharacterName("Gerome");
+$ <- CharacterBodyType(0x190);
+$ <- Hue(0x909);
 $ <- WanderPrefab {
     interval: HumanDuration("2s"),
 };

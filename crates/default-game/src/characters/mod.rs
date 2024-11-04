@@ -7,8 +7,6 @@ use yewoh_server::world::entity::MapPosition;
 
 use crate::persistence::SerializationSetupExt;
 
-pub mod prefabs;
-
 pub mod player;
 
 pub mod persistence;
@@ -39,7 +37,8 @@ pub struct CorpseSpawned {
     pub corpse: Entity,
 }
 
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, Default, Reflect, Component)]
+#[reflect(Component)]
 pub struct HitAnimation {
     pub hit_animation: Animation,
 }
@@ -54,7 +53,8 @@ pub struct MeleeWeapon {
     pub swing_animation: Animation,
 }
 
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, Reflect, Component)]
+#[reflect(Component)]
 pub struct Unarmed {
     pub weapon: MeleeWeapon,
 }
@@ -65,12 +65,15 @@ impl Plugin for CharactersPlugin {
     fn build(&self, app: &mut App) {
         app
             .register_type::<Invulnerable>()
+            .register_type::<HitAnimation>()
+            .register_type::<MeleeWeapon>()
+            .register_type::<Unarmed>()
             .register_type::<player::NewPlayerCharacter>()
-            .register_type::<prefabs::CharacterPrefab>()
             .register_type::<persistence::CustomStats>()
             .add_systems(Update, (
                 player::spawn_starting_items,
             ))
+            .register_serializer::<persistence::CustomNameSerializer>()
             .register_serializer::<persistence::CustomStatsSerializer>();
     }
 }

@@ -61,6 +61,7 @@ impl Plugin for ServerPlugin {
                 items::plugin,
                 characters::plugin,
                 account::plugin,
+                crate::remote_reflect::plugin,
             ))
             .configure_sets(First, (
                 ServerSet::Receive,

@@ -11,12 +11,13 @@ use yewoh::protocol::{CharacterFromList, CharacterList, CharacterListFlags, Equi
 use yewoh::types::FixedString;
 use yewoh_server::async_runtime::AsyncRuntime;
 use yewoh_server::world::account::{CharacterListEvent, CreateCharacterEvent, DeleteCharacterEvent, SelectCharacterEvent, User};
-use yewoh_server::world::characters::Stats;
+use yewoh_server::world::characters::{CharacterBodyType, CharacterName};
 use yewoh_server::world::connection::{NetClient, OwningClient, Possessing};
-use yewoh_server::world::entity::{BodyType, Graphic, Hue, MapPosition};
+use yewoh_server::world::entity::{Hue, MapPosition};
+use yewoh_server::world::items::ItemGraphic;
 
-use crate::accounts::repository::{AccountCharacters, AccountRepository, CharacterInfo, CharacterToSpawn};
-use crate::characters::persistence::CustomStats;
+use crate::accounts::repository::{AccountCharacters, AccountRepository, NewCharacterInfo, CharacterToSpawn};
+use crate::characters::persistence::{CustomName, CustomStats};
 use crate::characters::player::NewPlayerCharacter;
 use crate::data::prefabs::PrefabLibraryWorldExt;
 use crate::data::static_data::StaticData;
@@ -85,7 +86,7 @@ pub fn handle_list_characters_callback(
     clients: Query<&NetClient>,
     static_data: Res<StaticData>,
     mut pending: ResMut<PendingCharacterLists>,
-    players_query: Query<(Entity, &UniqueId, &Stats), With<BodyType>>,
+    players_query: Query<(Entity, &UniqueId, &CharacterName), With<CharacterBodyType>>,
     mut all_players: Local<HashMap<Uuid, (Entity, String)>>,
 ) {
     let mut first = true;
@@ -100,7 +101,7 @@ pub fn handle_list_characters_callback(
             first = false;
             all_players.clear();
             all_players.extend(players_query.iter()
-                .map(|(entity, pc, stats)| (pc.id, (entity, stats.name.clone()))));
+                .map(|(entity, pc, name)| (pc.id, (entity, name.to_string()))));
         }
 
         match result {
@@ -228,15 +229,15 @@ pub fn handle_delete_character<T: AccountRepository>(
 
 pub fn create_new_character(
     commands: &mut Commands,
-    info: CharacterInfo,
+    info: NewCharacterInfo,
 ) -> Entity {
-    let race_name = match info.stats.race {
+    let race_name = match info.race {
         Race::Human => "human",
         Race::Elf => "elf",
         Race::Gargoyle => "gargoyle",
     };
 
-    let gender_name = match info.stats.female {
+    let gender_name = match info.female {
         false => "male",
         true => "female",
     };
@@ -252,15 +253,17 @@ pub fn create_new_character(
         .insert((
             Persistent,
             CustomStats,
+            CustomName,
             CustomHue,
+            CharacterName(info.name.clone()),
             Hue(info.hue),
+            info.stats,
+            new_character,
             MapPosition {
                 map_id: 1,
                 position: IVec3::new(1325, 1624, 55),
                 direction: Direction::North,
             },
-            info.stats,
-            new_character,
         ))
         .id();
 
@@ -269,7 +272,7 @@ pub fn create_new_character(
             .fabricate_prefab("hair")
             .insert((
                 Persistent,
-                Graphic(info.hair),
+                ItemGraphic(info.hair),
                 Hue(info.hair_hue),
             ))
             .move_to_equipped_position(entity, EquipmentSlot::Hair);
@@ -280,7 +283,7 @@ pub fn create_new_character(
             .fabricate_prefab("hair")
             .insert((
                 Persistent,
-                Graphic(info.beard),
+                ItemGraphic(info.beard),
                 Hue(info.beard_hue),
             ))
             .move_to_equipped_position(entity, EquipmentSlot::FacialHair);
@@ -294,7 +297,7 @@ pub fn handle_spawn_character<T: AccountRepository>(
     mut pending: ResMut<PendingCharacterInfo>,
     pending_list: ResMut<PendingCharacterLists>,
     mut commands: Commands,
-    existing_players_query: Query<(Entity, &UniqueId), With<BodyType>>,
+    existing_players_query: Query<(Entity, &UniqueId), With<CharacterBodyType>>,
     mut all_players: Local<HashMap<Uuid, Entity>>,
     users: Query<&User>,
     account_repository: Res<T>,
@@ -368,7 +371,7 @@ impl<T: AccountRepository> Default for AccountsPlugin<T> {
 impl<T: AccountRepository> Plugin for AccountsPlugin<T> {
     fn build(&self, app: &mut App) {
         app
-            .register_type::<CharacterInfo>()
+            .register_type::<NewCharacterInfo>()
             .init_resource::<PendingCharacterLists>()
             .init_resource::<PendingCharacterInfo>()
             .add_systems(Update, (

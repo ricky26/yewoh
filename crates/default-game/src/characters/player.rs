@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use yewoh::protocol::EquipmentSlot;
-use yewoh_server::world::characters::Stats;
+use yewoh_server::world::characters::CharacterSex;
 use yewoh_server::world::entity::Hue;
 
 use crate::data::prefabs::PrefabLibraryWorldExt;
@@ -17,9 +17,9 @@ pub struct NewPlayerCharacter {
 
 pub fn spawn_starting_items(
     mut commands: Commands,
-    players: Query<(Entity, &NewPlayerCharacter, &Stats)>,
+    players: Query<(Entity, &NewPlayerCharacter, &CharacterSex)>,
 ) {
-    for (entity, request, stats) in &players {
+    for (entity, request, sex) in &players {
         commands.entity(entity).remove::<NewPlayerCharacter>();
 
         commands.fabricate_prefab("backpack")
@@ -36,7 +36,7 @@ pub fn spawn_starting_items(
             ))
             .move_to_equipped_position(entity, EquipmentSlot::Top);
 
-        let bottom_name = if stats.female { "test_skirt" } else { "test_pants" };
+        let bottom_name = if *sex == CharacterSex::Female { "test_skirt" } else { "test_pants" };
         commands.fabricate_prefab(bottom_name)
             .insert((
                 Persistent,

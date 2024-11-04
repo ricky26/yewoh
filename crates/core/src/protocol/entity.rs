@@ -55,10 +55,11 @@ impl Packet for EntityRequest {
 bitflags! {
     #[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
     pub struct EntityFlags : u8 {
+        const FROZEN = 0x1;
         const FEMALE = 0x2;
         const POISONED = 0x4;
-        const YELLOW_HITS = 0x8;
-        const FACTION_SHIP = 0x10;
+        const YELLOW_HEALTH = 0x8;
+        const PHASING = 0x10;
         const MOVABLE = 0x20;
         const WAR_MODE = 0x40;
         const HIDDEN = 0x80;

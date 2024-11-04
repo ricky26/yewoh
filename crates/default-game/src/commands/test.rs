@@ -5,8 +5,8 @@ use tracing::info;
 use yewoh::protocol::{GumpLayout, OpenGump};
 use yewoh::Direction;
 use yewoh_server::world::connection::{NetClient, Possessing};
-use yewoh_server::world::entity::{Graphic, Hue, MapPosition};
-
+use yewoh_server::world::entity::{Hue, MapPosition};
+use yewoh_server::world::items::ItemGraphic;
 use crate::commands::{TextCommand, TextCommandQueue};
 
 #[derive(Parser, Resource)]
@@ -51,7 +51,7 @@ pub fn frypan(
                     position: position.position,
                     direction: Direction::North,
                 },
-                Graphic(0x97f),
+                ItemGraphic(0x97f),
                 Hue(0x7d0),
             ));
         }

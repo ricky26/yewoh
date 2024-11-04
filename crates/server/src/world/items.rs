@@ -4,14 +4,37 @@ use bevy::prelude::*;
 use bevy::utils::hashbrown::hash_map::Entry;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use yewoh::protocol::{AnyPacket, DeleteEntity, EntityTooltipVersion, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityWorld};
+use serde::{Deserialize, Serialize};
+use yewoh::protocol::{AnyPacket, DeleteEntity, EntityFlags, EntityTooltipVersion, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityWorld};
 use yewoh::{EntityId, EntityKind};
 
 use crate::world::delta_grid::{delta_grid_cell, DeltaEntry, DeltaGrid, DeltaVersion};
-use crate::world::entity::{ContainedPosition, Container, EquippedPosition, Flags, Graphic, Hue, MapPosition, Quantity, RootPosition, Tooltip};
+use crate::world::entity::{ContainedPosition, EquippedPosition, Hue, MapPosition, RootPosition, Tooltip};
 use crate::world::map::Static;
 use crate::world::net_id::{NetEntityDestroyed, NetId};
 use crate::world::ServerSet;
+
+#[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Deref, DerefMut, Component, Reflect, Serialize, Deserialize)]
+#[reflect(Component, Default, Serialize, Deserialize)]
+#[serde(transparent)]
+#[require(Hue, ItemQuantity, Tooltip, RootPosition)]
+pub struct ItemGraphic(pub u16);
+
+#[derive(Debug, Clone, Eq, PartialEq, Component, Reflect, Deref, DerefMut)]
+#[reflect(Component, Default)]
+pub struct ItemQuantity(pub u16);
+
+impl Default for ItemQuantity {
+    fn default() -> Self {
+        ItemQuantity(1)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, Component, Reflect)]
+#[reflect(Component, Default)]
+pub struct Container {
+    pub gump_id: u16,
+}
 
 #[derive(Debug, Clone, Event)]
 pub struct ContainerOpenedEvent {
@@ -108,15 +131,18 @@ pub struct ValidItemPosition {
 
 #[derive(QueryData)]
 pub struct ItemQuery {
-    pub graphic: Ref<'static, Graphic>,
+    pub graphic: Ref<'static, ItemGraphic>,
     pub hue: Ref<'static, Hue>,
-    pub flags: Ref<'static, Flags>,
-    pub quantity: Ref<'static, Quantity>,
+    pub quantity: Ref<'static, ItemQuantity>,
     pub tooltip: Ref<'static, Tooltip>,
     pub position: PositionQuery,
 }
 
 impl<'w> ItemQueryItem<'w> {
+    pub fn flags(&self) -> EntityFlags {
+        EntityFlags::empty()
+    }
+    
     pub fn parent(&self) -> Option<Entity> {
         self.position.parent.as_ref().map(|p| p.get())
     }
@@ -134,7 +160,7 @@ impl<'w> ItemQueryItem<'w> {
             quantity: **self.quantity,
             position: position.position,
             hue: **self.hue,
-            flags: **self.flags,
+            flags: self.flags(),
         })
     }
 
@@ -194,7 +220,6 @@ impl<'w> ItemQueryItem<'w> {
     pub fn is_item_changed(&self) -> bool {
         self.graphic.is_changed() ||
             self.hue.is_changed() ||
-            self.flags.is_changed() ||
             self.quantity.is_changed()
     }
 }
@@ -208,10 +233,9 @@ pub struct ContainerQuery {
 #[derive(QueryFilter)]
 pub struct ChangedItemFilter {
     _query: Or<(
-        Changed<Graphic>,
+        Changed<ItemGraphic>,
         Changed<Hue>,
-        Changed<Flags>,
-        Changed<Quantity>,
+        Changed<ItemQuantity>,
         Changed<Tooltip>,
     )>,
 }
@@ -291,7 +315,11 @@ pub fn detect_item_changes(
                 .and_then(|e| net_ids.get(e).ok())
                 .map(|id| id.id);
             let Some(packet) = item.to_upsert(net_id.id, parent_id) else {
-                warn!("failed to create item packet for {entity}");
+                warn!(
+                    "failed to create item packet for {entity} (id={:?}, parent_id={:?})",
+                    net_id.id,
+                    parent_id,
+                );
                 continue;
             };
 
@@ -351,6 +379,9 @@ pub fn detect_item_changes(
 
 pub fn plugin(app: &mut App) {
     app
+        .register_type::<ItemQuantity>()
+        .register_type::<ItemGraphic>()
+        .register_type::<Container>()
         .add_event::<ContainerOpenedEvent>()
         .add_systems(PostUpdate, (
             (

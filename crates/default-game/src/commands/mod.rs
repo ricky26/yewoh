@@ -35,7 +35,6 @@ impl Plugin for CommandsPlugin {
                 info::start_info,
                 go::go,
                 test::echo,
-                test::frypan,
                 test::test_gump,
                 spawn::start_spawn,
                 spawn::spawn,

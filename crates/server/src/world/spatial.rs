@@ -1,12 +1,15 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use glam::{ivec2, IVec2};
 use smallvec::SmallVec;
 use yewoh::assets::map::CHUNK_SIZE;
 
-use crate::world::entity::{BodyType, Graphic, MapPosition};
+use crate::world::characters::CharacterBodyType;
+use crate::world::entity::MapPosition;
+use crate::world::items::ItemGraphic;
 use crate::world::map::{Chunk, MapInfos, Static, TileDataResource};
 use crate::world::ServerSet;
 
@@ -240,7 +243,7 @@ impl SpatialCharacterLookup {
 
 pub fn update_character_lookup(
     mut lookup: ResMut<SpatialCharacterLookup>,
-    entities: Query<(Entity, &MapPosition), (With<BodyType>, Changed<MapPosition>)>,
+    entities: Query<(Entity, &MapPosition), (With<CharacterBodyType>, Changed<MapPosition>)>,
     mut removed_entities: RemovedComponents<MapPosition>,
 ) {
     for (entity, position) in &entities {
@@ -291,8 +294,8 @@ pub fn update_dynamic_item_lookup(
     mut lookup: ResMut<SpatialDynamicItemLookup>,
     tile_data: Res<TileDataResource>,
     surfaces: Query<
-        (Entity, &MapPosition, &Graphic),
-        (Without<Static>, Or<(Changed<MapPosition>, Changed<Graphic>)>),
+        (Entity, &MapPosition, &ItemGraphic),
+        (Without<Static>, Or<(Changed<MapPosition>, Changed<ItemGraphic>)>),
     >,
     mut removed: RemovedComponents<MapPosition>,
 ) {
@@ -337,7 +340,7 @@ pub fn update_static_item_lookup(
     mut lookup: ResMut<SpatialStaticItemLookup>,
     tile_data: Res<TileDataResource>,
     surfaces: Query<
-        (Entity, &MapPosition, &Graphic),
+        (Entity, &MapPosition, &ItemGraphic),
         (With<Static>, Without<ProcessedStatic>),
     >,
 ) {

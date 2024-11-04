@@ -1,13 +1,13 @@
 use bevy::prelude::*;
-
-use yewoh::protocol::{CharacterAnimation, CharacterProfile, ContextMenuEntry, DamageDealt, EntityFlags, MoveConfirm, MoveEntityReject, MoveReject, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, Swing, WarMode};
+use yewoh::protocol;
+use yewoh::protocol::{CharacterAnimation, CharacterProfile, ContextMenuEntry, DamageDealt, MoveConfirm, MoveEntityReject, MoveReject, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, Swing};
 use yewoh::types::FixedString;
-use yewoh_server::world::characters::{ProfileEvent, RequestSkillsEvent};
+use yewoh_server::world::characters::{CharacterBodyType, CharacterNotoriety, ProfileEvent, RequestSkillsEvent, WarMode};
 use yewoh_server::world::combat::AttackTarget;
 use yewoh_server::world::connection::{NetClient, Possessing, ReceivedPacketEvent};
-use yewoh_server::world::entity::{BodyType, Container, ContainedPosition, EquippedPosition, Flags, MapPosition, Notorious};
+use yewoh_server::world::entity::{ContainedPosition, EquippedPosition, MapPosition};
 use yewoh_server::world::input::{ContextMenuEvent, ContextMenuRequest, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, SingleClickEvent};
-use yewoh_server::world::items::ContainerOpenedEvent;
+use yewoh_server::world::items::{Container, ContainerOpenedEvent};
 use yewoh_server::world::map::{Chunk, TileDataResource};
 use yewoh_server::world::navigation::try_move_in_direction;
 use yewoh_server::world::net_id::NetId;
@@ -29,7 +29,7 @@ pub fn handle_move(
     chunk_query: Query<(&MapPosition, &Chunk)>,
     tile_data: Res<TileDataResource>,
     connection_query: Query<(&NetClient, &Possessing)>,
-    mut characters: Query<(&mut MapPosition, &Notorious), Without<Chunk>>,
+    mut characters: Query<(&mut MapPosition, &CharacterNotoriety), Without<Chunk>>,
 ) {
     for MoveEvent { client_entity: connection, request } in events.read() {
         let connection = *connection;
@@ -92,7 +92,7 @@ pub fn handle_double_click(
     mut events: EventReader<DoubleClickEvent>,
     mut clients: Query<&NetClient>,
     mut opened_containers: EventWriter<ContainerOpenedEvent>,
-    target_query: Query<(&NetId, Option<&BodyType>, Option<&Container>)>,
+    target_query: Query<(&NetId, Option<&CharacterBodyType>, Option<&Container>)>,
 ) {
     for DoubleClickEvent { client_entity, target } in events.read() {
         let client = match clients.get_mut(*client_entity) {
@@ -246,7 +246,7 @@ pub fn handle_equip(
     mut events: EventReader<EquipEvent>,
     clients: Query<(&NetClient, &Possessing)>,
     characters: Query<(&MapPosition, &Held)>,
-    mut loadouts: Query<&mut BodyType>,
+    mut loadouts: Query<&mut CharacterBodyType>,
     mut commands: Commands,
 ) {
     for event in events.read() {
@@ -403,11 +403,11 @@ pub fn handle_skills_requests(
 pub fn handle_war_mode(
     mut commands: Commands,
     clients: Query<(&NetClient, &Possessing)>,
-    mut characters: Query<&mut Flags>,
+    mut characters: Query<&mut WarMode>,
     mut new_packets: EventReader<ReceivedPacketEvent>,
 ) {
     for ReceivedPacketEvent { client_entity, packet } in new_packets.read() {
-        let packet = match packet.downcast::<WarMode>() {
+        let packet = match packet.downcast::<protocol::WarMode>() {
             Some(x) => x,
             _ => continue,
         };
@@ -417,15 +417,15 @@ pub fn handle_war_mode(
             _ => continue,
         };
 
-        let mut flags = match characters.get_mut(owned.entity) {
+        let mut war_mode = match characters.get_mut(owned.entity) {
             Ok(x) => x,
             _ => continue,
         };
 
         if packet.war {
-            flags.flags |= EntityFlags::WAR_MODE;
+            **war_mode = true;
         } else {
-            flags.flags &= !EntityFlags::WAR_MODE;
+            **war_mode = false;
             commands.entity(owned.entity).remove::<AttackTarget>();
         }
 

@@ -5,8 +5,8 @@ use bevy::reflect::Reflect;
 use std::collections::HashMap;
 
 use yewoh::{EntityId, MIN_ITEM_ID};
-
-use crate::world::entity::{BodyType, Graphic};
+use crate::world::characters::CharacterBodyType;
+use crate::world::items::ItemGraphic;
 use crate::world::map::Static;
 use crate::world::ServerSet;
 
@@ -109,8 +109,8 @@ impl NetEntityLookup {
 pub fn assign_net_ids(
     mut commands: Commands,
     mut id_allocator: ResMut<NetIdAllocator>,
-    new_characters: Query<Entity, (Without<Static>, With<BodyType>, Without<Graphic>, Without<CharacterNetId>)>,
-    new_items: Query<Entity, (Without<Static>, With<Graphic>, Without<BodyType>, Without<ItemNetId>)>,
+    new_characters: Query<Entity, (Without<Static>, With<CharacterBodyType>, Without<ItemGraphic>, Without<CharacterNetId>)>,
+    new_items: Query<Entity, (Without<Static>, With<ItemGraphic>, Without<CharacterBodyType>, Without<ItemNetId>)>,
 ) {
     for entity in &new_characters {
         commands.entity(entity)
