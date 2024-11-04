@@ -1,3 +1,4 @@
+use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -11,7 +12,7 @@ use crate::async_runtime::AsyncRuntime;
 use crate::game_server::NewSessionAttempt;
 use crate::lobby::{NewSessionRequest, SessionAllocator};
 use crate::world::account::{CharacterListEvent, CreateCharacterEvent, DeleteCharacterEvent, SelectCharacterEvent, SentCharacterList, User};
-use crate::world::characters::{ProfileEvent, RequestSkillsEvent};
+use crate::world::characters::{ProfileEvent, RequestSkillsEvent, RequestStatusEvent};
 use crate::world::chat::ChatRequestEvent;
 use crate::world::entity::{TooltipRequest, TooltipRequests};
 use crate::world::input::{DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, SingleClickEvent, Targeting};
@@ -196,19 +197,22 @@ pub fn accept_new_clients(
 
         runtime.spawn(async move {
             while let Some(action) = rx.recv().await {
-                match action {
+                let result = match action {
                     WriterAction::Send(client_version, packet) => {
                         trace!("OUT ({address:?}): {packet:?}");
-                        if let Err(err) = writer.send(client_version, &packet).await {
-                            warn!("Error sending packet {err}");
-                        }
+                        writer.send(client_version, &packet).await
                     }
                     WriterAction::SendArc(client_version, packet) => {
                         trace!("OUT ({address:?}): {packet:?}");
-                        if let Err(err) = writer.send(client_version, &*packet).await {
-                            warn!("Error sending packet {err}");
-                        }
+                        writer.send(client_version, &*packet).await
                     }
+                };
+                if let Err(err) = result {
+                    if err.downcast_ref::<std::io::Error>()
+                        .map_or(true, |e| e.kind() != ErrorKind::BrokenPipe) {
+                        warn!("Error sending packet {err}");
+                    }
+                    break;
                 }
             }
         });
@@ -354,6 +358,7 @@ pub fn handle_input_packets(
     mut equip_events: EventWriter<EquipEvent>,
     mut profile_events: EventWriter<ProfileEvent>,
     mut skills_events: EventWriter<RequestSkillsEvent>,
+    mut status_events: EventWriter<RequestStatusEvent>,
 ) {
     for ReceivedPacketEvent { client_entity: connection, packet } in events.read() {
         let client_entity = *connection;
@@ -440,10 +445,8 @@ pub fn handle_input_packets(
                 };
 
                 match request.kind {
+                    EntityRequestKind::Status => { status_events.send(RequestStatusEvent { client_entity, target }); }
                     EntityRequestKind::Skills => { skills_events.send(RequestSkillsEvent { client_entity, target }); }
-                    kind => {
-                        warn!("unhandled entity request: {kind:?}");
-                    }
                 }
             }
             _ => {}

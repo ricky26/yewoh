@@ -42,10 +42,8 @@ pub async fn serve_lobby(
     }
 
     let login = reader.recv(seed.client_version).await?
-        .ok_or_else(|| anyhow!("expected login packet"))?;
-
-    info!("TEST {login:?}");
-    let login = login.downcast::<AccountLogin>()
+        .ok_or_else(|| anyhow!("expected login packet"))?
+        .downcast::<AccountLogin>()
         .map_err(|_| anyhow!("expected account login attempt"))?;
 
     if let Err(err) = accounts.login(&login.username, &login.password).await {

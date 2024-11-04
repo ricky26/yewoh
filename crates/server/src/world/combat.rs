@@ -141,6 +141,8 @@ pub fn plugin(app: &mut App) {
     app
         .register_type::<AttackTarget>()
         .add_event::<AttackRequestedEvent>()
+        .add_event::<DamagedEvent>()
+        .add_event::<SwingEvent>()
         .add_systems(Last, (
             send_updated_attack_target
                 .in_set(ServerSet::SendLast),

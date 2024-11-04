@@ -150,8 +150,11 @@ impl Reader {
 
             let read_offset = self.buffer_offset + self.buffer_len;
             let n = self.reader.read(&mut self.buffer[read_offset..]).await?;
-            self.buffer_len += n;
+            if n == 0 {
+                return Err(std::io::Error::new(ErrorKind::UnexpectedEof, "eof"));
+            }
 
+            self.buffer_len += n;
             let read_bytes = &mut self.buffer[read_offset..(read_offset + n)];
             Self::encrypt(self.encryption.as_mut(), self.from_client, read_bytes);
         }

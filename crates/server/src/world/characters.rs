@@ -174,6 +174,12 @@ pub struct ProfileEvent {
 }
 
 #[derive(Debug, Clone, Event)]
+pub struct RequestStatusEvent {
+    pub client_entity: Entity,
+    pub target: Entity,
+}
+
+#[derive(Debug, Clone, Event)]
 pub struct RequestSkillsEvent {
     pub client_entity: Entity,
     pub target: Entity,
@@ -584,6 +590,7 @@ pub fn plugin(app: &mut App) {
         .add_event::<AnimationStartedEvent>()
         .add_event::<ProfileEvent>()
         .add_event::<RequestSkillsEvent>()
+        .add_event::<RequestStatusEvent>()
         .add_systems(Last, (
             (
                 detect_character_changes,
