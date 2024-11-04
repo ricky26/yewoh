@@ -107,15 +107,15 @@ impl BundleSerializer for PositionSerializer {
         let (map_position, parent, container_position, equipped_position) = item;
 
         if let Some(position) = map_position {
-            PositionDto::Map(position.clone())
+            PositionDto::Map(*position)
         } else {
             let Some(parent) = parent else { unreachable!() };
             let parent = parent.get();
 
             if let Some(position) = container_position {
-                PositionDto::Contained { parent, position: position.clone() }
+                PositionDto::Contained { parent, position: *position }
             } else if let Some(position) = equipped_position {
-                PositionDto::Equipped { parent, position: position.clone() }
+                PositionDto::Equipped { parent, position: *position }
             } else {
                 unreachable!()
             }

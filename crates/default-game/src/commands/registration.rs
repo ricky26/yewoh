@@ -143,7 +143,7 @@ pub struct TextCommandExecutor<'w, 's> {
     commands: ResMut<'w, TextCommands>,
 }
 
-impl<'w, 's> TextCommandExecutor<'w, 's> {
+impl TextCommandExecutor<'_, '_> {
     pub fn try_split_exec(&mut self, from: Entity, line: &str) -> bool {
         if !line.starts_with(self.commands.start_character) {
             return false;
@@ -212,7 +212,7 @@ pub struct TextCommandQueue<'w, T: Send + Sync + 'static> {
     commands: Res<'w, TextCommands>,
 }
 
-impl<'a, T: Resource> TextCommandQueue<'a, T> {
+impl<T: Resource> TextCommandQueue<'_, T> {
     pub fn iter(&mut self) -> impl Iterator<Item=(Entity, T)> + '_ {
         let registration = self.commands.commands.get(&TypeId::of::<T>())
             .expect("tried to execute unregistered text command");

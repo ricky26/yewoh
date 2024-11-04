@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use std::any::TypeId;
 use std::sync::{Arc, LazyLock, Weak};
 use anyhow::bail;

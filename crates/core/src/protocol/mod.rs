@@ -266,7 +266,7 @@ impl AnyPacket {
             let mut new_packet = MaybeUninit::<AnyPacket>::uninit();
             let ptr = new_packet.as_mut_ptr();
             (*ptr).kind = P::packet_kind();
-            std::ptr::write(transmute(&mut (*ptr).buffer), packet);
+            std::ptr::write(transmute((*ptr).buffer.as_mut_ptr()), packet);
             new_packet.assume_init()
         }
     }
@@ -287,6 +287,7 @@ impl AnyPacket {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn into_downcast<P: Packet>(self) -> Result<P, Self> {
         if P::packet_kind() == self.kind {
             let result = Ok(unsafe { std::ptr::read(transmute(&self.buffer)) });
@@ -467,7 +468,7 @@ impl Writer {
 
     pub async fn send<T: Packet>(&mut self, client_version: ClientVersion, packet: &T) -> anyhow::Result<()> {
         trace!("SEND: {:2x} {}", T::packet_kind(), type_name::<T>());
-        
+
         if let Some(length) = T::fixed_length(client_version) {
             self.buffer.reserve(length);
             self.buffer.push(T::packet_kind());
@@ -486,7 +487,7 @@ impl Writer {
     pub async fn send_any(&mut self, client_version: ClientVersion, packet: &AnyPacket) -> anyhow::Result<()> {
         let registration = packet.registration();
         trace!("SEND: {:2x} {}", registration.packet_kind, registration.type_name);
-        
+
         if let Some(length) = packet.fixed_length(client_version) {
             self.buffer.reserve(length);
             self.buffer.push(packet.packet_kind());

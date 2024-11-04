@@ -334,6 +334,7 @@ pub fn handle_login_packets(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn handle_input_packets(
     lookup: Res<NetEntityLookup>,
     mut events: EventReader<ReceivedPacketEvent>,
@@ -447,25 +448,22 @@ pub fn handle_tooltip_packets(
             _ => continue,
         };
 
-        match request {
-            EntityTooltip::Request(ids) => {
-                for id in ids.iter().copied() {
-                    if let Some(entity) = lookup.net_to_ecs(id) {
-                        if let Ok(mut tooltip) = tooltips.get_mut(entity) {
-                            tooltip.requests.push(TooltipRequest {
-                                client: connection,
-                                entries: Vec::new(),
-                            });
-                        } else {
-                            client.send_packet(EntityTooltip::Response {
-                                id,
-                                entries: Vec::new(),
-                            }.into());
-                        }
+        if let EntityTooltip::Request(ids) = request {
+            for id in ids.iter().copied() {
+                if let Some(entity) = lookup.net_to_ecs(id) {
+                    if let Ok(mut tooltip) = tooltips.get_mut(entity) {
+                        tooltip.requests.push(TooltipRequest {
+                            client: connection,
+                            entries: Vec::new(),
+                        });
+                    } else {
+                        client.send_packet(EntityTooltip::Response {
+                            id,
+                            entries: Vec::new(),
+                        }.into());
                     }
                 }
             }
-            _ => {}
         }
     }
 }

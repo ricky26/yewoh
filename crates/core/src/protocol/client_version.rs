@@ -80,7 +80,7 @@ impl FromStr for ExtendedClientVersion {
                 .ok_or_else(|| anyhow!("Missing patch number"))?;
             let patch = u8::from_str(patch_str)?;
             let first_char = rest.chars().next().unwrap_or('\0');
-            if rest.len() == 1 && ('a'..='z').contains(&first_char) {
+            if rest.len() == 1 && first_char.is_ascii_lowercase() {
                 let build = first_char as u8 - b'a';
                 (patch, build, "")
             } else {

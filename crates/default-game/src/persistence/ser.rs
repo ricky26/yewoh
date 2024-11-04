@@ -11,7 +11,7 @@ struct BufferBundleSerializer<'a> {
     buffer: &'a SerializedBuffer,
 }
 
-impl<'a> Serialize for BufferBundleSerializer<'a> {
+impl Serialize for BufferBundleSerializer<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
         let mut tuple = serializer.serialize_tuple(2)?;
         tuple.serialize_element(&self.buffer.serializer_id)?;
@@ -30,7 +30,7 @@ impl<'a> BufferBundlesSerializer<'a> {
     }
 }
 
-impl<'a> Serialize for BufferBundlesSerializer<'a> {
+impl Serialize for BufferBundlesSerializer<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
         let mut seq = serializer.serialize_seq(Some(self.buffers.len()))?;
 
@@ -50,11 +50,11 @@ struct BufferValuePairSerializer<'a, 'b, T: BundleSerializer> {
     bundle: &'a T::Bundle,
 }
 
-impl<'a, 'b, T: BundleSerializer> Serialize for BufferValuePairSerializer<'a, 'b, T> {
+impl<T: BundleSerializer> Serialize for BufferValuePairSerializer<'_, '_, T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
         let mut seq = serializer.serialize_seq(Some(2))?;
         seq.serialize_element(&self.entity)?;
-        seq.serialize_element(&TypedReflectSerializer::new(self.bundle, &self.ctx.type_registry))?;
+        seq.serialize_element(&TypedReflectSerializer::new(self.bundle, self.ctx.type_registry))?;
         seq.end()
     }
 }
@@ -63,7 +63,7 @@ struct BufferValuesSerializer<'a> {
     buffer: &'a SerializedBuffer,
 }
 
-impl<'a> Serialize for BufferValuesSerializer<'a> {
+impl Serialize for BufferValuesSerializer<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
         let mut serializer = Some(serializer);
         let mut result = None;
@@ -85,7 +85,7 @@ impl<'a, 'b, T: BundleSerializer> BufferSerializer<'a, 'b, T> {
     }
 }
 
-impl<'a, 'b, T: BundleSerializer> Serialize for BufferSerializer<'a, 'b, T> {
+impl<T: BundleSerializer> Serialize for BufferSerializer<'_, '_, T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
         let mut seq = serializer.serialize_seq(Some(self.bundles.len()))?;
         for (entity, bundle) in self.bundles {

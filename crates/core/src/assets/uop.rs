@@ -95,6 +95,10 @@ pub struct UopBuffer<T> {
 }
 
 impl<T: Deref<Target=[u8]>> UopBuffer<T> {
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
     pub fn len(&self) -> usize {
         self.entries.len()
     }
@@ -214,12 +218,13 @@ pub struct Entry<'a> {
     stream: EntryStream<'a>,
 }
 
-impl<'a> Entry<'a> {
+impl Entry<'_> {
     pub fn header(&self) -> &[u8] { self.header }
     pub fn len(&self) -> usize { self.info.decompressed_length }
+    pub fn is_empty(&self) -> bool { self.info.decompressed_length == 0 }
 }
 
-impl<'a> Read for Entry<'a> {
+impl Read for Entry<'_> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         match &mut self.stream {
             EntryStream::Uncompressed(s) => s.read(buf),

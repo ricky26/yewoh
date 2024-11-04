@@ -79,7 +79,7 @@ impl MapDeltaGrid {
         let height = height.div_ceil(DELTA_CELL_SIZE);
         let num = width * height;
         let mut cells = Vec::new();
-        cells.resize_with(num, || DeltaCell::default());
+        cells.resize_with(num, DeltaCell::default);
         MapDeltaGrid {
             width,
             cells,

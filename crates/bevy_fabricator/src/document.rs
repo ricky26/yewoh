@@ -97,10 +97,6 @@ impl<'a> Path<'a> {
         Path(segments)
     }
 
-    pub fn from_iter(parts: impl IntoIterator<Item=&'a str>) -> Path<'a> {
-        Path(SmallVec::from_iter(parts))
-    }
-
     pub fn join(&self, other: &Path<'a>) -> Path<'a> {
         let mut segments = SmallVec::with_capacity(self.len() + other.len());
         segments.extend_from_slice(&self.0);
@@ -121,13 +117,19 @@ impl<'a> Path<'a> {
     }
 }
 
-impl<'a> Display for Path<'a> {
+impl<'a> FromIterator<&'a str> for Path<'a> {
+    fn from_iter<T: IntoIterator<Item=&'a str>>(iter: T) -> Self {
+        Path(SmallVec::from_iter(iter))
+    }
+}
+
+impl Display for Path<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.fmt(f)
     }
 }
 
-impl<'a> Debug for Path<'a> {
+impl Debug for Path<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.fmt(f)
     }
@@ -139,7 +141,7 @@ pub enum Import<'a> {
     File(&'a str),
 }
 
-impl<'a> Debug for Import<'a> {
+impl Debug for Import<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Import::Path(path) => path.fmt(f),
@@ -205,7 +207,7 @@ impl<'a> Expression<'a> {
     }
 }
 
-impl<'a> Debug for Expression<'a> {
+impl Debug for Expression<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Expression::Number(s) => write!(f, "{s:?}"),
@@ -300,7 +302,7 @@ pub struct Register<'a> {
     pub expression: Option<Expression<'a>>,
 }
 
-impl<'a> Register<'a> {
+impl Register<'_> {
     pub(crate) fn fmt_with_index(&self, index: usize, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "%{index}")?;
 
@@ -334,7 +336,7 @@ impl<'a> Register<'a> {
     }
 }
 
-impl<'a> Debug for Register<'a> {
+impl Debug for Register<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.fmt_with_index(0, f)
     }
@@ -404,17 +406,14 @@ impl<'a> Document<'a> {
     pub fn dependencies(&self) -> Vec<String> {
         let mut deps = Vec::new();
         for expr in self.registers.iter().filter_map(|r| r.expression.as_ref()) {
-            match expr {
-                Expression::Import(import) => {
-                    match import {
-                        Import::Path(_) => {}
-                        Import::File(file_path) => {
-                            let (_, file_path) = parse_string(*file_path).unwrap().unwrap();
-                            deps.push(file_path);
-                        }
+            if let Expression::Import(import) = expr {
+                match import {
+                    Import::Path(_) => {}
+                    Import::File(file_path) => {
+                        let (_, file_path) = parse_string(file_path).unwrap().unwrap();
+                        deps.push(file_path);
                     }
                 }
-                _ => {}
             }
         }
 
@@ -422,7 +421,7 @@ impl<'a> Document<'a> {
     }
 }
 
-impl<'a> Debug for Document<'a> {
+impl Debug for Document<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Document {{")?;
 
@@ -651,7 +650,7 @@ fn parse_number(src: &str) -> Result<Option<(&str, Number)>, ParseError<&str>> {
 
 fn parse_identifier(src: &str) -> Option<(&str, &str)> {
     let mut chars = src.chars();
-    let Some(first) = chars.next() else { return None };
+    let first = chars.next()?;
     if !first.is_alphabetic() && first != '$' && first != '_' {
         return None;
     }
@@ -670,7 +669,7 @@ fn parse_identifier(src: &str) -> Option<(&str, &str)> {
 }
 
 fn expect_identifier(src: &str) -> Result<(&str, &str), ParseError<&str>> {
-    parse_identifier(src).ok_or_else(|| ParseError::ExpectedIdentifier(src))
+    parse_identifier(src).ok_or(ParseError::ExpectedIdentifier(src))
 }
 
 fn parse_keyword<'a>(src: &'a str, keyword: &str) -> Option<&'a str> {
@@ -684,7 +683,7 @@ fn parse_keyword<'a>(src: &'a str, keyword: &str) -> Option<&'a str> {
 
 fn expect_keyword<'a>(src: &'a str, keyword: &'static str) -> Result<&'a str, ParseError<&'a str>> {
     parse_keyword(src, keyword)
-        .ok_or_else(|| ParseError::ExpectedKeyword { at: src, keyword })
+        .ok_or(ParseError::ExpectedKeyword { at: src, keyword })
 }
 
 fn parse_tuple_body<'a>(
@@ -774,7 +773,7 @@ fn parse_struct_body<'a>(
         let (next, key) = expect_identifier(rest)?;
         rest = skip_whitespace(next);
 
-        if rest.starts_with(&[',', '}']) {
+        if rest.starts_with([',', '}']) {
             let expr = Expression::Path(Path::single(key));
             let index = document.push_register(expr);
             body.push((key, index));
@@ -834,7 +833,7 @@ fn parse_path(src: &str) -> Option<(&str, Path)> {
 }
 
 fn expect_path(src: &str) -> Result<(&str, Path), ParseError<&str>> {
-    parse_path(src).ok_or_else(|| ParseError::ExpectedPath(src))
+    parse_path(src).ok_or(ParseError::ExpectedPath(src))
 }
 
 fn parse_path_import<'a>(
@@ -846,8 +845,8 @@ fn parse_path_import<'a>(
     let rest = skip_whitespace(rest);
     let path = root.join(&path);
 
-    if rest.starts_with("::") {
-        let rest = skip_whitespace(&rest[2..]);
+    if let Some(next) = rest.strip_prefix("::") {
+        let rest = skip_whitespace(next);
         if !rest.starts_with('{') {
             return Err(ParseError::ExpectedOpenBrace(rest));
         }
@@ -860,10 +859,10 @@ fn parse_path_import<'a>(
             }
 
             rest = parse_path_import(document, rest, &path)?
-                .ok_or_else(|| ParseError::ExpectedImportPath(rest))?;
+                .ok_or(ParseError::ExpectedImportPath(rest))?;
             rest = skip_whitespace(rest);
 
-            if !rest.starts_with(&['}', ',']) {
+            if !rest.starts_with(['}', ',']) {
                 return Err(ParseError::ExpectedImportPath(rest));
             }
 
@@ -969,7 +968,6 @@ fn parse_variable<'a>(
         variable_type,
         optional,
         expression: value,
-        ..default()
     };
     Ok(Some((rest, register)))
 }
@@ -1039,7 +1037,7 @@ fn expect_expression<'a>(
     document: &mut Document<'a>,
     input: &'a str,
 ) -> Result<(&'a str, Expression<'a>), ParseError<&'a str>> {
-    parse_expression(document, input)?.ok_or_else(|| ParseError::ExpectedExpression(input))
+    parse_expression(document, input)?.ok_or(ParseError::ExpectedExpression(input))
 }
 
 fn expect_expression_index<'a>(
@@ -1066,8 +1064,8 @@ fn parse_statement<'a>(
 
     if let Some((rest, expr)) = parse_expression(document, input)? {
         let rest = skip_whitespace(rest);
-        if rest.starts_with("<-") {
-            let rest = skip_whitespace(&rest[2..]);
+        if let Some(next) = rest.strip_prefix("<-") {
+            let rest = skip_whitespace(next);
             let expr = document.push_register(expr);
             let (rest, source_expr) = expect_expression_index(document, rest)?;
             document.applications.push(Application {

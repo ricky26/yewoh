@@ -148,7 +148,7 @@ pub struct SerializedBundles<'s, T: BundleSerializer> {
     deferred: Deferred<'s, SerializedBundlesBuffer<T>>,
 }
 
-impl<'w, T: BundleSerializer> SerializedBundles<'w, T> {
+impl<T: BundleSerializer> SerializedBundles<'_, T> {
     pub fn push(&mut self, entity: Entity, bundle: T::Bundle) {
         self.deferred.items.push((entity, bundle));
     }

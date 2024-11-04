@@ -67,6 +67,7 @@ impl GameEncryption {
 }
 
 #[derive(Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum Encryption {
     Lobby(LobbyPass),
     Game(GameEncryption),

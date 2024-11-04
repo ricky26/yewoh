@@ -45,6 +45,7 @@ impl<const I: usize> FixedString<I> {
         self.contents.fill(0);
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> FixedString<I> {
         TryFrom::try_from(s).expect("string value is too long")
     }

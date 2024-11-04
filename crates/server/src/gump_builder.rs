@@ -238,6 +238,7 @@ impl GumpBuilder {
         self
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add_tile_button(
         &mut self,
         up_texture_id: u32,

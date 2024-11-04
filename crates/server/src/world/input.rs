@@ -107,6 +107,7 @@ pub struct ContextMenuEvent {
     pub option: u16,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn update_targets(
     lookup: Res<NetEntityLookup>,
     mut clients: Query<(&NetClient, &mut Targeting)>,

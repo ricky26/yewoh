@@ -292,6 +292,7 @@ pub fn create_new_character(
     entity
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn handle_spawn_character<T: AccountRepository>(
     runtime: Res<AsyncRuntime>,
     mut pending: ResMut<PendingCharacterInfo>,

@@ -180,7 +180,7 @@ impl<'a> HuffmanVecWriter<'a> {
     }
 }
 
-impl<'a> Write for HuffmanVecWriter<'a> {
+impl Write for HuffmanVecWriter<'_> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         for i in buf {
             let i = *i as usize;

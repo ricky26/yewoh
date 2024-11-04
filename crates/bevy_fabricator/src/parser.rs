@@ -10,7 +10,7 @@ impl<P: SourcePosition> SourcePosition for &P {
     }
 }
 
-impl<'a> SourcePosition for &'a str {
+impl SourcePosition for &'_ str {
     fn address(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let n = self.len().min(15);
         let trunc = self.len() > n;

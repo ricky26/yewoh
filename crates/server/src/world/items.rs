@@ -57,20 +57,16 @@ pub struct PositionQuery {
     pub contained: Option<Ref<'static, ContainedPosition>>,
 }
 
-impl<'w> PositionQueryItem<'w> {
+impl PositionQueryItem<'_> {
     pub fn item_position(&self) -> Option<ItemPosition> {
         if let Some(parent) = self.parent.as_ref() {
-            if let Some(equipped) = self.equipped.as_ref() {
-                Some(ItemPosition::Equipped(parent.get(), (*equipped).clone()))
-            } else if let Some(contained) = self.contained.as_ref() {
-                Some(ItemPosition::Contained(parent.get(), (*contained).clone()))
-            } else {
-                None
-            }
-        } else if let Some(map) = self.map.as_ref() {
-            Some(ItemPosition::Map((*map).clone()))
+            self.equipped.as_ref()
+                .map(|e| ItemPosition::Equipped(parent.get(), **e))
+                .or_else(|| self.contained.as_ref()
+                    .map(|c| ItemPosition::Contained(parent.get(), **c)))
         } else {
-            None
+            self.map.as_ref()
+                .map(|m| ItemPosition::Map(**m))
         }
     }
 
@@ -138,11 +134,11 @@ pub struct ItemQuery {
     pub position: PositionQuery,
 }
 
-impl<'w> ItemQueryItem<'w> {
+impl ItemQueryItem<'_> {
     pub fn flags(&self) -> EntityFlags {
         EntityFlags::empty()
     }
-    
+
     pub fn parent(&self) -> Option<Entity> {
         self.position.parent.as_ref().map(|p| p.get())
     }
@@ -284,11 +280,11 @@ fn update_root_position_inner(
             continue;
         };
 
-        root.0 = position.clone();
+        root.0 = position;
 
         if let Some(children) = children {
             child_queue.extend(
-                children.iter().map(|e| (*e, position.clone())));
+                children.iter().map(|e| (*e, position)));
         }
     }
 }

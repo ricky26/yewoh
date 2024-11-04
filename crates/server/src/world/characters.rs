@@ -201,7 +201,7 @@ pub struct CharacterQuery {
     pub position: Ref<'static, MapPosition>,
 }
 
-impl<'w> CharacterQueryItem<'w> {
+impl CharacterQueryItem<'_> {
     pub fn flags(&self) -> EntityFlags {
         let mut flags = EntityFlags::empty();
 
@@ -232,12 +232,12 @@ impl<'w> CharacterQueryItem<'w> {
             self.hidden.is_changed() ||
             self.notoriety.is_changed()
     }
-    
+
     pub fn is_status_changed(&self) -> bool {
         self.name.is_changed() ||
             self.health.is_changed()
     }
-    
+
     pub fn is_stats_changed(&self) -> bool {
         self.name.is_changed() ||
             self.race.is_changed() ||
@@ -275,7 +275,7 @@ impl<'w> CharacterQueryItem<'w> {
             notoriety: **self.notoriety,
         }
     }
-    
+
     pub fn to_status_packet(&self, id: EntityId) -> UpsertEntityStats {
         UpsertEntityStats {
             id,
@@ -287,7 +287,7 @@ impl<'w> CharacterQueryItem<'w> {
             ..default()
         }
     }
-    
+
     pub fn to_full_status_packet(&self, id: EntityId) -> UpsertEntityStats {
         UpsertEntityStats {
             id,
@@ -418,7 +418,7 @@ pub fn detect_character_changes(
 
             position_entry.insert(*character.position);
         }
-        
+
         if character.is_status_changed() {
             let position = *character.position;
             let grid_cell = delta_grid_cell(position.position.truncate());

@@ -1,3 +1,5 @@
+#![allow(clippy::needless_range_loop)]
+
 /*
     Copyright (c) 2017 Alexander Krotov
 

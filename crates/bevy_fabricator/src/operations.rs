@@ -29,22 +29,22 @@ impl FromReflect for Fabricate {
             ReflectRef::Struct(reflect) => {
                 let fabricator = Fabricator::from_reflect(reflect.field("fabricator")?)?;
                 let parameters = reflect.field("parameters")
-                    .and_then(|r| Any::from_reflect(r))
-                    .unwrap_or_else(|| Any::default());
+                    .and_then(Any::from_reflect)
+                    .unwrap_or_else(Any::default);
                 Some(Fabricate { fabricator, parameters })
             }
             ReflectRef::TupleStruct(reflect) => {
                 let fabricator = Fabricator::from_reflect(reflect.field(0)?)?;
                 let parameters = reflect.field(1)
-                    .and_then(|r| Any::from_reflect(r))
-                    .unwrap_or_else(|| Any::default());
+                    .and_then(Any::from_reflect)
+                    .unwrap_or_else(Any::default);
                 Some(Fabricate { fabricator, parameters })
             }
             ReflectRef::Tuple(reflect) => {
                 let fabricator = Fabricator::from_reflect(reflect.field(0)?)?;
                 let parameters = reflect.field(1)
-                    .and_then(|r| Any::from_reflect(r))
-                    .unwrap_or_else(|| Any::default());
+                    .and_then(Any::from_reflect)
+                    .unwrap_or_else(Any::default);
                 Some(Fabricate { fabricator, parameters })
             }
             _ => None,

@@ -28,6 +28,7 @@ pub struct UniqueId {
 }
 
 impl UniqueId {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> UniqueId {
         UniqueId { id: new_uuid() }
     }

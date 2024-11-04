@@ -446,7 +446,7 @@ fn load_static_entities(
             parameters: parameters.clone(),
         };
 
-        let request = fabricate.to_request(&fabricators, Some(&asset_server));
+        let request = fabricate.to_request(fabricators, Some(&asset_server));
         let mut entity = app.world_mut()
             .spawn((
                 Name::new(name),

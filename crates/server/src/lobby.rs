@@ -67,7 +67,7 @@ pub async fn serve_lobby(
             return Err(anyhow!("unexpected lobby packet {:?}", packet));
         }
     }
-    
+
     Ok(())
 }
 
@@ -195,16 +195,14 @@ struct PendingSession {
     pub client_version: ClientVersion,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SessionAllocator {
     pending_sessions: HashMap<u32, PendingSession>,
 }
 
 impl SessionAllocator {
     pub fn new() -> SessionAllocator {
-        Self {
-            pending_sessions: HashMap::new(),
-        }
+        SessionAllocator::default()
     }
 
     pub fn allocate_session(&mut self, session: NewSessionRequest) {

@@ -14,7 +14,7 @@ struct BundleVisitor<'a, 'w> {
     deserializers: &'a BundleSerializers,
 }
 
-impl<'a, 'w, 'de> Visitor<'de> for BundleVisitor<'a, 'w> {
+impl<'de> Visitor<'de> for BundleVisitor<'_, '_> {
     type Value = (String, Box<dyn PartialReflect>);
 
     fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
@@ -28,7 +28,7 @@ impl<'a, 'w, 'de> Visitor<'de> for BundleVisitor<'a, 'w> {
             id: String,
         }
 
-        impl<'a, 'w, 'de> DeserializeSeed<'de> for Thunk<'a, 'w> {
+        impl<'de> DeserializeSeed<'de> for Thunk<'_, '_> {
             type Value = (String, Box<dyn PartialReflect>);
 
             fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error> where D: Deserializer<'de> {
@@ -48,7 +48,7 @@ impl<'a, 'w, 'de> Visitor<'de> for BundleVisitor<'a, 'w> {
     }
 }
 
-impl<'a, 'w, 'de> DeserializeSeed<'de> for BundleVisitor<'a, 'w> {
+impl<'de> DeserializeSeed<'de> for BundleVisitor<'_, '_> {
     type Value = (String, Box<dyn PartialReflect>);
 
     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error> where D: Deserializer<'de> {
@@ -61,7 +61,7 @@ struct BundlesVisitor<'a, 'w> {
     deserializers: &'a BundleSerializers,
 }
 
-impl<'a, 'w, 'de> Visitor<'de> for BundlesVisitor<'a, 'w> {
+impl<'de> Visitor<'de> for BundlesVisitor<'_, '_> {
     type Value = Vec<(String, Box<dyn PartialReflect>)>;
 
     fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
@@ -86,7 +86,7 @@ impl<'a, 'w, 'de> Visitor<'de> for BundlesVisitor<'a, 'w> {
     }
 }
 
-impl<'a, 'w, 'de> DeserializeSeed<'de> for BundlesVisitor<'a, 'w> {
+impl<'de> DeserializeSeed<'de> for BundlesVisitor<'_, '_> {
     type Value = Vec<(String, Box<dyn PartialReflect>)>;
 
     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error> where D: Deserializer<'de> {
@@ -99,7 +99,7 @@ pub(crate) struct WorldVisitor<'a, 'w> {
     pub(crate) deserializers: &'a BundleSerializers,
 }
 
-impl<'a, 'w, 'de> Visitor<'de> for WorldVisitor<'a, 'w> {
+impl<'de> Visitor<'de> for WorldVisitor<'_, '_> {
     type Value = Vec<(String, Box<dyn PartialReflect>)>;
 
     fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
@@ -125,7 +125,7 @@ impl<'a, 'w, 'de> Visitor<'de> for WorldVisitor<'a, 'w> {
     }
 }
 
-impl<'a, 'w, 'de> DeserializeSeed<'de> for WorldVisitor<'a, 'w> {
+impl<'de> DeserializeSeed<'de> for WorldVisitor<'_, '_> {
     type Value = Vec<(String, Box<dyn PartialReflect>)>;
 
     fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
@@ -138,7 +138,7 @@ struct BundleValuePairVisitor<'a, 'w, T: BundleSerializer> {
     _phantom: PhantomData<T>,
 }
 
-impl<'a, 'w, 'de, T: BundleSerializer> Visitor<'de> for BundleValuePairVisitor<'a, 'w, T> {
+impl<'de, T: BundleSerializer> Visitor<'de> for BundleValuePairVisitor<'_, '_, T> {
     type Value = (Entity, T::Bundle);
 
     fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
@@ -148,7 +148,7 @@ impl<'a, 'w, 'de, T: BundleSerializer> Visitor<'de> for BundleValuePairVisitor<'
     fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'de> {
         let entity = seq.next_element::<Entity>()?
             .ok_or_else(|| A::Error::custom("missing entity ID"))?;
-        let bundle = seq.next_element_seed(TypedReflectDeserializer::of::<T::Bundle>(&self.ctx.type_registry))?
+        let bundle = seq.next_element_seed(TypedReflectDeserializer::of::<T::Bundle>(self.ctx.type_registry))?
             .ok_or_else(|| A::Error::custom("missing bundle"))?;
         let bundle = T::Bundle::from_reflect(&*bundle)
             .ok_or_else(|| {
@@ -159,7 +159,7 @@ impl<'a, 'w, 'de, T: BundleSerializer> Visitor<'de> for BundleValuePairVisitor<'
     }
 }
 
-impl<'a, 'w, 'de, T: BundleSerializer> DeserializeSeed<'de> for BundleValuePairVisitor<'a, 'w, T> {
+impl<'de, T: BundleSerializer> DeserializeSeed<'de> for BundleValuePairVisitor<'_, '_, T> {
     type Value = (Entity, T::Bundle);
 
     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error> where D: Deserializer<'de> {
@@ -181,7 +181,7 @@ impl<'a, 'w, T: BundleSerializer> BundleValuesVisitor<'a, 'w, T> {
     }
 }
 
-impl<'a, 'w, 'de, T: BundleSerializer> Visitor<'de> for BundleValuesVisitor<'a, 'w, T> {
+impl<'de, T: BundleSerializer> Visitor<'de> for BundleValuesVisitor<'_, '_, T> {
     type Value = Box<dyn PartialReflect>;
 
     fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
@@ -206,7 +206,7 @@ impl<'a, 'w, 'de, T: BundleSerializer> Visitor<'de> for BundleValuesVisitor<'a, 
     }
 }
 
-impl<'a, 'w, 'de, T: BundleSerializer> DeserializeSeed<'de> for BundleValuesVisitor<'a, 'w, T> {
+impl<'de, T: BundleSerializer> DeserializeSeed<'de> for BundleValuesVisitor<'_, '_, T> {
     type Value = Box<dyn PartialReflect>;
 
     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error> where D: Deserializer<'de> {

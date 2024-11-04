@@ -158,16 +158,14 @@ pub fn send_deltas(
                     if seen.seen_entities.contains(&entity) {
                         seen.insert_entity(entity, parent);
                         client.send_packet_arc(packet);
-                    } else {
-                        if let Some(parent) = parent {
-                            if seen.open_containers.contains(&parent) {
-                                seen.insert_entity(entity, Some(parent));
-                                client.send_packet_arc(packet);
-                            }
-                        } else {
-                            seen.insert_entity(entity, None);
+                    } else if let Some(parent) = parent {
+                        if seen.open_containers.contains(&parent) {
+                            seen.insert_entity(entity, Some(parent));
                             client.send_packet_arc(packet);
                         }
+                    } else {
+                        seen.insert_entity(entity, None);
+                        client.send_packet_arc(packet);
                     }
                 }
                 DeltaEntry::ItemRemoved { entity, packet, .. } => {
@@ -298,7 +296,7 @@ pub fn sync_visible_entities(
 
                         let packet = character.to_upsert(id.id, equipment);
                         client.send_packet(AnyPacket::from_packet(packet));
-                        
+
                         let packet = if entry.entity == possessing.entity {
                             character.to_full_status_packet(id.id)
                         } else {

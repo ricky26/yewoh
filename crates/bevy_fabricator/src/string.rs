@@ -88,7 +88,7 @@ impl<'a> Iterator for StringIterator<'a> {
             _ => {}
         }
 
-        match self.string.find(&['"', '\\']) {
+        match self.string.find(['"', '\\']) {
             None => {
                 let res = StringFragment::Literal(self.string);
                 self.string = "";
@@ -155,7 +155,7 @@ pub fn fmt_escape_string(src: &str, f: &mut std::fmt::Formatter<'_>) -> std::fmt
 
     let mut rest = src;
     loop {
-        let offset = match rest.find(&['"', '\r', '\n', '\t', '\\']) {
+        let offset = match rest.find(['"', '\r', '\n', '\t', '\\']) {
             Some(offset) => offset,
             None => {
                 f.write_str(rest)?;

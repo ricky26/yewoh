@@ -98,7 +98,7 @@ impl<const N: usize, T: BucketEntry> BucketMap<N, T> {
     pub fn new(size: IVec2) -> BucketMap<N, T> {
         let capacity = (size.x as usize) * (size.y as usize);
         let mut buckets = Vec::with_capacity(capacity);
-        buckets.resize_with(capacity, || SortedBucket::default());
+        buckets.resize_with(capacity, SortedBucket::default);
         BucketMap {
             size,
             buckets,
@@ -172,7 +172,7 @@ impl<const N: usize, T: BucketEntry> MapBucketMap<N, T> {
         let map = match self.entities.entry(entity) {
             Entry::Occupied(mut existing) => {
                 let (old_map_id, old_position) = existing.get_mut();
-                let old_map = self.maps.get_mut(&old_map_id).unwrap();
+                let old_map = self.maps.get_mut(old_map_id).unwrap();
                 old_map.remove(entity, *old_position);
 
                 if *old_map_id == map_id {
@@ -383,7 +383,7 @@ impl MapChunkLookup {
     pub fn get_at(&self, position: IVec2) -> Option<Entity> {
         let chunk_pos = position / (CHUNK_SIZE as i32);
         if let Some(index) = self.chunk_index(chunk_pos) {
-            self.chunks[index].clone()
+            self.chunks[index]
         } else {
             None
         }
@@ -482,7 +482,7 @@ pub struct ColliderIter<'a> {
     dynamic_items: &'a [ItemEntry],
 }
 
-impl<'a> Iterator for ColliderIter<'a> {
+impl Iterator for ColliderIter<'_> {
     type Item = Collider;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -519,7 +519,7 @@ pub struct SpatialIter<'a> {
     characters: &'a [CharacterEntry],
 }
 
-impl<'a> Iterator for SpatialIter<'a> {
+impl Iterator for SpatialIter<'_> {
     type Item = Entity;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -529,10 +529,8 @@ impl<'a> Iterator for SpatialIter<'a> {
             Some(entry.entity)
         } else if let Some(entry) = slice_pop_first(&mut self.static_items) {
             Some(entry.entity)
-        } else if let Some(entity) = self.chunk.take() {
-            Some(entity)
         } else {
-            None
+            self.chunk.take()
         }
     }
 }
@@ -545,7 +543,7 @@ pub struct SpatialQuery<'w> {
     pub chunks: Res<'w, ChunkLookup>,
 }
 
-impl<'w> SpatialQuery<'w> {
+impl SpatialQuery<'_> {
     pub fn iter_colliders(&self, map_id: u8, position: IVec2) -> ColliderIter {
         let dynamic_items = self.dynamic_items.lookup.entries_at(map_id, position);
         let static_items = self.static_items.lookup.entries_at(map_id, position);
