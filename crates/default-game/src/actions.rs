@@ -1,6 +1,5 @@
 use bevy::prelude::*;
-use yewoh::protocol;
-use yewoh::protocol::{CharacterAnimation, CharacterProfile, ContextMenuEntry, DamageDealt, MoveConfirm, MoveEntityReject, MoveReject, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, Swing};
+use yewoh::protocol::{AnyPacket, CharacterAnimation, CharacterProfile, ContextMenuEntry, DamageDealt, MoveConfirm, MoveEntityReject, MoveReject, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, Swing};
 use yewoh::types::FixedString;
 use yewoh_server::world::characters::{CharacterBodyType, CharacterNotoriety, ProfileEvent, RequestSkillsEvent, WarMode};
 use yewoh_server::world::combat::AttackTarget;
@@ -56,7 +55,7 @@ pub fn handle_move(
                         sequence: request.sequence,
                         position: map_position.position,
                         direction: map_position.direction,
-                    }.into());
+                    });
                 }
             }
         }
@@ -65,7 +64,7 @@ pub fn handle_move(
         client.send_packet(MoveConfirm {
             sequence: request.sequence,
             notoriety,
-        }.into());
+        });
     }
 }
 
@@ -114,7 +113,7 @@ pub fn handle_double_click(
                 id: net.id,
                 text: FixedString::from_str("Me, Myself and I"),
                 flags: Default::default(),
-            }.into());
+            });
         }
 
         if container.is_some() {
@@ -146,14 +145,14 @@ pub fn handle_pick_up(
         };
 
         if held.is_some() {
-            client.send_packet(MoveEntityReject::AlreadyHolding.into());
+            client.send_packet(MoveEntityReject::AlreadyHolding);
             continue;
         }
 
         let (entity, position, container, equipped) = match targets.get(event.target) {
             Ok(x) => x,
             Err(_) => {
-                client.send_packet(MoveEntityReject::CannotLift.into());
+                client.send_packet(MoveEntityReject::CannotLift);
                 continue;
             }
         };
@@ -174,7 +173,7 @@ pub fn handle_pick_up(
                 .remove::<EquippedPosition>();
         } else {
             // Not sure where this item is, do nothing.
-            client.send_packet(MoveEntityReject::OutOfRange.into());
+            client.send_packet(MoveEntityReject::OutOfRange);
             continue;
         }
 
@@ -203,7 +202,7 @@ pub fn handle_drop(
         };
 
         if held.held_entity != event.target {
-            client.send_packet(MoveEntityReject::BelongsToAnother.into());
+            client.send_packet(MoveEntityReject::BelongsToAnother);
             continue;
         }
 
@@ -262,7 +261,7 @@ pub fn handle_equip(
         };
 
         if held.held_entity != event.target {
-            client.send_packet(MoveEntityReject::BelongsToAnother.into());
+            client.send_packet(MoveEntityReject::BelongsToAnother);
             continue;
         }
 
@@ -324,7 +323,7 @@ pub fn handle_context_menu(
         client.send_packet(Swing {
             attacker_id: net.id,
             target_id,
-        }.into());
+        });
         client.send_packet(CharacterAnimation {
             target_id: net.id,
             animation_id: 9,
@@ -332,7 +331,7 @@ pub fn handle_context_menu(
             repeat_count: 1,
             reverse: false,
             speed: 0,
-        }.into());
+        });
         client.send_packet(CharacterAnimation {
             target_id,
             animation_id: 7,
@@ -340,11 +339,11 @@ pub fn handle_context_menu(
             repeat_count: 1,
             reverse: false,
             speed: 0,
-        }.into());
+        });
         client.send_packet(DamageDealt {
             target_id,
             damage: 1337,
-        }.into());
+        });
     }
 }
 
@@ -370,7 +369,7 @@ pub fn handle_profile_requests(
             header: "Supreme Commander".to_string(),
             footer: "Static Profile".to_string(),
             profile: "Bio".to_string(),
-        }).into());
+        }));
     }
 }
 
@@ -396,7 +395,7 @@ pub fn handle_skills_requests(
                     cap: 1200,
                 }
             ],
-        }).into());
+        }));
     }
 }
 
@@ -407,9 +406,8 @@ pub fn handle_war_mode(
     mut new_packets: EventReader<ReceivedPacketEvent>,
 ) {
     for ReceivedPacketEvent { client_entity, packet } in new_packets.read() {
-        let packet = match packet.downcast::<protocol::WarMode>() {
-            Some(x) => x,
-            _ => continue,
+        let AnyPacket::WarMode(packet) = packet else {
+            continue;
         };
 
         let (client, owned) = match clients.get(*client_entity) {
@@ -429,6 +427,6 @@ pub fn handle_war_mode(
             commands.entity(owned.entity).remove::<AttackTarget>();
         }
 
-        client.send_packet(packet.clone().into());
+        client.send_packet(packet.clone());
     }
 }

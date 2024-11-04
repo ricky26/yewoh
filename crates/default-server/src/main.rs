@@ -57,8 +57,8 @@ struct Args {
     server_display_name: String,
 
     /// Whether or not to enable packet encryption.
-    #[clap(short, long, default_value = "true", env = "YEWOH_ENCRYPTION")]
-    encryption: bool,
+    #[clap(short = 'e', long, env = "YEWOH_DISABLE_ENCRYPTION")]
+    disable_encryption: bool,
 
     /// The external address of this server to provide to clients.
     #[clap(short, long, default_value = "127.0.0.1", env = "YEWOH_ADVERTISE_ADDRESS")]
@@ -194,7 +194,7 @@ fn main() -> anyhow::Result<()> {
 
     let accounts_repo_clone = accounts_repo.clone();
     let lobby_handle = tokio::spawn(listen_for_lobby(
-        lobby_listener, args.encryption,
+        lobby_listener, !args.disable_encryption,
         move || server_repo.clone(), move || accounts_repo_clone.clone()));
 
     let (new_session_tx, new_session_rx) = mpsc::unbounded_channel();
@@ -206,7 +206,7 @@ fn main() -> anyhow::Result<()> {
 
     app
         .insert_resource(AsyncRuntime::from(tokio::runtime::Handle::current()))
-        .insert_resource(NetServer::new(args.encryption, new_session_requests, new_session_rx))
+        .insert_resource(NetServer::new(!args.disable_encryption, new_session_requests, new_session_rx))
         .insert_resource(map_infos)
         .insert_resource(static_data)
         .insert_resource(TileDataResource { tile_data })

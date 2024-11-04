@@ -40,7 +40,7 @@ pub struct AsciiTextMessage {
 }
 
 impl Packet for AsciiTextMessage {
-    fn packet_kind() -> u8 { 0x1c }
+    const PACKET_KIND: u8 = 0x1c;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -97,7 +97,7 @@ pub struct UnicodeTextMessage {
 }
 
 impl Packet for UnicodeTextMessage {
-    fn packet_kind() -> u8 { 0xae }
+    const PACKET_KIND: u8 = 0xae;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -157,7 +157,7 @@ pub struct LocalisedTextMessage {
 }
 
 impl Packet for LocalisedTextMessage {
-    fn packet_kind() -> u8 { 0xc1 }
+    const PACKET_KIND: u8 = 0xc1;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -213,7 +213,7 @@ pub struct AsciiTextMessageRequest {
 }
 
 impl Packet for AsciiTextMessageRequest {
-    fn packet_kind() -> u8 { 0x03 }
+    const PACKET_KIND: u8 = 0x03;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -249,7 +249,7 @@ impl UnicodeTextMessageRequest {
 }
 
 impl Packet for UnicodeTextMessageRequest {
-    fn packet_kind() -> u8 { 0xad }
+    const PACKET_KIND: u8 = 0xad;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {

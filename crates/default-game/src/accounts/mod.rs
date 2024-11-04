@@ -144,7 +144,7 @@ pub fn handle_list_characters_callback(
                     flags,
                 };
 
-                client.send_packet(character_list.into());
+                client.send_packet(character_list);
             }
             Err(err) => warn!("Failed to list characters: {err}"),
         }

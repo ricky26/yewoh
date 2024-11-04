@@ -191,7 +191,7 @@ impl TextCommandExecutor<'_, '_> {
                     hue: 2751,
                     font: 1,
                     ..Default::default()
-                }.into());
+                });
             }
         }
     }

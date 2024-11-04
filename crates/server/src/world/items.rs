@@ -5,7 +5,7 @@ use bevy::utils::hashbrown::hash_map::Entry;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use serde::{Deserialize, Serialize};
-use yewoh::protocol::{AnyPacket, DeleteEntity, EntityFlags, EntityTooltipVersion, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityWorld};
+use yewoh::protocol::{AnyPacket, DeleteEntity, EntityFlags, EntityTooltipVersion, IntoAnyPacket, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityWorld};
 use yewoh::{EntityId, EntityKind};
 
 use crate::world::delta_grid::{delta_grid_cell, DeltaEntry, DeltaGrid, DeltaVersion};
@@ -193,11 +193,11 @@ impl ItemQueryItem<'_> {
         let item_position = self.position.item_position()?;
         let packet = match item_position {
             ItemPosition::Map(_) =>
-                AnyPacket::from_packet(self.to_upsert_map(id)?),
+                AnyPacket::from(self.to_upsert_map(id)?),
             ItemPosition::Equipped(_, _) =>
-                AnyPacket::from_packet(self.to_upsert_equipped(id, parent_id?)?),
+                AnyPacket::from(self.to_upsert_equipped(id, parent_id?)?),
             ItemPosition::Contained(_, _) =>
-                AnyPacket::from_packet(self.to_upsert_contained(id, parent_id?)?),
+                AnyPacket::from(self.to_upsert_contained(id, parent_id?)?),
         };
         Some(packet)
     }
@@ -345,11 +345,10 @@ pub fn detect_item_changes(
 
         if net_id.is_changed() || item.tooltip.is_changed() {
             let grid_cell = delta_grid_cell(position.position.truncate());
-            let packet = AnyPacket::from_packet(EntityTooltipVersion {
+            let packet = EntityTooltipVersion {
                 id: net_id.id,
                 revision: item.tooltip.version,
-            });
-            let packet = Arc::new(packet);
+            }.into_any_arc();
             let delta = delta_version.new_delta(DeltaEntry::TooltipChanged { entity, packet });
             if let Some(cell) = delta_grid.cell_at_mut(position.map_id, grid_cell) {
                 cell.deltas.push(delta);
@@ -361,9 +360,9 @@ pub fn detect_item_changes(
         let NetEntityDestroyed { entity, id } = event.clone();
         if let Some(last_position) = cache.last_position.remove(&entity) {
             let grid_cell = delta_grid_cell(last_position.position.truncate());
-            let packet = Arc::new(AnyPacket::from_packet(DeleteEntity {
+            let packet = DeleteEntity {
                 id,
-            }));
+            }.into_any_arc();
             let delta = delta_version.new_delta(DeltaEntry::ItemRemoved { entity, packet });
 
             if let Some(cell) = delta_grid.cell_at_mut(last_position.map_id, grid_cell) {

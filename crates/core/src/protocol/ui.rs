@@ -19,7 +19,7 @@ use super::{ClientVersion, Packet, Endian};
 pub struct OpenChatWindow;
 
 impl Packet for OpenChatWindow {
-    fn packet_kind() -> u8 { 0xb5 }
+    const PACKET_KIND: u8 = 0xb5;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(64) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, _payload: &[u8]) -> anyhow::Result<Self> {
@@ -40,7 +40,7 @@ pub struct OpenPaperDoll {
 }
 
 impl Packet for OpenPaperDoll {
-    fn packet_kind() -> u8 { 0x88 }
+    const PACKET_KIND: u8 = 0x88;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(66) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -65,7 +65,7 @@ pub struct OpenContainer {
 }
 
 impl Packet for OpenContainer {
-    fn packet_kind() -> u8 { 0x24 }
+    const PACKET_KIND: u8 = 0x24;
 
     fn fixed_length(client_version: ClientVersion) -> Option<usize> {
         Some(if client_version > VERSION_HIGH_SEAS { 9 } else { 7 })
@@ -130,7 +130,7 @@ pub struct OpenGump {
 }
 
 impl Packet for OpenGump {
-    fn packet_kind() -> u8 { 0xb0 }
+    const PACKET_KIND: u8 = 0xb0;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
@@ -221,7 +221,7 @@ pub struct OpenGumpCompressed {
 }
 
 impl Packet for OpenGumpCompressed {
-    fn packet_kind() -> u8 { 0xdd }
+    const PACKET_KIND: u8 = 0xdd;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
@@ -290,7 +290,7 @@ pub struct GumpResult {
 }
 
 impl Packet for GumpResult {
-    fn packet_kind() -> u8 { 0xb1 }
+    const PACKET_KIND: u8 = 0xb1;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 

@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use glam::ivec2;
 use bevy::ecs::entity::{EntityHashMap, EntityHashSet};
-use yewoh::protocol::{AnyPacket, BeginEnterWorld, ChangeSeason, EndEnterWorld, ExtendedCommand};
+use yewoh::protocol::{BeginEnterWorld, ChangeSeason, EndEnterWorld, ExtendedCommand};
 use yewoh::protocol::{CharacterEquipment, OpenContainer, UpsertContainerContents};
 
 use crate::world::characters::{CharacterBodyType, CharacterQuery};
@@ -157,24 +157,24 @@ pub fn send_deltas(
                 DeltaEntry::ItemChanged { entity, parent, packet } => {
                     if seen.seen_entities.contains(&entity) {
                         seen.insert_entity(entity, parent);
-                        client.send_packet_arc(packet);
+                        client.send_packet(packet);
                     } else if let Some(parent) = parent {
                         if seen.open_containers.contains(&parent) {
                             seen.insert_entity(entity, Some(parent));
-                            client.send_packet_arc(packet);
+                            client.send_packet(packet);
                         }
                     } else {
                         seen.insert_entity(entity, None);
-                        client.send_packet_arc(packet);
+                        client.send_packet(packet);
                     }
                 }
                 DeltaEntry::ItemRemoved { entity, packet, .. } => {
                     seen.remove_entity(entity);
-                    client.send_packet_arc(packet);
+                    client.send_packet(packet);
                 }
                 DeltaEntry::CharacterChanged { entity, update_packet, .. } => {
                     if seen.seen_entities.contains(&entity) {
-                        client.send_packet_arc(update_packet);
+                        client.send_packet(update_packet);
                     } else {
                         let Ok((id, character, children)) = character_query.get(entity) else {
                             continue;
@@ -200,38 +200,38 @@ pub fn send_deltas(
                         }
 
                         let packet = character.to_upsert(id.id, equipment);
-                        client.send_packet(AnyPacket::from_packet(packet));
+                        client.send_packet(packet);
                         seen.insert_entity(entity, None);
                         seen.open_containers.insert(entity);
                     }
                 }
                 DeltaEntry::CharacterRemoved { entity, packet, .. } => {
                     seen.remove_entity(entity);
-                    client.send_packet_arc(packet);
+                    client.send_packet(packet);
                 }
                 DeltaEntry::CharacterAnimation { entity, packet } => {
                     if seen.seen_entities.contains(&entity) {
-                        client.send_packet_arc(packet);
+                        client.send_packet(packet);
                     }
                 }
                 DeltaEntry::CharacterDamaged { entity, packet } => {
                     if seen.seen_entities.contains(&entity) {
-                        client.send_packet_arc(packet);
+                        client.send_packet(packet);
                     }
                 }
                 DeltaEntry::CharacterSwing { entity, packet, .. } => {
                     if seen.seen_entities.contains(&entity) {
-                        client.send_packet_arc(packet);
+                        client.send_packet(packet);
                     }
                 }
                 DeltaEntry::CharacterStatusChanged { entity, packet } => {
                     if entity != possessing.entity && seen.seen_entities.contains(&entity) {
-                        client.send_packet_arc(packet);
+                        client.send_packet(packet);
                     }
                 }
                 DeltaEntry::TooltipChanged { entity, packet, .. } => {
                     if seen.seen_entities.contains(&entity) {
-                        client.send_packet_arc(packet);
+                        client.send_packet(packet);
                     }
                 }
             }
@@ -295,14 +295,14 @@ pub fn sync_visible_entities(
                         }
 
                         let packet = character.to_upsert(id.id, equipment);
-                        client.send_packet(AnyPacket::from_packet(packet));
+                        client.send_packet(packet);
 
                         let packet = if entry.entity == possessing.entity {
                             character.to_full_status_packet(id.id)
                         } else {
                             character.to_status_packet(id.id)
                         };
-                        client.send_packet(AnyPacket::from_packet(packet));
+                        client.send_packet(packet);
                     }
                 }
 
@@ -378,9 +378,9 @@ pub fn send_change_map(
             position: map_position.position,
             direction: map_position.direction,
             map_size: map.size,
-        }.into());
-        client.send_packet(ExtendedCommand::ChangeMap(map_position.map_id).into());
-        client.send_packet(ChangeSeason { season: map.season, play_sound: true }.into());
+        });
+        client.send_packet(ExtendedCommand::ChangeMap(map_position.map_id));
+        client.send_packet(ChangeSeason { season: map.season, play_sound: true });
     }
 }
 
@@ -395,7 +395,7 @@ pub fn finish_synchronizing(
             .insert(EnteredWorld);
 
         if entered_world.is_none() {
-            client.send_packet(EndEnterWorld.into());
+            client.send_packet(EndEnterWorld);
         }
     }
 }
@@ -440,10 +440,10 @@ pub fn send_opened_containers(
         client.send_packet(OpenContainer {
             id,
             gump_id: container.gump_id,
-        }.into());
+        });
         client.send_packet(UpsertContainerContents {
             contents,
-        }.into());
+        });
     }
 }
 

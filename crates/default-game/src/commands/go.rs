@@ -82,7 +82,7 @@ fn show_go_gump(client: &NetClient) {
         type_id: 2,
         position: IVec2::new(10, 10),
         layout,
-    }.into());
+    });
 }
 
 pub fn go(

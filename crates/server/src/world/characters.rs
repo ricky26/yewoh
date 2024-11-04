@@ -5,7 +5,7 @@ use bevy::ecs::query::{QueryData, QueryFilter};
 use bevy::prelude::*;
 use bevy::utils::Entry;
 use serde::{Deserialize, Serialize};
-use yewoh::protocol::{AnyPacket, CharacterAnimation, CharacterEquipment, CharacterPredefinedAnimation, DeleteEntity, EntityFlags, EntityTooltipVersion, Packet, Race, UpdateCharacter, UpsertEntityCharacter, UpsertEntityStats};
+use yewoh::protocol::{AnyPacket, CharacterAnimation, CharacterEquipment, CharacterPredefinedAnimation, DeleteEntity, EntityFlags, EntityTooltipVersion, IntoAnyPacket, Race, UpdateCharacter, UpsertEntityCharacter, UpsertEntityStats};
 use yewoh::{EntityId, Notoriety};
 use yewoh::types::FixedString;
 use crate::world::connection::{NetClient, OwningClient};
@@ -394,7 +394,7 @@ pub fn detect_character_changes(
 ) {
     for (entity, net_id, character) in &characters_query {
         if net_id.is_changed() || character.is_character_changed() || character.position.is_changed() {
-            let update_packet = Arc::new(AnyPacket::from_packet(character.to_update(net_id.id)));
+            let update_packet = character.to_update(net_id.id).into_any_arc();
             let map_id = character.position.map_id;
             let position = character.position.position;
             let grid_cell = delta_grid_cell(position.truncate());
@@ -422,7 +422,7 @@ pub fn detect_character_changes(
         if character.is_status_changed() {
             let position = *character.position;
             let grid_cell = delta_grid_cell(position.position.truncate());
-            let packet = character.to_status_packet(net_id.id).into_arc();
+            let packet = character.to_status_packet(net_id.id).into_any_arc();
             let delta = delta_version.new_delta(DeltaEntry::CharacterStatusChanged { entity, packet });
             if let Some(cell) = delta_grid.cell_at_mut(position.map_id, grid_cell) {
                 cell.deltas.push(delta);
@@ -432,11 +432,10 @@ pub fn detect_character_changes(
         if character.tooltip.is_changed() {
             let position = character.position;
             let grid_cell = delta_grid_cell(position.position.truncate());
-            let packet = AnyPacket::from_packet(EntityTooltipVersion {
+            let packet = EntityTooltipVersion {
                 id: net_id.id,
                 revision: character.tooltip.version,
-            });
-            let packet = Arc::new(packet);
+            }.into_any_arc();
             let delta = delta_version.new_delta(DeltaEntry::TooltipChanged { entity, packet });
             if let Some(cell) = delta_grid.cell_at_mut(position.map_id, grid_cell) {
                 cell.deltas.push(delta);
@@ -448,9 +447,9 @@ pub fn detect_character_changes(
         let NetEntityDestroyed { entity, id } = event.clone();
         if let Some(last_position) = cache.last_position.remove(&entity) {
             let grid_cell = delta_grid_cell(last_position.position.truncate());
-            let packet = Arc::new(AnyPacket::from_packet(DeleteEntity {
+            let packet = DeleteEntity {
                 id,
-            }));
+            }.into_any_arc();
             let delta = delta_version.new_delta(DeltaEntry::CharacterRemoved { entity, packet });
 
             if let Some(cell) = delta_grid.cell_at_mut(last_position.map_id, grid_cell) {
@@ -469,8 +468,8 @@ pub fn send_updated_full_status(
            continue;
        };
 
-       let packet = character.to_full_status_packet(net_id.id).into_arc();
-       client.send_packet_arc(packet);
+       let packet = character.to_full_status_packet(net_id.id);
+       client.send_packet(packet);
     }
 }
 

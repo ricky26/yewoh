@@ -30,7 +30,7 @@ pub enum CharacterProfile {
 }
 
 impl Packet for CharacterProfile {
-    fn packet_kind() -> u8 { 0xb8 }
+    const PACKET_KIND: u8 = 0xb8;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
     fn decode(_client_version: ClientVersion, from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -133,7 +133,7 @@ pub enum Skills {
 }
 
 impl Packet for Skills {
-    fn packet_kind() -> u8 { 0x3a }
+    const PACKET_KIND: u8 = 0x3a;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
@@ -215,7 +215,7 @@ pub struct AttackRequest {
 }
 
 impl Packet for AttackRequest {
-    fn packet_kind() -> u8 { 0x5 }
+    const PACKET_KIND: u8 = 0x5;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(5) }
 
@@ -235,7 +235,7 @@ pub struct SetAttackTarget {
 }
 
 impl Packet for SetAttackTarget {
-    fn packet_kind() -> u8 { 0xaa }
+    const PACKET_KIND: u8 = 0xaa;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(5) }
 
@@ -267,7 +267,7 @@ pub struct Swing {
 }
 
 impl Packet for Swing {
-    fn packet_kind() -> u8 { 0x2f }
+    const PACKET_KIND: u8 = 0x2f;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(10) }
 
@@ -297,7 +297,7 @@ pub struct CharacterAnimation {
 }
 
 impl Packet for CharacterAnimation {
-    fn packet_kind() -> u8 { 0x6e }
+    const PACKET_KIND: u8 = 0x6e;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(14) }
 
@@ -345,7 +345,7 @@ pub struct CharacterPredefinedAnimation {
 }
 
 impl Packet for CharacterPredefinedAnimation {
-    fn packet_kind() -> u8 { 0xe2 }
+    const PACKET_KIND: u8 = 0xe2;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(10) }
 

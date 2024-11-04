@@ -15,7 +15,7 @@ pub struct PlayMusic {
 }
 
 impl Packet for PlayMusic {
-    fn packet_kind() -> u8 { 0x6d }
+    const PACKET_KIND: u8 = 0x6d;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(3) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -45,7 +45,7 @@ pub struct PlaySoundEffect {
 }
 
 impl Packet for PlaySoundEffect {
-    fn packet_kind() -> u8 { 0x54 }
+    const PACKET_KIND: u8 = 0x54;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(12) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {

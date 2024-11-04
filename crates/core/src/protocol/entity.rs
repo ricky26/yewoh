@@ -32,7 +32,7 @@ pub struct EntityRequest {
 }
 
 impl Packet for EntityRequest {
-    fn packet_kind() -> u8 { 0x34 }
+    const PACKET_KIND: u8 = 0x34;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(10) }
 
@@ -78,7 +78,7 @@ pub struct UpsertEntityLegacy {
 }
 
 impl Packet for UpsertEntityLegacy {
-    fn packet_kind() -> u8 { 0x1a }
+    const PACKET_KIND: u8 = 0x1a;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -187,7 +187,7 @@ pub struct UpsertEntityWorld {
 }
 
 impl Packet for UpsertEntityWorld {
-    fn packet_kind() -> u8 { 0xf3 }
+    const PACKET_KIND: u8 = 0xf3;
 
     fn fixed_length(client_version: ClientVersion) -> Option<usize> {
         Some(if client_version >= VERSION_HIGH_SEAS { 26 } else { 24 })
@@ -253,7 +253,7 @@ pub struct DeleteEntity {
 }
 
 impl Packet for DeleteEntity {
-    fn packet_kind() -> u8 { 0x1d }
+    const PACKET_KIND: u8 = 0x1d;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(5) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -279,7 +279,7 @@ pub struct UpsertLocalPlayer {
 }
 
 impl Packet for UpsertLocalPlayer {
-    fn packet_kind() -> u8 { 0x20 }
+    const PACKET_KIND: u8 = 0x20;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(19) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -379,7 +379,7 @@ impl UpsertEntityCharacter {
 }
 
 impl Packet for UpsertEntityCharacter {
-    fn packet_kind() -> u8 { 0x78 }
+    const PACKET_KIND: u8 = 0x78;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
     fn decode(client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -475,7 +475,7 @@ pub struct UpdateCharacter {
 }
 
 impl Packet for UpdateCharacter {
-    fn packet_kind() -> u8 { 0x77 }
+    const PACKET_KIND: u8 = 0x77;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(17) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -524,7 +524,7 @@ pub struct UpsertEntityEquipped {
 }
 
 impl Packet for UpsertEntityEquipped {
-    fn packet_kind() -> u8 { 0x2e }
+    const PACKET_KIND: u8 = 0x2e;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(15) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -556,7 +556,7 @@ pub struct EntityTooltipVersion {
 }
 
 impl Packet for EntityTooltipVersion {
-    fn packet_kind() -> u8 { 0xdc }
+    const PACKET_KIND: u8 = 0xdc;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(9) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -585,7 +585,7 @@ pub enum EntityTooltip {
 }
 
 impl Packet for EntityTooltip {
-    fn packet_kind() -> u8 { 0xd6 }
+    const PACKET_KIND: u8 = 0xd6;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
     fn decode(_client_version: ClientVersion, from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -663,7 +663,7 @@ pub struct UpsertEntityContained {
 }
 
 impl Packet for UpsertEntityContained {
-    fn packet_kind() -> u8 { 0x25 }
+    const PACKET_KIND: u8 = 0x25;
 
     fn fixed_length(client_version: ClientVersion) -> Option<usize> {
         Some(if client_version >= VERSION_GRID_INVENTORY { 21 } else { 20 })
@@ -719,7 +719,7 @@ pub struct UpsertContainerContents {
 }
 
 impl Packet for UpsertContainerContents {
-    fn packet_kind() -> u8 { 0x3c }
+    const PACKET_KIND: u8 = 0x3c;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
@@ -760,7 +760,7 @@ pub struct UpsertContainerEquipment {
 }
 
 impl Packet for UpsertContainerEquipment {
-    fn packet_kind() -> u8 { 0x89 }
+    const PACKET_KIND: u8 = 0x89;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
@@ -854,7 +854,7 @@ pub struct UpsertEntityStats {
 }
 
 impl Packet for UpsertEntityStats {
-    fn packet_kind() -> u8 { 0x11 }
+    const PACKET_KIND: u8 = 0x11;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
@@ -1055,7 +1055,7 @@ pub struct DamageDealt {
 }
 
 impl Packet for DamageDealt {
-    fn packet_kind() -> u8 { 0x0b }
+    const PACKET_KIND: u8 = 0x0b;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(7) }
 
@@ -1079,7 +1079,7 @@ pub struct RequestName {
 }
 
 impl Packet for RequestName {
-    fn packet_kind() -> u8 { 0x98 }
+    const PACKET_KIND: u8 = 0x98;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
@@ -1107,7 +1107,7 @@ pub struct RenameEntity {
 }
 
 impl Packet for RenameEntity {
-    fn packet_kind() -> u8 { 0x75 }
+    const PACKET_KIND: u8 = 0x75;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(35) }
 
@@ -1131,7 +1131,7 @@ pub struct EntityLightLevel {
 }
 
 impl Packet for EntityLightLevel {
-    fn packet_kind() -> u8 { 0x4e }
+    const PACKET_KIND: u8 = 0x4e;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(6) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {

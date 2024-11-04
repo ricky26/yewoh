@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use tokio::sync::mpsc;
 use tracing::{info, trace, warn};
 use yewoh::protocol::encryption::Encryption;
-use yewoh::protocol::{AnyPacket, AsciiTextMessageRequest, CharacterProfile, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DeleteCharacter, DoubleClick, DropEntity, EntityRequest, EntityRequestKind, EntityTooltip, EntityTooltipLine, EquipEntity, FeatureFlags, GameServerLogin, Move, PickUpEntity, SelectCharacter, SingleClick, SupportedFeatures, UnicodeTextMessageRequest};
+use yewoh::protocol::{AnyPacket, CharacterProfile, ClientVersion, ClientVersionRequest, EntityRequestKind, EntityTooltip, EntityTooltipLine, FeatureFlags, GameServerLogin, IntoAnyPacket, SupportedFeatures, UnicodeTextMessageRequest};
 
 use crate::async_runtime::AsyncRuntime;
 use crate::game_server::NewSessionAttempt;
@@ -24,13 +24,6 @@ pub enum WriterAction {
     SendArc(ClientVersion, Arc<AnyPacket>),
 }
 
-#[derive(Debug, Clone, Component)]
-pub struct NetClient {
-    address: SocketAddr,
-    client_version: ClientVersion,
-    tx: mpsc::UnboundedSender<WriterAction>,
-}
-
 #[derive(Debug, Clone, Component, Reflect)]
 pub struct Possessing {
     pub entity: Entity,
@@ -41,18 +34,24 @@ pub struct OwningClient {
     pub client_entity: Entity,
 }
 
+#[derive(Debug, Clone, Component)]
+pub struct NetClient {
+    address: SocketAddr,
+    client_version: ClientVersion,
+    tx: mpsc::UnboundedSender<WriterAction>,
+}
+
 impl NetClient {
     pub fn address(&self) -> SocketAddr { self.address }
 
     pub fn client_version(&self) -> ClientVersion { self.client_version }
 
-    pub fn send_packet(&self, packet: AnyPacket) {
-        self.tx.send(WriterAction::Send(self.client_version, packet)).ok();
-    }
-
-    pub fn send_packet_arc(&self, packet: impl Into<Arc<AnyPacket>>) {
-        let packet = packet.into();
-        self.tx.send(WriterAction::SendArc(self.client_version, packet)).ok();
+    pub fn send_packet(&self, packet: impl IntoAnyPacket) {
+        let action = match packet.into_any_maybe_arc() {
+            Ok(p) => WriterAction::Send(self.client_version, p),
+            Err(p) => WriterAction::SendArc(self.client_version, p),
+        };
+        self.tx.send(action).ok();
     }
 }
 
@@ -106,9 +105,10 @@ impl NetServer {
     }
 }
 
-pub fn broadcast<'a>(clients: impl Iterator<Item=&'a NetClient>, packet: Arc<AnyPacket>) {
+pub fn broadcast<'a>(clients: impl Iterator<Item=&'a NetClient>, packet: impl IntoAnyPacket) {
+    let packet = packet.into_any_arc();
     for client in clients {
-        client.send_packet_arc(packet.clone());
+        client.send_packet(packet.clone());
     }
 }
 
@@ -145,17 +145,17 @@ pub fn accept_new_clients(
         let attempt_tx = server.login_attempts_tx.clone();
         runtime.spawn(async move {
             let packet = match reader.recv(ClientVersion::default()).await {
-                Ok(packet) => packet,
+                Ok(Some(packet)) => packet,
+                Ok(None) => return,
                 Err(err) => {
                     warn!("From ({address}): whilst reading first packet: {err}");
                     return;
                 }
             };
 
-            let packet = packet.and_then(|r| r.into_downcast::<GameServerLogin>().ok());
             let login = match packet {
-                Some(packet) => packet,
-                None => {
+                AnyPacket::GameServerLogin(packet) => packet,
+                _ => {
                     warn!("From ({address}): expected login as first game server connection message");
                     return;
                 }
@@ -199,13 +199,13 @@ pub fn accept_new_clients(
                 match action {
                     WriterAction::Send(client_version, packet) => {
                         trace!("OUT ({address:?}): {packet:?}");
-                        if let Err(err) = writer.send_any(client_version, &packet).await {
+                        if let Err(err) = writer.send(client_version, &packet).await {
                             warn!("Error sending packet {err}");
                         }
                     }
                     WriterAction::SendArc(client_version, packet) => {
                         trace!("OUT ({address:?}): {packet:?}");
-                        if let Err(err) = writer.send_any(client_version, &packet).await {
+                        if let Err(err) = writer.send(client_version, &*packet).await {
                             warn!("Error sending packet {err}");
                         }
                     }
@@ -247,7 +247,7 @@ pub fn accept_new_clients(
             internal_close.send(entity).ok();
         });
 
-        client.send_packet(ClientVersionRequest::default().into());
+        client.send_packet(ClientVersionRequest::default());
     }
 
     while let Ok(entity) = server.closed_rx.try_recv() {
@@ -284,52 +284,59 @@ pub fn handle_login_packets(
             _ => continue,
         };
 
-        if let Some(_version_response) = packet.downcast::<ClientVersionRequest>() {
-            if sent_character_list.is_none() {
-                commands.entity(connection).insert(SentCharacterList);
+        match packet {
+            AnyPacket::ClientVersionRequest(_) => {
+                if sent_character_list.is_none() {
+                    commands.entity(connection).insert(SentCharacterList);
 
-                client.send_packet(SupportedFeatures {
-                    feature_flags: FeatureFlags::T2A
-                        | FeatureFlags::UOR
-                        | FeatureFlags::LBR
-                        | FeatureFlags::AOS
-                        | FeatureFlags::SE
-                        | FeatureFlags::ML
-                        | FeatureFlags::NINTH_AGE
-                        | FeatureFlags::LIVE_ACCOUNT
-                        | FeatureFlags::SA
-                        | FeatureFlags::HS
-                        | FeatureFlags::GOTHIC
-                        | FeatureFlags::RUSTIC
-                        | FeatureFlags::JUNGLE
-                        | FeatureFlags::SHADOWGUARD
-                        | FeatureFlags::TOL
-                        | FeatureFlags::EJ,
-                }.into());
-                character_list_events.send(CharacterListEvent {
+                    client.send_packet(SupportedFeatures {
+                        feature_flags: FeatureFlags::T2A
+                            | FeatureFlags::UOR
+                            | FeatureFlags::LBR
+                            | FeatureFlags::AOS
+                            | FeatureFlags::SE
+                            | FeatureFlags::ML
+                            | FeatureFlags::NINTH_AGE
+                            | FeatureFlags::LIVE_ACCOUNT
+                            | FeatureFlags::SA
+                            | FeatureFlags::HS
+                            | FeatureFlags::GOTHIC
+                            | FeatureFlags::RUSTIC
+                            | FeatureFlags::JUNGLE
+                            | FeatureFlags::SHADOWGUARD
+                            | FeatureFlags::TOL
+                            | FeatureFlags::EJ,
+                    });
+                    character_list_events.send(CharacterListEvent {
+                        client_entity: connection,
+                    });
+                }
+            }
+            AnyPacket::CreateCharacterClassic(create_character) => {
+                character_creation_events.send(CreateCharacterEvent {
                     client_entity: connection,
+                    request: create_character.0.clone(),
                 });
             }
-        } else if let Some(create_character) = packet.downcast::<CreateCharacterClassic>() {
-            character_creation_events.send(CreateCharacterEvent {
-                client_entity: connection,
-                request: create_character.0.clone(),
-            });
-        } else if let Some(create_character) = packet.downcast::<CreateCharacterEnhanced>() {
-            character_creation_events.send(CreateCharacterEvent {
-                client_entity: connection,
-                request: create_character.0.clone(),
-            });
-        } else if let Some(select_character) = packet.downcast::<SelectCharacter>() {
-            select_character_events.send(SelectCharacterEvent {
-                client_entity: connection,
-                request: select_character.clone(),
-            });
-        } else if let Some(delete_character) = packet.downcast::<DeleteCharacter>() {
-            delete_character_events.send(DeleteCharacterEvent {
-                client_entity: connection,
-                request: delete_character.clone(),
-            });
+            AnyPacket::CreateCharacterEnhanced(create_character) => {
+                character_creation_events.send(CreateCharacterEvent {
+                    client_entity: connection,
+                    request: create_character.0.clone(),
+                });
+            }
+            AnyPacket::SelectCharacter(select_character) => {
+                select_character_events.send(SelectCharacterEvent {
+                    client_entity: connection,
+                    request: select_character.clone(),
+                });
+            }
+            AnyPacket::DeleteCharacter(delete_character) => {
+                delete_character_events.send(DeleteCharacterEvent {
+                    client_entity: connection,
+                    request: delete_character.clone(),
+                });
+            }
+            _ => {}
         }
     }
 }
@@ -351,81 +358,95 @@ pub fn handle_input_packets(
     for ReceivedPacketEvent { client_entity: connection, packet } in events.read() {
         let client_entity = *connection;
 
-        if let Some(request) = packet.downcast::<Move>().cloned() {
-            move_events.send(MoveEvent { client_entity, request });
-        } else if let Some(request) = packet.downcast::<SingleClick>() {
-            single_click_events.send(SingleClickEvent {
-                client_entity,
-                target: lookup.net_to_ecs(request.target_id),
-            });
-        } else if let Some(request) = packet.downcast::<DoubleClick>() {
-            double_click_events.send(DoubleClickEvent {
-                client_entity,
-                target: lookup.net_to_ecs(request.target_id),
-            });
-        } else if let Some(request) = packet.downcast::<PickUpEntity>() {
-            if let Some(target) = lookup.net_to_ecs(request.target_id) {
-                pick_up_events.send(PickUpEvent {
+        match packet {
+            AnyPacket::Move(request) => {
+                move_events.send(MoveEvent { client_entity, request: request.clone() });
+            }
+            AnyPacket::SingleClick(request) => {
+                single_click_events.send(SingleClickEvent {
                     client_entity,
-                    target,
+                    target: lookup.net_to_ecs(request.target_id),
                 });
             }
-        } else if let Some(request) = packet.downcast::<DropEntity>() {
-            if let Some(target) = lookup.net_to_ecs(request.target_id) {
-                drop_events.send(DropEvent {
+            AnyPacket::DoubleClick(request) => {
+                double_click_events.send(DoubleClickEvent {
                     client_entity,
-                    target,
-                    position: request.position,
-                    grid_index: request.grid_index,
-                    dropped_on: request.container_id.and_then(|id| lookup.net_to_ecs(id)),
+                    target: lookup.net_to_ecs(request.target_id),
                 });
             }
-        } else if let Some(request) = packet.downcast::<EquipEntity>() {
-            if let Some((target, character)) = lookup.net_to_ecs(request.target_id)
-                .zip(lookup.net_to_ecs(request.character_id)) {
-                equip_events.send(EquipEvent {
+            AnyPacket::PickUpEntity(request) => {
+                if let Some(target) = lookup.net_to_ecs(request.target_id) {
+                    pick_up_events.send(PickUpEvent {
+                        client_entity,
+                        target,
+                    });
+                }
+            }
+            AnyPacket::DropEntity(request) => {
+                if let Some(target) = lookup.net_to_ecs(request.target_id) {
+                    drop_events.send(DropEvent {
+                        client_entity,
+                        target,
+                        position: request.position,
+                        grid_index: request.grid_index,
+                        dropped_on: request.container_id.and_then(|id| lookup.net_to_ecs(id)),
+                    });
+                }
+            }
+            AnyPacket::EquipEntity(request) => {
+                if let Some((target, character)) = lookup.net_to_ecs(request.target_id)
+                    .zip(lookup.net_to_ecs(request.character_id)) {
+                    equip_events.send(EquipEvent {
+                        client_entity,
+                        target,
+                        character,
+                        slot: request.slot,
+                    });
+                }
+            }
+            AnyPacket::AsciiTextMessageRequest(request) => {
+                chat_events.send(ChatRequestEvent {
                     client_entity,
-                    target,
-                    character,
-                    slot: request.slot,
+                    request: UnicodeTextMessageRequest {
+                        kind: request.kind,
+                        hue: request.hue,
+                        font: request.font,
+                        text: request.text.clone(),
+                        ..Default::default()
+                    },
                 });
             }
-        } else if let Some(request) = packet.downcast::<AsciiTextMessageRequest>() {
-            chat_events.send(ChatRequestEvent {
-                client_entity,
-                request: UnicodeTextMessageRequest {
-                    kind: request.kind,
-                    hue: request.hue,
-                    font: request.font,
-                    text: request.text.clone(),
-                    ..Default::default()
-                },
-            });
-        } else if let Some(request) = packet.downcast::<UnicodeTextMessageRequest>().cloned() {
-            chat_events.send(ChatRequestEvent { client_entity, request });
-        } else if let Some(request) = packet.downcast::<CharacterProfile>().cloned() {
-            match request {
-                CharacterProfile::Request(request) => {
-                    if let Some(target) = lookup.net_to_ecs(request.target_id) {
-                        profile_events.send(ProfileEvent {
-                            client_entity,
-                            target,
-                            new_profile: request.new_profile.clone(),
-                        });
+            AnyPacket::UnicodeTextMessageRequest(request) => {
+                chat_events.send(ChatRequestEvent { client_entity, request: request.clone() });
+            }
+            AnyPacket::CharacterProfile(request) => {
+                match request {
+                    CharacterProfile::Request(request) => {
+                        if let Some(target) = lookup.net_to_ecs(request.target_id) {
+                            profile_events.send(ProfileEvent {
+                                client_entity,
+                                target,
+                                new_profile: request.new_profile.clone(),
+                            });
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            AnyPacket::EntityRequest(request) => {
+                let target = match lookup.net_to_ecs(request.target) {
+                    Some(x) => x,
+                    _ => continue,
+                };
+
+                match request.kind {
+                    EntityRequestKind::Skills => { skills_events.send(RequestSkillsEvent { client_entity, target }); }
+                    kind => {
+                        warn!("unhandled entity request: {kind:?}");
                     }
                 }
-                _ => unreachable!(),
             }
-        } else if let Some(request) = packet.downcast::<EntityRequest>().cloned() {
-            let target = match lookup.net_to_ecs(request.target) {
-                Some(x) => x,
-                _ => continue,
-            };
-
-            match request.kind {
-                EntityRequestKind::Skills => { skills_events.send(RequestSkillsEvent { client_entity, target }); }
-                _ => {}
-            }
+            _ => {}
         }
     }
 }
@@ -438,9 +459,8 @@ pub fn handle_tooltip_packets(
 ) {
     for ReceivedPacketEvent { client_entity: connection, packet } in events.read() {
         let connection = *connection;
-        let request = match packet.downcast::<EntityTooltip>() {
-            Some(x) => x,
-            _ => continue,
+        let AnyPacket::EntityTooltip(request) = packet else {
+            continue;
         };
 
         let client = match clients.get(connection) {
@@ -460,7 +480,7 @@ pub fn handle_tooltip_packets(
                         client.send_packet(EntityTooltip::Response {
                             id,
                             entries: Vec::new(),
-                        }.into());
+                        });
                     }
                 }
             }
@@ -494,7 +514,7 @@ pub fn send_tooltips(
                 })
                 .collect();
 
-            client.send_packet(EntityTooltip::Response { id, entries }.into());
+            client.send_packet(EntityTooltip::Response { id, entries });
         }
     }
 }

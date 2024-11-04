@@ -1,9 +1,7 @@
-use std::sync::Arc;
-
 use bevy::ecs::entity::{VisitEntities, VisitEntitiesMut};
 use bevy::ecs::reflect::{ReflectMapEntities, ReflectVisitEntities, ReflectVisitEntitiesMut};
 use bevy::prelude::*;
-use yewoh::protocol::{AnyPacket, DamageDealt, SetAttackTarget, Swing};
+use yewoh::protocol::{DamageDealt, IntoAnyPacket, SetAttackTarget, Swing};
 
 use crate::world::connection::{NetClient, OwningClient};
 use crate::world::delta_grid::{delta_grid_cell, DeltaEntry, DeltaGrid, DeltaVersion};
@@ -59,7 +57,7 @@ pub fn send_updated_attack_target(
         let target_id = net_ids.get(attack_target.target).ok().map(|id| id.id);
         client.send_packet(SetAttackTarget {
             target_id,
-        }.into());
+        });
     }
 
     for entity in removed_targets.read() {
@@ -75,7 +73,7 @@ pub fn send_updated_attack_target(
 
         client.send_packet(SetAttackTarget {
             target_id: None,
-        }.into());
+        });
     }
 }
 
@@ -92,10 +90,10 @@ pub fn detect_damage_notices(
         };
 
         let grid_cell = delta_grid_cell(position.position.truncate());
-        let packet = Arc::new(AnyPacket::from_packet(DamageDealt {
+        let packet = DamageDealt {
             target_id: target_id.id,
             damage: event.damage,
-        }));
+        }.into_any_arc();
 
         if let Some(cell) = delta_grid.cell_at_mut(position.map_id, grid_cell) {
             cell.deltas.push(delta_version.new_delta(DeltaEntry::CharacterDamaged {
@@ -124,10 +122,10 @@ pub fn detect_swings(
         };
 
         let grid_cell = delta_grid_cell(position.position.truncate());
-        let packet = Arc::new(AnyPacket::from_packet(Swing {
+        let packet = Swing {
             target_id: target_id.id,
             attacker_id: attacker_id.id,
-        }));
+        }.into_any_arc();
 
         if let Some(cell) = delta_grid.cell_at_mut(position.map_id, grid_cell) {
             cell.deltas.push(delta_version.new_delta(DeltaEntry::CharacterSwing {

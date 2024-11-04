@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
-use yewoh::protocol::{GlobalLightLevel, Packet, SetTime};
+use yewoh::protocol::{GlobalLightLevel, IntoAnyPacket, SetTime};
 use yewoh_server::world::connection::NetClient;
 use yewoh_server::world::view::Synchronizing;
 
@@ -59,21 +59,21 @@ pub fn send_time(
     let light_level = now.light_level();
 
     if *last_light_level != light_level {
-        let packet = SetTime { hour, minute, second }.into_arc();
-        let light_level_packet = GlobalLightLevel(light_level).into_arc();
+        let packet = SetTime { hour, minute, second }.into_any_arc();
+        let light_level_packet = GlobalLightLevel(light_level).into_any_arc();
         *last_light_level = light_level;
 
         for client in all_clients.iter() {
-            client.send_packet_arc(packet.clone());
-            client.send_packet_arc(light_level_packet.clone());
+            client.send_packet(packet.clone());
+            client.send_packet(light_level_packet.clone());
         }
     } else if !new_clients.is_empty() {
-        let packet = SetTime { hour, minute, second }.into_arc();
-        let light_level_packet = GlobalLightLevel(light_level).into_arc();
+        let packet = SetTime { hour, minute, second }.into_any_arc();
+        let light_level_packet = GlobalLightLevel(light_level).into_any_arc();
 
         for client in new_clients.iter() {
-            client.send_packet_arc(packet.clone());
-            client.send_packet_arc(light_level_packet.clone());
+            client.send_packet(packet.clone());
+            client.send_packet(light_level_packet.clone());
         }
     }
 }

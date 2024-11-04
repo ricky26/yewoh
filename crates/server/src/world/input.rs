@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use bevy::prelude::*;
 use tracing::debug;
-use yewoh::protocol::{AttackRequest, ContextMenu, ContextMenuEntry, EquipmentSlot, ExtendedCommand, Move, PickTarget, SetAttackTarget, TargetType};
+use yewoh::protocol::{AnyPacket, ContextMenu, ContextMenuEntry, EquipmentSlot, ExtendedCommand, Move, PickTarget, SetAttackTarget, TargetType};
 
 use crate::world::combat::AttackRequestedEvent;
 use crate::world::connection::{NetClient, ReceivedPacketEvent};
@@ -130,9 +130,8 @@ pub fn update_targets(
 ) {
     for ReceivedPacketEvent { client_entity, packet } in events.read() {
         let client_entity = *client_entity;
-        let request = match packet.downcast::<PickTarget>() {
-            Some(x) => x,
-            None => continue,
+        let AnyPacket::PickTarget(request) = packet else {
+            continue;
         };
 
         let (client, mut targeting) = match clients.get_mut(client_entity) {
@@ -155,7 +154,7 @@ pub fn update_targets(
 
             targeting.pending.pop_front();
             if let Some(next) = targeting.pending.front() {
-                client.send_packet(next.packet.clone().into());
+                client.send_packet(next.packet.clone());
             }
         }
     }
@@ -189,7 +188,7 @@ pub fn update_targets(
         };
 
         if targeting.pending.is_empty() {
-            client.send_packet(packet.clone().into());
+            client.send_packet(packet.clone());
         }
 
         targeting.pending.push_back(InFlightTargetRequest {
@@ -218,7 +217,7 @@ pub fn update_targets(
         if position == 0 {
             targeting.pending.pop_front();
             if let Some(next) = targeting.pending.front() {
-                client.send_packet(next.packet.clone().into());
+                client.send_packet(next.packet.clone());
             }
         } else {
             targeting.pending.remove(position);
@@ -234,9 +233,8 @@ pub fn handle_context_menu_packets(
 ) {
     for ReceivedPacketEvent { client_entity: client, packet } in events.read() {
         let client_entity = *client;
-        let packet = match packet.downcast::<ExtendedCommand>() {
-            Some(x) => x,
-            _ => continue,
+        let AnyPacket::ExtendedCommand(packet) = packet else {
+            continue;
         };
 
         match packet {
@@ -293,7 +291,7 @@ pub fn send_context_menu(
         client.send_packet(ExtendedCommand::ContextMenuEnhanced(ContextMenu {
             target_id,
             entries: request.entries.clone(),
-        }).into());
+        }));
     }
 }
 
@@ -305,9 +303,8 @@ pub fn handle_attack_packets(
 ) {
     for ReceivedPacketEvent { client_entity: client, packet } in events.read() {
         let client_entity = *client;
-        let packet = match packet.downcast::<AttackRequest>() {
-            Some(x) => x,
-            _ => continue,
+        let AnyPacket::AttackRequest(packet) = packet else {
+            continue;
         };
 
         let target = match lookup.net_to_ecs(packet.target_id) {
@@ -316,7 +313,7 @@ pub fn handle_attack_packets(
                 if let Ok(client) = clients.get(client_entity) {
                     client.send_packet(SetAttackTarget {
                         target_id: None,
-                    }.into());
+                    });
                 }
 
                 continue;

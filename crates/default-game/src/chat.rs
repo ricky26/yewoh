@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use yewoh::protocol::{MessageKind, Packet, UnicodeTextMessage};
+use yewoh::protocol::{MessageKind, UnicodeTextMessage};
 use yewoh::types::FixedString;
 use yewoh_server::world::characters::CharacterName;
 use yewoh_server::world::chat::ChatRequestEvent;
@@ -39,6 +39,6 @@ pub fn handle_incoming_chat(
             hue: 1234,
             font: 1,
             graphic_id: 0
-        }.into_arc());
+        });
     }
 }

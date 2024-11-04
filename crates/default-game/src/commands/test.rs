@@ -81,7 +81,7 @@ pub fn test_gump(
                     layout: "{ page 0 }{ resizepic 0 0 5054 420 440 }{ text 0 0 120 0 }".to_string(),
                     text: vec!["Hello, world!".into()],
                 },
-            }.into());
+            });
         }
     }
 }

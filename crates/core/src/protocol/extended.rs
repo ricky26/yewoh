@@ -89,7 +89,7 @@ impl ExtendedCommand {
 }
 
 impl Packet for ExtendedCommand {
-    fn packet_kind() -> u8 { 0xbf }
+    const PACKET_KIND: u8 = 0xbf;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -224,7 +224,7 @@ pub enum ExtendedCommandAos {
 }
 
 impl Packet for ExtendedCommandAos {
-    fn packet_kind() -> u8 { 0xd7 }
+    const PACKET_KIND: u8 = 0xd7;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, _payload: &[u8]) -> anyhow::Result<Self> {

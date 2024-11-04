@@ -21,7 +21,7 @@ pub struct Seed {
 }
 
 impl Packet for Seed {
-    fn packet_kind() -> u8 { 0xef }
+    const PACKET_KIND: u8 = 0xef;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(21) }
 
@@ -75,7 +75,7 @@ impl Debug for AccountLogin {
 }
 
 impl Packet for AccountLogin {
-    fn packet_kind() -> u8 { 0x80 }
+    const PACKET_KIND: u8 = 0x80;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(62) }
 
@@ -113,7 +113,7 @@ pub enum LoginError {
 }
 
 impl Packet for LoginError {
-    fn packet_kind() -> u8 { 0x82 }
+    const PACKET_KIND: u8 = 0x82;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
 
@@ -142,7 +142,7 @@ pub struct ServerList {
 }
 
 impl Packet for ServerList {
-    fn packet_kind() -> u8 { 0xa8 }
+    const PACKET_KIND: u8 = 0xa8;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
@@ -194,7 +194,7 @@ pub struct SelectGameServer {
 }
 
 impl Packet for SelectGameServer {
-    fn packet_kind() -> u8 { 0xA0 }
+    const PACKET_KIND: u8 = 0xa0;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(3) }
 
@@ -219,7 +219,7 @@ pub struct SwitchServer {
 }
 
 impl Packet for SwitchServer {
-    fn packet_kind() -> u8 { 0x8c }
+    const PACKET_KIND: u8 = 0x8c;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(11) }
 
@@ -256,7 +256,7 @@ impl Debug for GameServerLogin {
 }
 
 impl Packet for GameServerLogin {
-    fn packet_kind() -> u8 { 0x91 }
+    const PACKET_KIND: u8 = 0x91;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(0x41) }
 
@@ -319,7 +319,7 @@ impl SupportedFeatures {
 }
 
 impl Packet for SupportedFeatures {
-    fn packet_kind() -> u8 { 0xb9 }
+    const PACKET_KIND: u8 = 0xb9;
 
     fn fixed_length(client_version: ClientVersion) -> Option<usize> {
         Some(if client_version >= Self::EXTENDED_MIN_VERSION { 5 } else { 3 })
@@ -402,7 +402,7 @@ impl CharacterList {
 }
 
 impl Packet for CharacterList {
-    fn packet_kind() -> u8 { 0xa9 }
+    const PACKET_KIND: u8 = 0xa9;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
     fn decode(client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -696,7 +696,7 @@ impl CreateCharacter {
 pub struct CreateCharacterClassic(pub CreateCharacter);
 
 impl Packet for CreateCharacterClassic {
-    fn packet_kind() -> u8 { 0 }
+    const PACKET_KIND: u8 = 0x00;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(104) }
 
     fn decode(client_version: ClientVersion, _from_client: bool, payload: &[u8]) -> anyhow::Result<Self> {
@@ -712,7 +712,7 @@ impl Packet for CreateCharacterClassic {
 pub struct CreateCharacterEnhanced(pub CreateCharacter);
 
 impl Packet for CreateCharacterEnhanced {
-    fn packet_kind() -> u8 { 0xf8 }
+    const PACKET_KIND: u8 = 0xf8;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(106) }
 
     fn decode(client_version: ClientVersion, _from_client: bool, payload: &[u8]) -> anyhow::Result<Self> {
@@ -731,7 +731,7 @@ pub struct DeleteCharacter {
 }
 
 impl Packet for DeleteCharacter {
-    fn packet_kind() -> u8 { 0x83 }
+    const PACKET_KIND: u8 = 0x83;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(39) }
 
@@ -762,7 +762,7 @@ pub struct SelectCharacter {
 }
 
 impl Packet for SelectCharacter {
-    fn packet_kind() -> u8 { 0x5d }
+    const PACKET_KIND: u8 = 0x5d;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(73) }
 
@@ -804,7 +804,7 @@ pub struct ClientVersionRequest {
 }
 
 impl Packet for ClientVersionRequest {
-    fn packet_kind() -> u8 { 0xbd }
+    const PACKET_KIND: u8 = 0xbd;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -828,7 +828,7 @@ pub struct BeginEnterWorld {
 }
 
 impl Packet for BeginEnterWorld {
-    fn packet_kind() -> u8 { 0x1b }
+    const PACKET_KIND: u8 = 0x1b;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(37) }
 
@@ -875,7 +875,7 @@ impl Packet for BeginEnterWorld {
 pub struct EndEnterWorld;
 
 impl Packet for EndEnterWorld {
-    fn packet_kind() -> u8 { 0x55 }
+    const PACKET_KIND: u8 = 0x55;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(1) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, _payload: &[u8]) -> anyhow::Result<Self> {
@@ -893,7 +893,7 @@ pub struct ShowPublicHouses {
 }
 
 impl Packet for ShowPublicHouses {
-    fn packet_kind() -> u8 { 0xfb }
+    const PACKET_KIND: u8 = 0xfb;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
 
@@ -912,7 +912,7 @@ impl Packet for ShowPublicHouses {
 pub struct Ping;
 
 impl Packet for Ping {
-    fn packet_kind() -> u8 { 0x73 }
+    const PACKET_KIND: u8 = 0x73;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, _payload: &[u8]) -> anyhow::Result<Self> {
@@ -928,7 +928,7 @@ impl Packet for Ping {
 pub struct Logout;
 
 impl Packet for Logout {
-    fn packet_kind() -> u8 { 0x01 }
+    const PACKET_KIND: u8 = 0x01;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(5) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, _payload: &[u8]) -> anyhow::Result<Self> {
@@ -947,7 +947,7 @@ pub struct WarMode {
 }
 
 impl Packet for WarMode {
-    fn packet_kind() -> u8 { 0x72 }
+    const PACKET_KIND: u8 = 0x72;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(5) }
 
@@ -968,7 +968,7 @@ impl Packet for WarMode {
 pub struct RequestHelp;
 
 impl Packet for RequestHelp {
-    fn packet_kind() -> u8 { 0x9b }
+    const PACKET_KIND: u8 = 0x9b;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(258) }
 

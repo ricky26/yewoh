@@ -30,6 +30,6 @@ impl NetClientExt for NetClient {
             language: FixedString::from_str("ENU"),
             name: FixedString::from_str("System"),
             ..Default::default()
-        }.into());
+        });
     }
 }

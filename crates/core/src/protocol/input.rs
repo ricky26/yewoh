@@ -20,7 +20,7 @@ pub struct Move {
 }
 
 impl Packet for Move {
-    fn packet_kind() -> u8 { 0x02 }
+    const PACKET_KIND: u8 = 0x02;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(7) }
 
@@ -53,7 +53,7 @@ pub struct MoveConfirm {
 }
 
 impl Packet for MoveConfirm {
-    fn packet_kind() -> u8 { 0x22 }
+    const PACKET_KIND: u8 = 0x22;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(3) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -78,7 +78,7 @@ pub struct MoveReject {
 }
 
 impl Packet for MoveReject {
-    fn packet_kind() -> u8 { 0x21 }
+    const PACKET_KIND: u8 = 0x21;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(8) }
 
@@ -111,7 +111,7 @@ pub struct SingleClick {
 }
 
 impl Packet for SingleClick {
-    fn packet_kind() -> u8 { 0x9 }
+    const PACKET_KIND: u8 = 0x09;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(5) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -132,7 +132,7 @@ pub struct DoubleClick {
 }
 
 impl Packet for DoubleClick {
-    fn packet_kind() -> u8 { 0x6 }
+    const PACKET_KIND: u8 = 0x06;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(5) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -159,7 +159,7 @@ pub struct PickUpEntity {
 }
 
 impl Packet for PickUpEntity {
-    fn packet_kind() -> u8 { 0x7 }
+    const PACKET_KIND: u8 = 0x07;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(7) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -184,7 +184,7 @@ pub struct DropEntity {
 }
 
 impl Packet for DropEntity {
-    fn packet_kind() -> u8 { 0x8 }
+    const PACKET_KIND: u8 = 0x08;
 
     fn fixed_length(client_version: ClientVersion) -> Option<usize> {
         Some(if client_version >= VERSION_GRID_INVENTORY { 15 } else { 14 })
@@ -242,7 +242,7 @@ pub enum MoveEntityReject {
 }
 
 impl Packet for MoveEntityReject {
-    fn packet_kind() -> u8 { 0x27 }
+    const PACKET_KIND: u8 = 0x27;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
 
@@ -265,7 +265,7 @@ pub struct EquipEntity {
 }
 
 impl Packet for EquipEntity {
-    fn packet_kind() -> u8 { 0x13 }
+    const PACKET_KIND: u8 = 0x13;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(10) }
 
@@ -306,7 +306,7 @@ pub struct PickTarget {
 }
 
 impl Packet for PickTarget {
-    fn packet_kind() -> u8 { 0x6c }
+    const PACKET_KIND: u8 = 0x6c;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(19) }
 

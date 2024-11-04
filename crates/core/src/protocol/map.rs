@@ -12,7 +12,7 @@ pub struct SetTime {
 }
 
 impl Packet for SetTime {
-    fn packet_kind() -> u8 { 0x5b }
+    const PACKET_KIND: u8 = 0x5b;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some (4) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -37,7 +37,7 @@ pub struct ChangeSeason {
 }
 
 impl Packet for ChangeSeason {
-    fn packet_kind() -> u8 { 0xbc }
+    const PACKET_KIND: u8 = 0xbc;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(3) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -57,7 +57,7 @@ impl Packet for ChangeSeason {
 pub struct ViewRange(pub u8);
 
 impl Packet for ViewRange {
-    fn packet_kind() -> u8 { 0xc8 }
+    const PACKET_KIND: u8 = 0xc8;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
@@ -74,7 +74,7 @@ impl Packet for ViewRange {
 pub struct GlobalLightLevel(pub u8);
 
 impl Packet for GlobalLightLevel {
-    fn packet_kind() -> u8 { 0x4f }
+    const PACKET_KIND: u8 = 0x4f;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
