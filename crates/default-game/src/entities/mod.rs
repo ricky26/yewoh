@@ -4,8 +4,6 @@ use rand::{thread_rng, RngCore};
 use serde::{Deserialize, Serialize};
 use uuid::{Bytes, Uuid};
 
-use crate::persistence::SerializationSetupExt;
-
 pub mod persistence;
 
 pub mod position;
@@ -47,15 +45,12 @@ pub struct EntitiesPlugin;
 impl Plugin for EntitiesPlugin {
     fn build(&self, app: &mut App) {
         app
+            .add_plugins(persistence::plugin)
             .register_type::<UniqueId>()
             .register_type::<Persistent>()
             .register_type::<prefabs::Prefab>()
             .register_type::<prefabs::AtMapPosition>()
             .register_type::<prefabs::EquippedBy>()
-            .register_type::<prefabs::ContainedBy>()
-            .register_type::<persistence::CustomHue>()
-            .register_serializer::<persistence::UniqueIdSerializer>()
-            .register_serializer::<persistence::PositionSerializer>()
-            .register_serializer::<persistence::CustomHueSerializer>();
+            .register_type::<prefabs::ContainedBy>();
     }
 }

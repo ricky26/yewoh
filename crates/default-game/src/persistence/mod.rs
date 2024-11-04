@@ -21,11 +21,9 @@ use sqlx::{Database, Pool};
 use tracing::error;
 
 use crate::entities::Persistent;
-use crate::persistence::prefab::PrefabSerializer;
 
 mod ser;
 mod de;
-pub mod prefab;
 pub mod db;
 
 pub async fn migrate<D: Database>(db: &Pool<D>) -> anyhow::Result<()>
@@ -333,7 +331,6 @@ impl Plugin for PersistencePlugin {
     fn build(&self, app: &mut App) {
         app
             .init_schedule(SerializeSchedule)
-            .init_resource::<BundleSerializers>()
-            .register_serializer::<PrefabSerializer>();
+            .init_resource::<BundleSerializers>();
     }
 }

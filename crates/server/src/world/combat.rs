@@ -32,7 +32,7 @@ pub struct AttackRequestedEvent {
 }
 
 #[derive(Debug, Clone, Reflect, Event)]
-pub struct DamageDealtEvent {
+pub struct DamagedEvent {
     pub target: Entity,
     pub damage: u16,
 }
@@ -83,7 +83,7 @@ pub fn detect_damage_notices(
     delta_version: Res<DeltaVersion>,
     mut delta_grid: ResMut<DeltaGrid>,
     damage_targets: Query<(&NetId, &RootPosition)>,
-    mut damage_events: EventReader<DamageDealtEvent>,
+    mut damage_events: EventReader<DamagedEvent>,
 ) {
     for event in damage_events.read() {
         let Ok((target_id, position)) = damage_targets.get(event.target) else {

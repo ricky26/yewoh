@@ -5,18 +5,16 @@ import yewoh_default_game::activities::combat::MeleeWeapon;
 import yewoh_default_game::items::tooltips::StaticTooltips;
 import bevy_fabricator::humantime::HumanDuration;
 
-$ <- ItemGraphic(0x97f);
-$ <- Hue(0x7d0);
+$ <- ItemGraphic(0xe85);
 $ <- MeleeWeapon {
-    min_damage: 8,
-    max_damage: 11,
-    delay: HumanDuration("3s"),
+    min_damage: 40,
+    max_damage: 50,
+    delay: HumanDuration("1s"),
     range: 4,
     swing_animation: Animation::Predefined({ kind: 0, action: 4 }),
 };
 $ <- StaticTooltips {
     entries: [
-        { text_id: 1022431 },
-        { arguments: "Cook things, yo", priority: 1 },
+        { text_id: 1011407 },
     ],
 }

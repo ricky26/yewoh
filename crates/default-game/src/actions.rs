@@ -158,16 +158,16 @@ pub fn handle_pick_up(
             }
         };
 
-        if let Some(_) = position {
+        if position.is_some() {
             commands.entity(entity)
                 .insert(Holder { held_by: character })
                 .remove::<MapPosition>();
-        } else if let Some(_) = container {
+        } else if container.is_some() {
             commands.entity(entity)
                 .insert(Holder { held_by: character })
                 .remove_parent()
                 .remove::<ContainedPosition>();
-        } else if let Some(_) = equipped {
+        } else if equipped.is_some() {
             commands.entity(entity)
                 .insert(Holder { held_by: character })
                 .remove_parent()
@@ -210,7 +210,7 @@ pub fn handle_drop(
         let target = event.target;
 
         if let Some(container_entity) = event.dropped_on {
-            if let Ok(_) = containers.get_mut(container_entity) {
+            if containers.get_mut(container_entity).is_ok() {
                 commands.entity(target)
                     .remove::<Holder>()
                     .set_parent(event.dropped_on.unwrap())
@@ -267,7 +267,7 @@ pub fn handle_equip(
         }
 
         let target = event.target;
-        if let Ok(_) = loadouts.get_mut(event.character) {
+        if loadouts.get_mut(event.character).is_ok() {
             commands.entity(target)
                 .remove::<Holder>()
                 .set_parent(event.character)

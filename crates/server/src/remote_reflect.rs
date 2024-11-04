@@ -9,7 +9,7 @@ use yewoh::{Direction, Notoriety};
 pub enum EquipmentSlotRemote {
     Invalid,
     MainHand,
-    BothHands,
+    OffHand,
     Shoes,
     Bottom,
     Top,

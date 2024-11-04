@@ -325,7 +325,7 @@ pub enum EquipmentSlot {
     #[default]
     Invalid = 0,
     MainHand = 1,
-    BothHands = 2,
+    OffHand = 2,
     Shoes = 3,
     Bottom = 4,
     Top = 5,

@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use bevy::app::PluginGroupBuilder;
 use bevy::prelude::*;
 use bevy_fabricator::FabricatorPlugin;
@@ -7,7 +9,6 @@ use crate::accounts::AccountsPlugin;
 use crate::actions::{handle_context_menu, handle_double_click, handle_drop, handle_equip, handle_move, handle_pick_up, handle_profile_requests, handle_single_click, handle_skills_requests, handle_war_mode};
 use crate::activities::ActivitiesPlugin;
 use crate::ai::AiPlugin;
-use crate::characters::CharactersPlugin;
 use crate::chat::handle_incoming_chat;
 use crate::commands::CommandsPlugin;
 use crate::entities::EntitiesPlugin;
@@ -59,7 +60,7 @@ impl PluginGroup for DefaultGamePlugins {
             .add(DefaultGamePlugin)
             .add(ActivitiesPlugin)
             .add(EntitiesPlugin)
-            .add(CharactersPlugin)
+            .add(characters::plugin)
             .add(ItemsPlugin)
             .add(SpawnersPlugin)
             .add(AiPlugin)

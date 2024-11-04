@@ -5,8 +5,36 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use yewoh_server::world::entity::{ContainedPosition, EquippedPosition, MapPosition, Hue};
 
-use crate::entities::{Persistent, UniqueId};
-use crate::persistence::BundleSerializer;
+use crate::data::prefabs::PrefabLibraryEntityExt;
+use crate::entities::{Persistent, PrefabInstance, UniqueId};
+use crate::persistence::{BundleSerializer, SerializationSetupExt};
+
+#[derive(Default)]
+pub struct PrefabSerializer;
+
+impl BundleSerializer for PrefabSerializer {
+    type Query = &'static PrefabInstance;
+    type Filter = With<Persistent>;
+    type Bundle = String;
+
+    fn id() -> &'static str {
+        "Prefab"
+    }
+
+    fn priority() -> i32 {
+        -1000
+    }
+
+    fn extract(item: &PrefabInstance) -> Self::Bundle {
+        item.prefab_name.clone()
+    }
+
+    fn insert(world: &mut World, entity: Entity, bundle: Self::Bundle) {
+        world.entity_mut(entity)
+            .fabricate_prefab(bundle)
+            .insert(Persistent);
+    }
+}
 
 #[derive(Default)]
 pub struct UniqueIdSerializer;
@@ -137,4 +165,13 @@ impl BundleSerializer for CustomHueSerializer {
                 Hue(bundle),
             ));
     }
+}
+
+pub fn plugin(app: &mut App) {
+    app
+        .register_type::<CustomHue>()
+        .register_serializer::<PrefabSerializer>()
+        .register_serializer::<UniqueIdSerializer>()
+        .register_serializer::<PositionSerializer>()
+        .register_serializer::<CustomHueSerializer>();
 }

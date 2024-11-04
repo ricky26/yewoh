@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use bevy::prelude::*;
 use bevy::utils::HashMap;
-use bevy_fabricator::{empty_reflect, FabricateRequest, Fabricator};
+use bevy_fabricator::{empty_reflect, FabricateRequest, Fabricated, Fabricator};
 use crate::entities::PrefabInstance;
 
 #[derive(Clone, Default, Resource)]
@@ -84,21 +84,37 @@ pub fn fabricate_from_library(
     Ok(())
 }
 
-pub fn fabricate_prefab(
-    world: &mut World, entity: Entity, prefab_name: String,
-) -> anyhow::Result<()> {
+fn fabricate_prefab_impl(
+    world: &mut World, entity: Entity, prefab_name: &str,
+) -> anyhow::Result<Fabricated> {
     let library = world.resource::<PrefabLibrary>();
     let request = PrefabLibraryRequest::from(prefab_name);
     let fabricate_request = library.request_for(&request)?;
     let fabricated = fabricate_request.fabricate(world, entity)?;
-    world.entity_mut(entity)
-        .insert((
-            fabricated,
-            PrefabInstance {
-                prefab_name: request.prefab_name.clone(),
-            },
-        ));
-    Ok(())
+    Ok(fabricated)
+}
+
+pub fn fabricate_prefab(
+    world: &mut World, entity: Entity, prefab_name: &str,
+) -> anyhow::Result<()> {
+    let prefab_instance = PrefabInstance {
+        prefab_name: prefab_name.to_string(),
+    };
+    match fabricate_prefab_impl(world, entity, prefab_name) {
+        Ok(fabricated) => {
+            world.entity_mut(entity)
+                .insert((
+                    fabricated,
+                    prefab_instance,
+                ));
+            Ok(())
+        }
+        Err(err) => {
+            world.entity_mut(entity)
+                .insert(prefab_instance);
+            Err(err)
+        }
+    }
 }
 
 pub trait PrefabLibraryWorldExt {
@@ -160,8 +176,8 @@ impl PrefabLibraryEntityExt for EntityCommands<'_> {
     fn fabricate_prefab(&mut self, prefab_name: impl Into<String>) -> &mut Self {
         let prefab_name = prefab_name.into();
         self.queue(move |entity, world: &mut World| {
-            if let Err(err) = fabricate_prefab(world, entity, prefab_name) {
-                warn!("failed to fabricate: {err}");
+            if let Err(err) = fabricate_prefab(world, entity, &prefab_name) {
+                warn!("failed to fabricate {prefab_name}: {err}");
             }
         })
     }
@@ -183,8 +199,8 @@ impl PrefabLibraryEntityExt for EntityWorldMut<'_> {
         let entity = self.id();
         let prefab_name = prefab_name.into();
         self.world_scope(move |world| {
-            if let Err(err) = fabricate_prefab(world, entity, prefab_name) {
-                warn!("failed to fabricate: {err}");
+            if let Err(err) = fabricate_prefab(world, entity, &prefab_name) {
+                warn!("failed to fabricate {prefab_name}: {err}");
             }
         });
         self

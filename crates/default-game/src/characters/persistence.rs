@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use yewoh_server::world::characters::{CharacterName, CharacterStats};
 
 use crate::entities::Persistent;
-use crate::persistence::BundleSerializer;
+use crate::persistence::{BundleSerializer, SerializationSetupExt};
 
 #[derive(Clone, Debug, Default, Reflect, Component)]
 #[reflect(Component)]
@@ -61,4 +61,11 @@ impl BundleSerializer for CustomStatsSerializer {
                 bundle,
             ));
     }
+}
+
+pub fn plugin(app: &mut App) {
+    app
+        .register_type::<CustomStats>()
+        .register_serializer::<CustomNameSerializer>()
+        .register_serializer::<CustomStatsSerializer>();
 }

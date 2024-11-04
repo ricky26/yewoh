@@ -52,3 +52,11 @@ pub fn spawn_starting_items(
             .move_to_equipped_position(entity, EquipmentSlot::Shoes);
     }
 }
+
+pub fn plugin(app: &mut App) {
+    app
+        .register_type::<NewPlayerCharacter>()
+        .add_systems(Update, (
+            spawn_starting_items,
+        ));
+}

@@ -1,19 +1,63 @@
+use std::time::Duration;
 use bevy::prelude::*;
-
-use yewoh::protocol;
+use serde::Deserialize;
 use yewoh::protocol::EquipmentSlot;
-use yewoh_server::world::characters::{AnimationStartedEvent, CharacterBodyType, Health};
-use yewoh_server::world::combat::{AttackRequestedEvent, AttackTarget};
-use yewoh_server::world::connection::{NetClient, Possessing};
+use yewoh_server::world::characters::{Animation, AnimationStartedEvent, CharacterBodyType, Health};
+use yewoh_server::world::combat::{AttackRequestedEvent, AttackTarget, DamagedEvent, SwingEvent};
+use yewoh_server::world::connection::Possessing;
 use yewoh_server::world::entity::{EquippedPosition, Hue, MapPosition};
 use yewoh_server::world::items::{Container, ItemGraphic, ItemQuantity};
-use yewoh_server::world::net_id::NetId;
-use yewoh_server::world::ServerSet;
 
 use crate::activities::{progress_current_activity, CurrentActivity};
-use crate::characters::{CharacterDied, Corpse, CorpseSpawned, DamageDealt, HitAnimation, Invulnerable, MeleeWeapon, Unarmed};
 
-mod prefabs;
+#[derive(Clone, Debug, Default, Reflect, Component)]
+#[reflect(Component)]
+pub struct Invulnerable;
+
+#[derive(Debug, Clone, Event)]
+pub struct MeleeDamageDealtEvent {
+    pub target: Entity,
+    pub source: Entity,
+    pub damage: u16,
+    pub location: MapPosition,
+}
+
+#[derive(Debug, Clone, Event)]
+pub struct CharacterDied {
+    pub character: Entity,
+}
+
+#[derive(Debug, Default, Clone, Component)]
+pub struct Corpse;
+
+#[derive(Debug, Clone, Event)]
+pub struct CorpseSpawned {
+    pub character: Entity,
+    pub corpse: Entity,
+}
+
+#[derive(Debug, Clone, Default, Reflect, Component)]
+#[reflect(Component)]
+pub struct HitAnimation {
+    pub hit_animation: Animation,
+}
+
+#[derive(Debug, Clone, Default, Reflect, Component, Deserialize)]
+#[reflect(Component, Deserialize)]
+pub struct MeleeWeapon {
+    pub min_damage: u16,
+    pub max_damage: u16,
+    #[serde(with = "humantime_serde")]
+    pub delay: Duration,
+    pub range: i32,
+    pub swing_animation: Animation,
+}
+
+#[derive(Debug, Clone, Reflect, Component)]
+#[reflect(Component)]
+pub struct Unarmed {
+    pub weapon: MeleeWeapon,
+}
 
 pub const CORPSE_GRAPHIC_ID: u16 = 0x2006;
 pub const CORPSE_BOX_GUMP_ID: u16 = 9;
@@ -39,9 +83,9 @@ pub fn update_weapon_stats(
     mut commands: Commands,
     mut characters: Query<
         (Entity, Option<&Children>, Option<&Unarmed>),
-        (With<CharacterBodyType>, Or<(Changed<CharacterBodyType>, Changed<Unarmed>)>),
+        (With<CharacterBodyType>, Or<(Changed<CharacterBodyType>, Changed<Children>, Changed<Unarmed>)>),
     >,
-    weapons: Query<(&EquippedPosition, &MeleeWeapon)>,
+    weapons: Query<&EquippedPosition>,
 ) {
     for (entity, children, unarmed) in &mut characters {
         let Some(children) = children else {
@@ -49,19 +93,15 @@ pub fn update_weapon_stats(
             continue;
         };
 
-        let weapon = children.iter()
-            .filter_map(|e| match weapons.get(*e)
-            {
-                Ok((equipped, weapon)) => Some((*e, equipped, weapon)),
-                _ => None,
-            })
-            .filter(|(_, pos, _)| pos.slot == EquipmentSlot::MainHand)
-            .map(|e| e.2)
-            .next();
+        let has_weapon = children.iter()
+            .filter_map(|e| weapons.get(*e).ok())
+            .any(|w| w.slot == EquipmentSlot::MainHand);
+        if has_weapon {
+            // MeleeWeapon will have already been populated by the weapon.
+            continue;
+        }
 
-        if let Some(weapon) = weapon {
-            commands.entity(entity).insert(weapon.clone());
-        } else if let Some(unarmed) = unarmed {
+        if let Some(unarmed) = unarmed {
             commands.entity(entity).insert(unarmed.weapon.clone());
         } else {
             commands.entity(entity).remove::<MeleeWeapon>();
@@ -69,8 +109,28 @@ pub fn update_weapon_stats(
     }
 }
 
+pub fn update_weapon_stats_on_equip(
+    mut characters: Query<&mut MeleeWeapon, With<CharacterBodyType>>,
+    weapons: Query<
+        (&Parent, &EquippedPosition, &MeleeWeapon),
+        (Without<CharacterBodyType>, Or<(Changed<EquippedPosition>, Changed<MeleeWeapon>)>,
+    )>,
+) {
+    for (parent, equipped, weapon) in &weapons {
+        if equipped.slot != EquipmentSlot::MainHand {
+            continue;
+        };
+
+        let Ok(mut out_weapon) = characters.get_mut(parent.get()) else {
+            continue;
+        };
+
+        *out_weapon = weapon.clone();
+    }
+}
+
 pub fn attack_current_target(
-    mut damage_events: EventWriter<DamageDealt>,
+    mut damage_events: EventWriter<MeleeDamageDealtEvent>,
     mut animation_events: EventWriter<AnimationStartedEvent>,
     mut actors: Query<
         (Entity, &mut CurrentActivity, &mut AttackTarget, &MapPosition, &MeleeWeapon),
@@ -106,10 +166,10 @@ pub fn attack_current_target(
             });
         }
 
-        damage_events.send(DamageDealt {
+        damage_events.send(MeleeDamageDealtEvent {
             target: current_target.target,
             source: entity,
-            damage: weapon.damage,
+            damage: weapon.min_damage,
             location: *target_location,
         });
 
@@ -118,7 +178,7 @@ pub fn attack_current_target(
 }
 
 pub fn apply_damage(
-    mut damage_events: EventReader<DamageDealt>,
+    mut damage_events: EventReader<MeleeDamageDealtEvent>,
     mut died_events: EventWriter<CharacterDied>,
     mut characters: Query<&mut Health, Without<Invulnerable>>,
 ) {
@@ -177,34 +237,20 @@ pub fn spawn_corpses(
 }
 
 pub fn send_damage_notices(
-    net_ids: Query<&NetId>,
-    clients: Query<&NetClient>,
-    mut damage_events: EventReader<DamageDealt>,
+    mut in_damage_events: EventReader<MeleeDamageDealtEvent>,
+    mut out_damage_events: EventWriter<DamagedEvent>,
+    mut out_swing_events: EventWriter<SwingEvent>,
 ) {
-    for event in damage_events.read() {
-        let target_id = match net_ids.get(event.target) {
-            Ok(x) => x.id,
-            _ => continue,
-        };
+    for event in in_damage_events.read() {
+        out_damage_events.send(DamagedEvent {
+            target: event.target,
+            damage: event.damage,
+        });
 
-        let attacker_id = net_ids.get(event.source)
-            .ok()
-            .map(|id| id.id);
-
-        // TODO: filter clients
-        for client in &clients {
-            client.send_packet(protocol::DamageDealt {
-                target_id,
-                damage: event.damage,
-            }.into());
-
-            if let Some(attacker_id) = attacker_id {
-                client.send_packet(protocol::Swing {
-                    attacker_id,
-                    target_id,
-                }.into());
-            }
-        }
+        out_swing_events.send(SwingEvent {
+            target: event.target,
+            attacker: event.source,
+        });
     }
 }
 
@@ -213,22 +259,26 @@ pub struct CombatPlugin;
 impl Plugin for CombatPlugin {
     fn build(&self, app: &mut App) {
         app
-            .register_type::<prefabs::MeleeWeaponPrefab>()
+            .register_type::<Invulnerable>()
+            .register_type::<HitAnimation>()
+            .register_type::<MeleeWeapon>()
+            .register_type::<Unarmed>()
             .add_event::<CharacterDied>()
             .add_event::<CorpseSpawned>()
-            .add_event::<DamageDealt>()
+            .add_event::<MeleeDamageDealtEvent>()
             .add_systems(Update, (
                 handle_attack_requests,
                 update_weapon_stats,
+                update_weapon_stats_on_equip,
                 attack_current_target
                     .after(progress_current_activity)
                     .after(update_weapon_stats),
-                apply_damage,
+                (
+                    apply_damage,
+                    send_damage_notices,
+                ).after(attack_current_target),
                 remove_dead_characters.after(apply_damage),
                 spawn_corpses.after(apply_damage).before(remove_dead_characters),
-            ))
-            .add_systems(Last, (
-                send_damage_notices,
-            ).in_set(ServerSet::Send));
+            ));
     }
 }
