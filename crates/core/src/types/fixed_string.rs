@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 
 #[derive(Debug, Clone)]
@@ -13,7 +13,7 @@ impl Display for StringTooLong {
 
 impl Error for StringTooLong {}
 
-#[derive(Debug, Clone, Eq)]
+#[derive(Clone, Eq)]
 pub struct FixedString<const I: usize> {
     length: u16,
     contents: [u8; I],
@@ -65,6 +65,13 @@ impl<const I: usize> Deref for FixedString<I> {
 
     fn deref(&self) -> &Self::Target {
         self.as_str()
+    }
+}
+
+impl<const I: usize> Debug for FixedString<I> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let s = self.as_str();
+        write!(f, "{s:?}")
     }
 }
 
