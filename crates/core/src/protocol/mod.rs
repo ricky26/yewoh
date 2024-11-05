@@ -114,8 +114,6 @@ impl Reader {
     }
 
     pub fn set_encryption(&mut self, mut encryption: Option<Encryption>) {
-        tracing::debug!("set_encryption {:?}", encryption.is_some());
-
         if self.encryption.is_some() {
             warn!("Tried to disable encryption. This could cause issues");
         }
