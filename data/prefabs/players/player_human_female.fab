@@ -4,7 +4,7 @@ import yewoh_server::remote_reflect::RaceRemote;
 import "player.fab" as playerPrefab;
 
 local hue: u16 = 0x909;
-local body_type: u16 = 605;
+local body_type: u16 = 401;
 local race = RaceRemote::Human;
 local sex = CharacterSex::Female;
 
