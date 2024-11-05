@@ -1,16 +1,16 @@
 use bevy::prelude::*;
-use yewoh::protocol::{AnyPacket, CharacterAnimation, CharacterProfile, ContextMenuEntry, DamageDealt, MoveConfirm, MoveEntityReject, MoveReject, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, Swing};
+use yewoh::protocol::{CharacterAnimation, CharacterProfile, ContextMenuEntry, DamageDealt, MoveConfirm, MoveEntityReject, MoveReject, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, Swing};
 use yewoh::types::FixedString;
-use yewoh_server::world::characters::{CharacterBodyType, CharacterNotoriety, ProfileEvent, RequestSkillsEvent, WarMode};
-use yewoh_server::world::combat::AttackTarget;
-use yewoh_server::world::connection::{NetClient, Possessing, ReceivedPacketEvent};
+use yewoh_server::world::characters::{CharacterBodyType, CharacterNotoriety, ProfileEvent, RequestSkillsEvent};
+use yewoh_server::world::connection::{NetClient, Possessing};
 use yewoh_server::world::entity::{ContainedPosition, EquippedPosition, MapPosition};
-use yewoh_server::world::input::{ContextMenuEvent, ContextMenuRequest, DoubleClickEvent, DropEvent, EquipEvent, MoveEvent, PickUpEvent, SingleClickEvent};
+use yewoh_server::world::input::{ContextMenuEvent, ContextMenuRequest, OnClientDoubleClick, DropEvent, EquipEvent, MoveEvent, PickUpEvent, OnClientSingleClick};
 use yewoh_server::world::items::{Container, ContainerOpenedEvent};
 use yewoh_server::world::map::{Chunk, TileDataResource};
 use yewoh_server::world::navigation::try_move_in_direction;
 use yewoh_server::world::net_id::NetId;
 use yewoh_server::world::spatial::SpatialQuery;
+use yewoh_server::world::view::Synchronized;
 
 #[derive(Debug, Clone, Component, Reflect)]
 pub struct Held {
@@ -68,60 +68,46 @@ pub fn handle_move(
     }
 }
 
-pub fn handle_single_click(
-    mut click_events: EventReader<SingleClickEvent>,
+pub fn on_single_click(
+    trigger: Trigger<OnClientSingleClick>,
     mut commands: Commands,
 ) {
-    for SingleClickEvent { client_entity: client, target } in click_events.read() {
-        let client_entity = *client;
-        let target = match target {
-            Some(x) => *x,
-            None => continue,
-        };
-
-        commands.spawn(ContextMenuRequest {
-            client_entity,
-            target,
-            entries: Vec::new(),
-        });
-    }
+    let client_entity = trigger.entity();
+    commands.spawn(ContextMenuRequest {
+        client_entity,
+        target: trigger.target,
+        entries: Vec::new(),
+    });
 }
 
-pub fn handle_double_click(
-    mut events: EventReader<DoubleClickEvent>,
-    mut clients: Query<&NetClient>,
+pub fn on_double_click(
+    trigger: Trigger<OnClientDoubleClick>,
     mut opened_containers: EventWriter<ContainerOpenedEvent>,
+    clients: Query<&NetClient, With<Synchronized>>,
     target_query: Query<(&NetId, Option<&CharacterBodyType>, Option<&Container>)>,
 ) {
-    for DoubleClickEvent { client_entity, target } in events.read() {
-        let client = match clients.get_mut(*client_entity) {
-            Ok(x) => x,
-            _ => continue,
-        };
-        let target = match target {
-            Some(x) => *x,
-            None => continue,
-        };
+    let client_entity = trigger.entity();
+    let Ok(client) = clients.get(client_entity) else {
+        return;
+    };
 
-        let (net, character, container) = match target_query.get(target) {
-            Ok(e) => e,
-            _ => continue,
-        };
+    let Ok((net, character, container)) = target_query.get(trigger.target) else {
+        return;
+    };
 
-        if character.is_some() {
-            client.send_packet(OpenPaperDoll {
-                id: net.id,
-                text: FixedString::from_str("Me, Myself and I"),
-                flags: Default::default(),
-            });
-        }
+    if character.is_some() {
+        client.send_packet(OpenPaperDoll {
+            id: net.id,
+            text: FixedString::from_str("Me, Myself and I"),
+            flags: Default::default(),
+        });
+    }
 
-        if container.is_some() {
-            opened_containers.send(ContainerOpenedEvent {
-                client_entity: *client_entity,
-                container: target,
-            });
-        }
+    if container.is_some() {
+        opened_containers.send(ContainerOpenedEvent {
+            client_entity,
+            container: trigger.target,
+        });
     }
 }
 
@@ -399,6 +385,7 @@ pub fn handle_skills_requests(
     }
 }
 
+/*
 pub fn handle_war_mode(
     mut commands: Commands,
     clients: Query<(&NetClient, &Possessing)>,
@@ -429,4 +416,21 @@ pub fn handle_war_mode(
 
         client.send_packet(packet.clone());
     }
+}
+ */
+
+pub fn plugin(app: &mut App) {
+    app
+        .add_systems(Update, (
+            handle_move,
+            handle_pick_up,
+            handle_drop,
+            handle_equip,
+            // handle_war_mode,
+            handle_context_menu,
+            handle_profile_requests,
+            handle_skills_requests,
+        ))
+        .add_observer(on_single_click)
+        .add_observer(on_double_click);
 }

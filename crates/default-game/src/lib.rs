@@ -6,7 +6,6 @@ use bevy_fabricator::FabricatorPlugin;
 use yewoh_server::world::ServerSet;
 
 use crate::accounts::AccountsPlugin;
-use crate::actions::{handle_context_menu, handle_double_click, handle_drop, handle_equip, handle_move, handle_pick_up, handle_profile_requests, handle_single_click, handle_skills_requests, handle_war_mode};
 use crate::activities::ActivitiesPlugin;
 use crate::ai::AiPlugin;
 use crate::chat::handle_incoming_chat;
@@ -73,18 +72,11 @@ pub struct DefaultGamePlugin;
 impl Plugin for DefaultGamePlugin {
     fn build(&self, app: &mut App) {
         app
+            .add_plugins((
+                actions::plugin,
+            ))
             .add_systems(Update, (
-                handle_move,
-                handle_single_click,
-                handle_double_click,
-                handle_pick_up,
-                handle_drop,
-                handle_equip,
-                handle_war_mode,
                 handle_incoming_chat,
-                handle_context_menu,
-                handle_profile_requests,
-                handle_skills_requests,
             ))
             .add_systems(Last, (
                 send_time.in_set(ServerSet::Send),

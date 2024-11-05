@@ -1,12 +1,10 @@
 use std::collections::VecDeque;
 
 use bevy::prelude::*;
-use tracing::debug;
-use yewoh::protocol::{AnyPacket, ContextMenu, ContextMenuEntry, EquipmentSlot, ExtendedCommand, Move, PickTarget, SetAttackTarget, TargetType};
+use yewoh::protocol::{ContextMenu, ContextMenuEntry, EquipmentSlot, ExtendedCommand, Move, PickTarget, TargetType};
 
-use crate::world::combat::AttackRequestedEvent;
-use crate::world::connection::{NetClient, ReceivedPacketEvent};
-use crate::world::net_id::{NetEntityLookup, NetId};
+use crate::world::connection::NetClient;
+use crate::world::net_id::NetId;
 use crate::world::ServerSet;
 
 #[derive(Debug, Clone, Event)]
@@ -16,15 +14,15 @@ pub struct MoveEvent {
 }
 
 #[derive(Debug, Clone, Event)]
-pub struct SingleClickEvent {
+pub struct OnClientSingleClick {
     pub client_entity: Entity,
-    pub target: Option<Entity>,
+    pub target: Entity,
 }
 
 #[derive(Debug, Clone, Event)]
-pub struct DoubleClickEvent {
+pub struct OnClientDoubleClick {
     pub client_entity: Entity,
-    pub target: Option<Entity>,
+    pub target: Entity,
 }
 
 #[derive(Debug, Clone, Event)]
@@ -73,14 +71,14 @@ pub struct EntityTargetResponse {
 }
 
 #[derive(Debug, Clone)]
-struct InFlightTargetRequest {
-    request_entity: Entity,
-    packet: PickTarget,
+pub struct InFlightTargetRequest {
+    pub request_entity: Entity,
+    pub packet: PickTarget,
 }
 
 #[derive(Debug, Clone, Default, Component)]
 pub struct Targeting {
-    pending: VecDeque<InFlightTargetRequest>,
+    pub pending: VecDeque<InFlightTargetRequest>,
 }
 
 #[derive(Debug, Clone, Component)]
@@ -109,7 +107,6 @@ pub struct ContextMenuEvent {
 
 #[allow(clippy::too_many_arguments)]
 pub fn update_targets(
-    lookup: Res<NetEntityLookup>,
     mut clients: Query<(&NetClient, &mut Targeting)>,
     new_world_targets: Query<
         (Entity, &WorldTargetRequest),
@@ -125,40 +122,8 @@ pub fn update_targets(
     >,
     mut removed_world_targets: RemovedComponents<WorldTargetRequest>,
     mut removed_entity_targets: RemovedComponents<EntityTargetRequest>,
-    mut events: EventReader<ReceivedPacketEvent>,
     mut commands: Commands,
 ) {
-    for ReceivedPacketEvent { client_entity, packet } in events.read() {
-        let client_entity = *client_entity;
-        let AnyPacket::PickTarget(request) = packet else {
-            continue;
-        };
-
-        let (client, mut targeting) = match clients.get_mut(client_entity) {
-            Ok(x) => x,
-            _ => continue,
-        };
-
-        if let Some(pending) = targeting.pending.front() {
-            let mut entity = commands.entity(pending.request_entity);
-
-            if request.target_ground {
-                entity.insert(WorldTargetResponse {
-                    position: Some(request.position),
-                });
-            } else {
-                entity.insert(EntityTargetResponse {
-                    target: request.target_id.and_then(|id| lookup.net_to_ecs(id)),
-                });
-            }
-
-            targeting.pending.pop_front();
-            if let Some(next) = targeting.pending.front() {
-                client.send_packet(next.packet.clone());
-            }
-        }
-    }
-
     let new_targets = new_entity_targets.iter()
         .map(|(entity, request)| (entity, request.client_entity, false, request.target_type))
         .chain(
@@ -225,50 +190,6 @@ pub fn update_targets(
     }
 }
 
-pub fn handle_context_menu_packets(
-    lookup: Res<NetEntityLookup>,
-    mut events: EventReader<ReceivedPacketEvent>,
-    mut invoked_events: EventWriter<ContextMenuEvent>,
-    mut commands: Commands,
-) {
-    for ReceivedPacketEvent { client_entity: client, packet } in events.read() {
-        let client_entity = *client;
-        let AnyPacket::ExtendedCommand(packet) = packet else {
-            continue;
-        };
-
-        match packet {
-            ExtendedCommand::ContextMenuRequest(target_id) => {
-                let target = match lookup.net_to_ecs(*target_id) {
-                    Some(x) => x,
-                    _ => continue,
-                };
-
-                commands.spawn(ContextMenuRequest {
-                    client_entity,
-                    target,
-                    entries: vec![],
-                });
-            }
-            ExtendedCommand::ContextMenuResponse(response) => {
-                let target = match lookup.net_to_ecs(response.target_id) {
-                    Some(x) => x,
-                    _ => continue,
-                };
-
-                invoked_events.send(ContextMenuEvent {
-                    client_entity,
-                    target,
-                    option: response.id,
-                });
-            }
-            p => {
-                debug!("unhandled extended packet {:?}", p);
-            }
-        }
-    }
-}
-
 pub fn send_context_menu(
     clients: Query<&NetClient>,
     requests: Query<(Entity, &ContextMenuRequest)>,
@@ -295,51 +216,15 @@ pub fn send_context_menu(
     }
 }
 
-pub fn handle_attack_packets(
-    lookup: Res<NetEntityLookup>,
-    clients: Query<&NetClient>,
-    mut events: EventReader<ReceivedPacketEvent>,
-    mut invoked_events: EventWriter<AttackRequestedEvent>,
-) {
-    for ReceivedPacketEvent { client_entity: client, packet } in events.read() {
-        let client_entity = *client;
-        let AnyPacket::AttackRequest(packet) = packet else {
-            continue;
-        };
-
-        let target = match lookup.net_to_ecs(packet.target_id) {
-            Some(x) => x,
-            None => {
-                if let Ok(client) = clients.get(client_entity) {
-                    client.send_packet(SetAttackTarget {
-                        target_id: None,
-                    });
-                }
-
-                continue;
-            }
-        };
-
-        invoked_events.send(AttackRequestedEvent {
-            client_entity,
-            target,
-        });
-    }
-}
-
 pub fn plugin(app: &mut App) {
     app
         .add_event::<MoveEvent>()
-        .add_event::<SingleClickEvent>()
-        .add_event::<DoubleClickEvent>()
+        .add_event::<OnClientSingleClick>()
+        .add_event::<OnClientDoubleClick>()
         .add_event::<PickUpEvent>()
         .add_event::<DropEvent>()
         .add_event::<EquipEvent>()
         .add_event::<ContextMenuEvent>()
-        .add_systems(First, (
-            handle_context_menu_packets,
-            handle_attack_packets,
-        ).in_set(ServerSet::HandlePackets))
         .add_systems(Last, (
             send_context_menu,
             update_targets,

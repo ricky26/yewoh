@@ -452,7 +452,7 @@ pub fn plugin(app: &mut App) {
         .register_type::<OwningClient>()
         .add_systems(First, (
             start_synchronizing,
-        ).in_set(ServerSet::HandlePackets))
+        ).in_set(ServerSet::UpdateVisibility))
         .add_systems(Last, (
             send_change_map,
         ).in_set(ServerSet::SendFirst))

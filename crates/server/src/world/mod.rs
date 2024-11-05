@@ -31,7 +31,6 @@ pub mod account;
 #[derive(SystemSet, Hash, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerSet {
     Receive,
-    HandlePackets,
     UpdateVisibility,
     AssignNetIds,
     SendFirst,
@@ -65,7 +64,6 @@ impl Plugin for ServerPlugin {
             ))
             .configure_sets(First, (
                 ServerSet::Receive,
-                ServerSet::HandlePackets,
             ).chain())
             .configure_sets(PostUpdate, (
                 ServerSet::UpdateVisibility,
