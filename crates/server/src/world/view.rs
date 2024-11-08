@@ -8,7 +8,7 @@ use crate::world::characters::{CharacterBodyType, CharacterQuery};
 use crate::world::connection::{NetClient, OwningClient, Possessing};
 use crate::world::delta_grid::{delta_grid_cell, Delta, DeltaEntry, DeltaGrid};
 use crate::world::entity::{ContainedPosition, EquippedPosition, MapPosition};
-use crate::world::items::{Container, ContainerOpenedEvent, ItemQuery};
+use crate::world::items::{Container, OnContainerOpen, ItemQuery};
 use crate::world::map::MapInfos;
 use crate::world::net_id::NetId;
 use crate::world::ServerSet;
@@ -403,7 +403,7 @@ pub fn finish_synchronizing(
 pub fn send_opened_containers(
     net_ids: Query<&NetId>,
     mut clients: Query<(&NetClient, &mut SeenEntities)>,
-    mut events: EventReader<ContainerOpenedEvent>,
+    mut events: EventReader<OnContainerOpen>,
     containers: Query<(&Container, Option<&Children>)>,
     contained_items: Query<(Entity, &NetId, ItemQuery), (With<Parent>, With<ContainedPosition>)>,
 ) {

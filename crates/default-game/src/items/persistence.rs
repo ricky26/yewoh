@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use yewoh_server::world::items::ItemGraphic;
 
 use crate::entities::Persistent;
-use crate::persistence::BundleSerializer;
+use crate::persistence::{BundleSerializer, SerializationSetupExt};
 
 #[derive(Clone, Debug, Default, Reflect, Component)]
 #[reflect(Component)]
@@ -32,4 +32,10 @@ impl BundleSerializer for CustomGraphicSerializer {
                 ItemGraphic(bundle),
             ));
     }
+}
+
+pub fn plugin(app: &mut App) {
+    app
+        .register_type::<CustomGraphic>()
+        .register_serializer::<CustomGraphicSerializer>();
 }

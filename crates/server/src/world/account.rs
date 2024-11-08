@@ -12,24 +12,24 @@ pub struct User {
 }
 
 #[derive(Debug, Clone, Event)]
-pub struct CharacterListEvent {
+pub struct OnClientCharacterListRequest {
     pub client_entity: Entity,
 }
 
 #[derive(Debug, Clone, Event)]
-pub struct CreateCharacterEvent {
+pub struct OnClientCreateCharacter {
     pub client_entity: Entity,
     pub request: CreateCharacter,
 }
 
 #[derive(Debug, Clone, Event)]
-pub struct SelectCharacterEvent {
+pub struct OnClientSelectCharacter {
     pub client_entity: Entity,
     pub request: SelectCharacter,
 }
 
 #[derive(Debug, Clone, Event)]
-pub struct DeleteCharacterEvent {
+pub struct OnClientDeleteCharacter {
     pub client_entity: Entity,
     pub request: DeleteCharacter,
 }
@@ -38,8 +38,8 @@ pub fn plugin(app: &mut App) {
     app
         .register_type::<SentCharacterList>()
         .register_type::<User>()
-        .add_event::<CharacterListEvent>()
-        .add_event::<CreateCharacterEvent>()
-        .add_event::<SelectCharacterEvent>()
-        .add_event::<DeleteCharacterEvent>();
+        .add_event::<OnClientCharacterListRequest>()
+        .add_event::<OnClientCreateCharacter>()
+        .add_event::<OnClientSelectCharacter>()
+        .add_event::<OnClientDeleteCharacter>();
 }

@@ -1,5 +1,3 @@
-use std::cmp::Ordering;
-
 use bevy::prelude::*;
 use glam::{IVec2, IVec3};
 use serde::{Deserialize, Serialize};
@@ -68,60 +66,10 @@ pub struct ContainedPosition {
     pub grid_index: u8,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Reflect)]
-#[reflect(Default)]
-pub struct TooltipLine {
-    pub text_id: u32,
-    pub arguments: String,
-    pub priority: u32,
-}
-
-impl Default for TooltipLine {
-    fn default() -> Self {
-        TooltipLine {
-            text_id: 1042971,
-            arguments: String::new(),
-            priority: 0,
-        }
-    }
-}
-
-impl TooltipLine {
-    pub fn from_static(text_id: u32, priority: u32) -> TooltipLine {
-        Self {
-            text_id,
-            arguments: Default::default(),
-            priority,
-        }
-    }
-
-    pub fn from_str(text: String, priority: u32) -> TooltipLine {
-        Self {
-            text_id: 1042971,
-            arguments: text,
-            priority,
-        }
-    }
-}
-
-impl PartialOrd for TooltipLine {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for TooltipLine {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.priority.cmp(&other.priority)
-            .then_with(|| self.text_id.cmp(&other.text_id))
-            .then_with(|| self.arguments.cmp(&other.arguments))
-    }
-}
-
-#[derive(Debug, Clone, Reflect)]
-pub struct TooltipRequest {
-    pub client: Entity,
-    pub entries: Vec<TooltipLine>,
+#[derive(Debug, Clone, Reflect, Event)]
+pub struct OnClientTooltipRequest {
+    pub client_entity: Entity,
+    pub targets: Vec<Entity>,
 }
 
 #[derive(Debug, Clone, Copy, Default, Component, Reflect)]
@@ -140,7 +88,7 @@ impl Tooltip {
 #[derive(Debug, Clone, Default, Component, Reflect)]
 #[reflect(Component, Default)]
 pub struct TooltipRequests {
-    pub requests: Vec<TooltipRequest>,
+    pub requests: Vec<OnClientTooltipRequest>,
 }
 
 pub fn plugin(app: &mut App) {
@@ -154,7 +102,5 @@ pub fn plugin(app: &mut App) {
         .register_type::<ContainedPosition>()
         .register_type::<EquippedPosition>()
         .register_type::<Tooltip>()
-        .register_type::<TooltipRequests>()
-        .register_type::<TooltipLine>()
-        .register_type_data::<Vec<TooltipLine>, ReflectFromReflect>();
+        .register_type::<TooltipRequests>();
 }

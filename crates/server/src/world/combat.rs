@@ -9,6 +9,13 @@ use crate::world::entity::RootPosition;
 use crate::world::net_id::NetId;
 use crate::world::ServerSet;
 
+#[derive(Debug, Clone, Reflect, Event)]
+#[reflect(Component)]
+pub struct OnClientWarModeChanged {
+    pub client_entity: Entity,
+    pub war_mode: bool,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Reflect, Component, VisitEntities, VisitEntitiesMut)]
 #[reflect(Component, VisitEntities, VisitEntitiesMut, MapEntities)]
 pub struct AttackTarget {
@@ -24,19 +31,19 @@ impl FromWorld for AttackTarget {
 }
 
 #[derive(Debug, Clone, Event)]
-pub struct AttackRequestedEvent {
+pub struct OnClientAttackRequest {
     pub client_entity: Entity,
     pub target: Entity,
 }
 
 #[derive(Debug, Clone, Reflect, Event)]
-pub struct DamagedEvent {
+pub struct OnCharacterDamage {
     pub target: Entity,
     pub damage: u16,
 }
 
 #[derive(Debug, Clone, Reflect, Event)]
-pub struct SwingEvent {
+pub struct OnCharacterSwing {
     pub attacker: Entity,
     pub target: Entity,
 }
@@ -81,7 +88,7 @@ pub fn detect_damage_notices(
     delta_version: Res<DeltaVersion>,
     mut delta_grid: ResMut<DeltaGrid>,
     damage_targets: Query<(&NetId, &RootPosition)>,
-    mut damage_events: EventReader<DamagedEvent>,
+    mut damage_events: EventReader<OnCharacterDamage>,
 ) {
     for event in damage_events.read() {
         let Ok((target_id, position)) = damage_targets.get(event.target) else {
@@ -108,7 +115,7 @@ pub fn detect_swings(
     delta_version: Res<DeltaVersion>,
     mut delta_grid: ResMut<DeltaGrid>,
     characters: Query<(&NetId, &RootPosition)>,
-    mut swing_events: EventReader<SwingEvent>,
+    mut swing_events: EventReader<OnCharacterSwing>,
 ) {
     for event in swing_events.read() {
         let Ok((attacker_id, position)) = characters.get(event.attacker) else {
@@ -140,9 +147,10 @@ pub fn detect_swings(
 pub fn plugin(app: &mut App) {
     app
         .register_type::<AttackTarget>()
-        .add_event::<AttackRequestedEvent>()
-        .add_event::<DamagedEvent>()
-        .add_event::<SwingEvent>()
+        .add_event::<OnClientWarModeChanged>()
+        .add_event::<OnClientAttackRequest>()
+        .add_event::<OnCharacterDamage>()
+        .add_event::<OnCharacterSwing>()
         .add_systems(Last, (
             send_updated_attack_target
                 .in_set(ServerSet::SendLast),

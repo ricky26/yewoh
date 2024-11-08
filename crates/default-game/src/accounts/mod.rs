@@ -10,13 +10,13 @@ use yewoh::Direction;
 use yewoh::protocol::{CharacterFromList, CharacterList, CharacterListFlags, EquipmentSlot, Race};
 use yewoh::types::FixedString;
 use yewoh_server::async_runtime::AsyncRuntime;
-use yewoh_server::world::account::{CharacterListEvent, CreateCharacterEvent, DeleteCharacterEvent, SelectCharacterEvent, User};
+use yewoh_server::world::account::{OnClientDeleteCharacter, OnClientCharacterListRequest, OnClientCreateCharacter, OnClientSelectCharacter, User};
 use yewoh_server::world::characters::{CharacterBodyType, CharacterName};
 use yewoh_server::world::connection::{NetClient, OwningClient, Possessing};
 use yewoh_server::world::entity::{Hue, MapPosition};
 use yewoh_server::world::items::ItemGraphic;
-
-use crate::accounts::repository::{AccountCharacters, AccountRepository, NewCharacterInfo, CharacterToSpawn};
+use yewoh_server::world::ServerSet;
+use crate::accounts::repository::{AccountCharacters, AccountRepository, CharacterToSpawn, NewCharacterInfo};
 use crate::characters::persistence::{CustomName, CustomStats};
 use crate::characters::player::NewPlayerCharacter;
 use crate::data::prefabs::PrefabLibraryWorldExt;
@@ -59,22 +59,21 @@ impl Default for PendingCharacterInfo {
     }
 }
 
-pub fn handle_list_characters<T: AccountRepository>(
+pub fn on_list_characters<T: AccountRepository>(
     runtime: Res<AsyncRuntime>,
     account_repository: Res<T>,
     users: Query<&User>,
     pending: Res<PendingCharacterLists>,
-    mut events: EventReader<CharacterListEvent>,
+    mut events: EventReader<OnClientCharacterListRequest>,
 ) {
-    for event in events.read() {
-        let user = match users.get(event.client_entity) {
-            Ok(x) => x,
-            _ => continue,
+    for request in events.read() {
+        let Ok(user) = users.get(request.client_entity) else {
+            continue;
         };
 
         let username = user.username.clone();
         let tx = pending.tx.clone();
-        let entity = event.client_entity;
+        let entity = request.client_entity;
         let repository = account_repository.clone();
         runtime.spawn(async move {
             tx.send((entity, repository.list_characters(&username).await)).ok();
@@ -92,9 +91,8 @@ pub fn handle_list_characters_callback(
     let mut first = true;
 
     while let Ok((entity, result)) = pending.rx.try_recv() {
-        let client = match clients.get(entity) {
-            Ok(x) => x,
-            _ => continue,
+        let Ok(client) = clients.get(entity) else {
+            continue;
         };
 
         if first {
@@ -151,78 +149,75 @@ pub fn handle_list_characters_callback(
     }
 }
 
-pub fn handle_create_character<T: AccountRepository>(
+pub fn on_create_character<T: AccountRepository>(
     runtime: Res<AsyncRuntime>,
     repository: Res<T>,
     users: Query<&User>,
     pending: Res<PendingCharacterInfo>,
-    mut events: EventReader<CreateCharacterEvent>,
+    mut events: EventReader<OnClientCreateCharacter>,
 ) {
-    for CreateCharacterEvent { client_entity, request } in events.read() {
-        let client_entity = *client_entity;
-        let user = match users.get(client_entity) {
-            Ok(x) => x,
-            _ => continue,
+    for request in events.read() {
+        let Ok(user) = users.get(request.client_entity) else {
+            continue;
         };
 
         let repository = repository.clone();
+        let entity = request.client_entity;
         let username = user.username.clone();
-        let request = request.clone();
+        let request = request.request.clone();
         let tx = pending.tx.clone();
         runtime.spawn(async move {
-            tx.send((client_entity, repository.create_character(&username, request).await)).ok();
+            tx.send((entity, repository.create_character(&username, request).await)).ok();
         });
     }
 }
 
-pub fn handle_select_character<T: AccountRepository>(
+pub fn on_select_character<T: AccountRepository>(
     runtime: Res<AsyncRuntime>,
     repository: Res<T>,
     users: Query<&User>,
     pending: Res<PendingCharacterInfo>,
-    mut events: EventReader<SelectCharacterEvent>,
+    mut events: EventReader<OnClientSelectCharacter>,
 ) {
-    for SelectCharacterEvent { client_entity, request } in events.read() {
-        let client_entity = *client_entity;
-        let user = match users.get(client_entity) {
-            Ok(x) => x,
-            _ => continue,
+    for request in events.read() {
+        let Ok(user) = users.get(request.client_entity) else {
+            continue;
         };
 
         let repository = repository.clone();
         let username = user.username.clone();
         let tx = pending.tx.clone();
-        let character_index = request.character_index as i32;
+        let character_index = request.request.character_index as i32;
+        let entity = request.client_entity;
         runtime.spawn(async move {
-            tx.send((client_entity, repository.load_character(&username, character_index).await)).ok();
+            tx.send((entity, repository.load_character(&username, character_index).await)).ok();
         });
     }
 }
 
-pub fn handle_delete_character<T: AccountRepository>(
+pub fn on_delete_character<T: AccountRepository>(
     runtime: Res<AsyncRuntime>,
     repository: Res<T>,
     users: Query<&User>,
-    mut events: EventReader<DeleteCharacterEvent>,
     pending: ResMut<PendingCharacterLists>,
+    mut events: EventReader<OnClientDeleteCharacter>,
 ) {
-    for DeleteCharacterEvent { client_entity, request } in events.read() {
-        let client_entity = *client_entity;
-        let user = match users.get(client_entity) {
-            Ok(x) => x,
-            _ => continue,
+    for request in events.read() {
+        let Ok(user) = users.get(request.client_entity) else {
+            continue;
         };
 
         let repository = repository.clone();
+        let entity = request.client_entity;
         let username = user.username.clone();
-        let request = request.clone();
+        let request = request.request.clone();
         let tx = pending.tx.clone();
         runtime.spawn(async move {
             if let Err(err) = repository.delete_character(&username, request).await {
                 warn!("failed to delete character: {err}");
             }
 
-            tx.send((client_entity, repository.list_characters(&username).await)).ok();
+            tx.send((entity, repository.list_characters(&username).await)).ok();
         });
     }
 }
@@ -375,12 +370,16 @@ impl<T: AccountRepository> Plugin for AccountsPlugin<T> {
             .register_type::<NewCharacterInfo>()
             .init_resource::<PendingCharacterLists>()
             .init_resource::<PendingCharacterInfo>()
+            .add_systems(First, (
+                (
+                    on_list_characters::<T>,
+                    on_create_character::<T>,
+                    on_select_character::<T>,
+                    on_delete_character::<T>,
+                ).in_set(ServerSet::HandlePackets),
+            ))
             .add_systems(Update, (
-                handle_list_characters::<T>,
                 handle_list_characters_callback,
-                handle_create_character::<T>,
-                handle_select_character::<T>,
-                handle_delete_character::<T>,
                 handle_spawn_character::<T>,
             ));
     }

@@ -1,14 +1,13 @@
 use std::collections::VecDeque;
 
 use bevy::prelude::*;
-use yewoh::protocol::{ContextMenu, ContextMenuEntry, EquipmentSlot, ExtendedCommand, Move, PickTarget, TargetType};
+use yewoh::protocol::{EquipmentSlot, Move, PickTarget, TargetType};
 
 use crate::world::connection::NetClient;
-use crate::world::net_id::NetId;
 use crate::world::ServerSet;
 
 #[derive(Debug, Clone, Event)]
-pub struct MoveEvent {
+pub struct OnClientMove {
     pub client_entity: Entity,
     pub request: Move,
 }
@@ -26,13 +25,13 @@ pub struct OnClientDoubleClick {
 }
 
 #[derive(Debug, Clone, Event)]
-pub struct PickUpEvent {
+pub struct OnClientPickUp {
     pub client_entity: Entity,
     pub target: Entity,
 }
 
 #[derive(Debug, Clone, Event)]
-pub struct DropEvent {
+pub struct OnClientDrop {
     pub client_entity: Entity,
     pub target: Entity,
     pub position: IVec3,
@@ -41,7 +40,7 @@ pub struct DropEvent {
 }
 
 #[derive(Debug, Clone, Event)]
-pub struct EquipEvent {
+pub struct OnClientEquip {
     pub client_entity: Entity,
     pub target: Entity,
     pub character: Entity,
@@ -81,28 +80,17 @@ pub struct Targeting {
     pub pending: VecDeque<InFlightTargetRequest>,
 }
 
-#[derive(Debug, Clone, Component)]
-pub struct ContextMenuRequest {
+#[derive(Debug, Clone, Event)]
+pub struct OnClientContextMenuRequest {
     pub client_entity: Entity,
     pub target: Entity,
-    pub entries: Vec<ContextMenuEntry>,
-}
-
-impl FromWorld for ContextMenuRequest {
-    fn from_world(_world: &mut World) -> Self {
-        ContextMenuRequest {
-            client_entity: Entity::PLACEHOLDER,
-            target: Entity::PLACEHOLDER,
-            entries: Vec::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Event)]
-pub struct ContextMenuEvent {
+pub struct OnClientContextMenuAction {
     pub client_entity: Entity,
     pub target: Entity,
-    pub option: u16,
+    pub action_id: u16,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -190,9 +178,10 @@ pub fn update_targets(
     }
 }
 
+/*
 pub fn send_context_menu(
     clients: Query<&NetClient>,
-    requests: Query<(Entity, &ContextMenuRequest)>,
+    requests: Query<(Entity, &OnClientContextMenuRequest)>,
     net_ids: Query<&NetId>,
     mut commands: Commands,
 ) {
@@ -215,18 +204,19 @@ pub fn send_context_menu(
         }));
     }
 }
+*/
 
 pub fn plugin(app: &mut App) {
     app
-        .add_event::<MoveEvent>()
+        .add_event::<OnClientMove>()
         .add_event::<OnClientSingleClick>()
         .add_event::<OnClientDoubleClick>()
-        .add_event::<PickUpEvent>()
-        .add_event::<DropEvent>()
-        .add_event::<EquipEvent>()
-        .add_event::<ContextMenuEvent>()
+        .add_event::<OnClientPickUp>()
+        .add_event::<OnClientDrop>()
+        .add_event::<OnClientEquip>()
+        .add_event::<OnClientContextMenuAction>()
         .add_systems(Last, (
-            send_context_menu,
+            // send_context_menu,
             update_targets,
         ).in_set(ServerSet::Send));
 }

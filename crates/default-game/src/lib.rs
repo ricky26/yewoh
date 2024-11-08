@@ -8,7 +8,7 @@ use yewoh_server::world::ServerSet;
 use crate::accounts::AccountsPlugin;
 use crate::activities::ActivitiesPlugin;
 use crate::ai::AiPlugin;
-use crate::chat::handle_incoming_chat;
+use crate::chat::on_client_chat_message;
 use crate::commands::CommandsPlugin;
 use crate::entities::EntitiesPlugin;
 use crate::items::ItemsPlugin;
@@ -75,8 +75,8 @@ impl Plugin for DefaultGamePlugin {
             .add_plugins((
                 actions::plugin,
             ))
-            .add_systems(Update, (
-                handle_incoming_chat,
+            .add_systems(First, (
+                on_client_chat_message.in_set(ServerSet::HandlePackets),
             ))
             .add_systems(Last, (
                 send_time.in_set(ServerSet::Send),

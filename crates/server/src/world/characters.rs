@@ -12,7 +12,7 @@ use crate::world::connection::{NetClient, OwningClient};
 use crate::world::delta_grid::{delta_grid_cell, DeltaEntry, DeltaGrid, DeltaVersion};
 use crate::world::entity::{Frozen, Hidden, Hue, MapPosition, RootPosition, Tooltip};
 use crate::world::items::ValidItemPosition;
-use crate::world::net_id::{NetEntityDestroyed, NetId};
+use crate::world::net_id::{OnDestroyNetEntity, NetId};
 use crate::world::ServerSet;
 
 #[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Deref, Component, Reflect, Serialize, Deserialize)]
@@ -160,27 +160,33 @@ pub struct CharacterNotoriety(#[reflect(remote = crate::remote_reflect::Notoriet
 pub struct WarMode(pub bool);
 
 #[derive(Debug, Clone, Event)]
-pub struct AnimationStartedEvent {
+pub struct OnCharacterAnimationStart {
     pub entity: Entity,
     pub location: MapPosition,
     pub animation: Animation,
 }
 
 #[derive(Debug, Clone, Event)]
-pub struct ProfileEvent {
-    pub client_entity: Entity,
-    pub target: Entity,
-    pub new_profile: Option<String>,
-}
-
-#[derive(Debug, Clone, Event)]
-pub struct RequestStatusEvent {
+pub struct OnClientProfileRequest {
     pub client_entity: Entity,
     pub target: Entity,
 }
 
 #[derive(Debug, Clone, Event)]
-pub struct RequestSkillsEvent {
+pub struct OnClientProfileUpdateRequest {
+    pub client_entity: Entity,
+    pub target: Entity,
+    pub new_profile: String,
+}
+
+#[derive(Debug, Clone, Event)]
+pub struct OnClientStatusRequest {
+    pub client_entity: Entity,
+    pub target: Entity,
+}
+
+#[derive(Debug, Clone, Event)]
+pub struct OnClientSkillsRequest {
     pub client_entity: Entity,
     pub target: Entity,
 }
@@ -396,7 +402,7 @@ pub fn detect_character_changes(
         (Entity, Ref<NetId>, CharacterQuery),
         (ValidItemPosition, Or<(Changed<NetId>, ChangedCharacterFilter)>),
     >,
-    mut removed_characters: EventReader<NetEntityDestroyed>,
+    mut removed_characters: EventReader<OnDestroyNetEntity>,
 ) {
     for (entity, net_id, character) in &characters_query {
         if net_id.is_changed() || character.is_character_changed() || character.position.is_changed() {
@@ -450,7 +456,7 @@ pub fn detect_character_changes(
     }
 
     for event in removed_characters.read() {
-        let NetEntityDestroyed { entity, id } = event.clone();
+        let OnDestroyNetEntity { entity, id } = event.clone();
         if let Some(last_position) = cache.last_position.remove(&entity) {
             let grid_cell = delta_grid_cell(last_position.position.truncate());
             let packet = DeleteEntity {
@@ -551,7 +557,7 @@ pub fn detect_animations(
     delta_version: Res<DeltaVersion>,
     mut delta_grid: ResMut<DeltaGrid>,
     animation_targets: Query<(&NetId, &RootPosition)>,
-    mut events: EventReader<AnimationStartedEvent>,
+    mut events: EventReader<OnCharacterAnimationStart>,
 ) {
     for event in events.read() {
         let Ok((net_id, position)) = animation_targets.get(event.entity) else {
@@ -587,10 +593,10 @@ pub fn plugin(app: &mut App) {
         .register_type::<DamageResists>()
         .register_type::<WarMode>()
         .register_type::<Animation>()
-        .add_event::<AnimationStartedEvent>()
-        .add_event::<ProfileEvent>()
-        .add_event::<RequestSkillsEvent>()
-        .add_event::<RequestStatusEvent>()
+        .add_event::<OnCharacterAnimationStart>()
+        .add_event::<OnClientProfileRequest>()
+        .add_event::<OnClientSkillsRequest>()
+        .add_event::<OnClientStatusRequest>()
         .add_systems(Last, (
             (
                 detect_character_changes,

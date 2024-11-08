@@ -1,14 +1,17 @@
 use bevy::prelude::*;
-use yewoh::protocol::{CharacterAnimation, CharacterProfile, ContextMenuEntry, DamageDealt, MoveConfirm, MoveEntityReject, MoveReject, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, Swing};
+use yewoh::protocol;
+use yewoh::protocol::{CharacterAnimation, CharacterProfile, ContextMenu, ContextMenuEntry, DamageDealt, ExtendedCommand, MoveConfirm, MoveEntityReject, MoveReject, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, Swing};
 use yewoh::types::FixedString;
-use yewoh_server::world::characters::{CharacterBodyType, CharacterNotoriety, ProfileEvent, RequestSkillsEvent};
+use yewoh_server::world::characters::{CharacterBodyType, CharacterNotoriety, OnClientProfileRequest, OnClientSkillsRequest, WarMode};
+use yewoh_server::world::combat::{AttackTarget, OnClientWarModeChanged};
 use yewoh_server::world::connection::{NetClient, Possessing};
 use yewoh_server::world::entity::{ContainedPosition, EquippedPosition, MapPosition};
-use yewoh_server::world::input::{ContextMenuEvent, ContextMenuRequest, OnClientDoubleClick, DropEvent, EquipEvent, MoveEvent, PickUpEvent, OnClientSingleClick};
-use yewoh_server::world::items::{Container, ContainerOpenedEvent};
+use yewoh_server::world::input::{OnClientContextMenuAction, OnClientContextMenuRequest, OnClientDoubleClick, OnClientDrop, OnClientEquip, OnClientMove, OnClientPickUp, OnClientSingleClick};
+use yewoh_server::world::items::{Container, OnContainerOpen};
 use yewoh_server::world::map::{Chunk, TileDataResource};
 use yewoh_server::world::navigation::try_move_in_direction;
 use yewoh_server::world::net_id::NetId;
+use yewoh_server::world::ServerSet;
 use yewoh_server::world::spatial::SpatialQuery;
 use yewoh_server::world::view::Synchronized;
 
@@ -22,37 +25,34 @@ pub struct Holder {
     pub held_by: Entity,
 }
 
-pub fn handle_move(
-    mut events: EventReader<MoveEvent>,
+pub fn on_client_move(
     spatial_query: SpatialQuery,
     chunk_query: Query<(&MapPosition, &Chunk)>,
     tile_data: Res<TileDataResource>,
     connection_query: Query<(&NetClient, &Possessing)>,
     mut characters: Query<(&mut MapPosition, &CharacterNotoriety), Without<Chunk>>,
+    mut events: EventReader<OnClientMove>,
 ) {
-    for MoveEvent { client_entity: connection, request } in events.read() {
-        let connection = *connection;
-        let (client, owned) = match connection_query.get(connection) {
-            Ok(x) => x,
-            _ => continue,
+    for request in events.read() {
+        let Ok((client, owned)) = connection_query.get(request.client_entity) else {
+            continue;
         };
 
         let primary_entity = owned.entity;
-        let (mut map_position, notoriety) = match characters.get_mut(primary_entity) {
-            Ok(x) => x,
-            _ => continue,
+        let Ok((mut map_position, notoriety)) = characters.get_mut(primary_entity) else {
+            continue;
         };
 
-        if map_position.direction != request.direction {
-            map_position.direction = request.direction;
+        if map_position.direction != request.request.direction {
+            map_position.direction = request.request.direction;
         } else {
-            match try_move_in_direction(&spatial_query, &chunk_query, &tile_data, *map_position, request.direction, Some(primary_entity)) {
+            match try_move_in_direction(&spatial_query, &chunk_query, &tile_data, *map_position, request.request.direction, Some(primary_entity)) {
                 Ok(new_position) => {
                     *map_position = new_position;
                 }
                 Err(_) => {
                     client.send_packet(MoveReject {
-                        sequence: request.sequence,
+                        sequence: request.request.sequence,
                         position: map_position.position,
                         direction: map_position.direction,
                     });
@@ -62,72 +62,73 @@ pub fn handle_move(
 
         let notoriety = **notoriety;
         client.send_packet(MoveConfirm {
-            sequence: request.sequence,
+            sequence: request.request.sequence,
             notoriety,
         });
     }
 }
 
-pub fn on_single_click(
-    trigger: Trigger<OnClientSingleClick>,
+pub fn on_client_single_click(
     mut commands: Commands,
+    mut events: EventReader<OnClientSingleClick>,
 ) {
-    let client_entity = trigger.entity();
-    commands.spawn(ContextMenuRequest {
-        client_entity,
-        target: trigger.target,
-        entries: Vec::new(),
-    });
+    for request in events.read() {
+        let client_entity = request.client_entity;
+        commands.trigger_targets(OnClientContextMenuRequest {
+            client_entity,
+            target: request.target,
+        }, client_entity);
+    }
 }
 
-pub fn on_double_click(
-    trigger: Trigger<OnClientDoubleClick>,
-    mut opened_containers: EventWriter<ContainerOpenedEvent>,
+pub fn on_client_double_click(
+    mut opened_containers: EventWriter<OnContainerOpen>,
     clients: Query<&NetClient, With<Synchronized>>,
     target_query: Query<(&NetId, Option<&CharacterBodyType>, Option<&Container>)>,
+    mut events: EventReader<OnClientDoubleClick>,
 ) {
-    let client_entity = trigger.entity();
-    let Ok(client) = clients.get(client_entity) else {
-        return;
-    };
+    for request in events.read() {
+        let client_entity = request.client_entity;
+        let Ok(client) = clients.get(client_entity) else {
+            continue;
+        };
 
-    let Ok((net, character, container)) = target_query.get(trigger.target) else {
-        return;
-    };
+        let Ok((net, character, container)) = target_query.get(request.target) else {
+            continue;
+        };
 
-    if character.is_some() {
-        client.send_packet(OpenPaperDoll {
-            id: net.id,
-            text: FixedString::from_str("Me, Myself and I"),
-            flags: Default::default(),
-        });
-    }
+        if character.is_some() {
+            client.send_packet(OpenPaperDoll {
+                id: net.id,
+                text: FixedString::from_str("Me, Myself and I"),
+                flags: Default::default(),
+            });
+        }
 
-    if container.is_some() {
-        opened_containers.send(ContainerOpenedEvent {
-            client_entity,
-            container: trigger.target,
-        });
+        if container.is_some() {
+            opened_containers.send(OnContainerOpen {
+                client_entity,
+                container: request.target,
+            });
+        }
     }
 }
 
-pub fn handle_pick_up(
-    mut events: EventReader<PickUpEvent>,
+pub fn on_client_pick_up(
     clients: Query<(&NetClient, &Possessing)>,
     characters: Query<Option<&Held>>,
     targets: Query<(Entity, Option<&MapPosition>, Option<&ContainedPosition>, Option<&EquippedPosition>)>,
     mut commands: Commands,
+    mut events: EventReader<OnClientPickUp>,
 ) {
-    for event in events.read() {
-        let (client, owner) = match clients.get(event.client_entity) {
-            Ok(x) => x,
-            _ => continue,
+    for request in events.read() {
+        let Ok((client, owner)) = clients.get(request.client_entity) else {
+            continue;
         };
 
         let character = owner.entity;
-        let held = match characters.get(character) {
-            Ok(x) => x,
-            _ => continue,
+        let Ok(held) = characters.get(character) else {
+            continue;
         };
 
         if held.is_some() {
@@ -135,12 +136,9 @@ pub fn handle_pick_up(
             continue;
         }
 
-        let (entity, position, container, equipped) = match targets.get(event.target) {
-            Ok(x) => x,
-            Err(_) => {
-                client.send_packet(MoveEntityReject::CannotLift);
-                continue;
-            }
+        let Ok((entity, position, container, equipped)) = targets.get(request.target) else {
+            client.send_packet(MoveEntityReject::CannotLift);
+            continue;
         };
 
         if position.is_some() {
@@ -168,40 +166,38 @@ pub fn handle_pick_up(
     }
 }
 
-pub fn handle_drop(
-    mut events: EventReader<DropEvent>,
+pub fn on_client_drop(
     clients: Query<(&NetClient, &Possessing)>,
     characters: Query<(&MapPosition, &Held)>,
     mut containers: Query<&mut Container>,
     mut commands: Commands,
+    mut events: EventReader<OnClientDrop>,
 ) {
-    for event in events.read() {
-        let (client, owner) = match clients.get(event.client_entity) {
-            Ok(x) => x,
-            _ => continue,
+    for request in events.read() {
+        let Ok((client, owner)) = clients.get(request.client_entity) else {
+            continue;
         };
 
         let character = owner.entity;
-        let (character_position, held) = match characters.get(character) {
-            Ok(x) => x,
-            _ => continue,
+        let Ok((character_position, held)) = characters.get(character) else {
+            continue;
         };
 
-        if held.held_entity != event.target {
+        if held.held_entity != request.target {
             client.send_packet(MoveEntityReject::BelongsToAnother);
             continue;
         }
 
-        let target = event.target;
+        let target = request.target;
 
-        if let Some(container_entity) = event.dropped_on {
+        if let Some(container_entity) = request.dropped_on {
             if containers.get_mut(container_entity).is_ok() {
                 commands.entity(target)
                     .remove::<Holder>()
-                    .set_parent(event.dropped_on.unwrap())
+                    .set_parent(request.dropped_on.unwrap())
                     .insert(ContainedPosition {
-                        position: event.position.truncate(),
-                        grid_index: event.grid_index,
+                        position: request.position.truncate(),
+                        grid_index: request.grid_index,
                     });
             } else {
                 commands.entity(target)
@@ -216,7 +212,7 @@ pub fn handle_drop(
             commands.entity(target)
                 .remove::<Holder>()
                 .insert(MapPosition {
-                    position: event.position,
+                    position: request.position,
                     map_id: character_position.map_id,
                     ..Default::default()
                 });
@@ -227,37 +223,35 @@ pub fn handle_drop(
     }
 }
 
-pub fn handle_equip(
-    mut events: EventReader<EquipEvent>,
+pub fn on_client_equip(
     clients: Query<(&NetClient, &Possessing)>,
     characters: Query<(&MapPosition, &Held)>,
     mut loadouts: Query<&mut CharacterBodyType>,
     mut commands: Commands,
+    mut events: EventReader<OnClientEquip>,
 ) {
-    for event in events.read() {
-        let (client, owner) = match clients.get(event.client_entity) {
-            Ok(x) => x,
-            _ => continue,
+    for request in events.read() {
+        let Ok((client, owner)) = clients.get(request.client_entity) else {
+            continue;
         };
 
         let character = owner.entity;
-        let (character_position, held) = match characters.get(character) {
-            Ok(x) => x,
-            _ => continue,
+        let Ok((character_position, held)) = characters.get(character) else {
+            continue;
         };
 
-        if held.held_entity != event.target {
+        if held.held_entity != request.target {
             client.send_packet(MoveEntityReject::BelongsToAnother);
             continue;
         }
 
-        let target = event.target;
-        if loadouts.get_mut(event.character).is_ok() {
+        let target = request.target;
+        if loadouts.get_mut(request.character).is_ok() {
             commands.entity(target)
                 .remove::<Holder>()
-                .set_parent(event.character)
+                .set_parent(request.character)
                 .insert(EquippedPosition {
-                    slot: event.slot,
+                    slot: request.slot,
                 });
         } else {
             commands.entity(target)
@@ -274,41 +268,55 @@ pub fn handle_equip(
     }
 }
 
-pub fn handle_context_menu(
+pub fn on_client_context_menu_request(
     net_ids: Query<&NetId>,
     clients: Query<(&NetClient, &Possessing)>,
-    characters: Query<&NetId>,
-    mut context_requests: Query<&mut ContextMenuRequest>,
-    mut context_events: EventReader<ContextMenuEvent>,
+    mut events: EventReader<OnClientContextMenuRequest>,
 ) {
-    for mut request in context_requests.iter_mut() {
-        request.entries.push(ContextMenuEntry {
-            id: 0,
-            text_id: 3000489,
-            hue: None,
-            flags: Default::default(),
-        });
+    for request in events.read() {
+        let Ok((client, _)) = clients.get(request.client_entity) else {
+            continue;
+        };
+
+        let Ok(net_id) = net_ids.get(request.target) else {
+            continue;
+        };
+
+        client.send_packet(ExtendedCommand::ContextMenu(ContextMenu {
+            target_id: net_id.id,
+            entries: vec![
+                ContextMenuEntry {
+                    id: 0,
+                    text_id: 3000489,
+                    hue: None,
+                    flags: Default::default(),
+                },
+            ],
+        }));
     }
+}
 
-    for ContextMenuEvent { client_entity, target, .. } in context_events.read() {
-        let (client, owned) = match clients.get(*client_entity) {
-            Ok(x) => x,
-            _ => continue,
+pub fn on_client_context_menu_action(
+    net_ids: Query<&NetId>,
+    clients: Query<(&NetClient, &Possessing)>,
+    mut events: EventReader<OnClientContextMenuAction>,
+) {
+    for request in events.read() {
+        let Ok((client, owned)) = clients.get(request.client_entity) else {
+            continue;
         };
 
-        let net = match characters.get(owned.entity) {
-            Ok(x) => x,
-            _ => continue,
+        let Ok(net) = net_ids.get(owned.entity) else {
+            continue;
         };
 
-        let target_id = match net_ids.get(*target) {
-            Ok(x) => x.id,
-            _ => continue,
+        let Ok(target_id) = net_ids.get(request.target) else {
+            continue;
         };
 
         client.send_packet(Swing {
             attacker_id: net.id,
-            target_id,
+            target_id: target_id.id,
         });
         client.send_packet(CharacterAnimation {
             target_id: net.id,
@@ -319,7 +327,7 @@ pub fn handle_context_menu(
             speed: 0,
         });
         client.send_packet(CharacterAnimation {
-            target_id,
+            target_id: target_id.id,
             animation_id: 7,
             frame_count: 5,
             repeat_count: 1,
@@ -327,31 +335,28 @@ pub fn handle_context_menu(
             speed: 0,
         });
         client.send_packet(DamageDealt {
-            target_id,
+            target_id: target_id.id,
             damage: 1337,
         });
     }
 }
 
-pub fn handle_profile_requests(
+pub fn on_client_profile_request(
     net_ids: Query<&NetId>,
     clients: Query<&NetClient>,
-    mut requests: EventReader<ProfileEvent>,
+    mut events: EventReader<OnClientProfileRequest>,
 ) {
-    for request in requests.read() {
-        let client_entity = request.client_entity;
-        let client = match clients.get(client_entity) {
-            Ok(x) => x,
-            _ => continue,
+    for request in events.read() {
+        let Ok(client) = clients.get(request.client_entity) else {
+            continue;
         };
 
-        let target_id = match net_ids.get(request.target) {
-            Ok(x) => x.id,
-            _ => continue,
+        let Ok(target_id) = net_ids.get(request.target) else {
+            continue;
         };
 
         client.send_packet(CharacterProfile::Response(ProfileResponse {
-            target_id,
+            target_id: target_id.id,
             header: "Supreme Commander".to_string(),
             footer: "Static Profile".to_string(),
             profile: "Bio".to_string(),
@@ -359,15 +364,13 @@ pub fn handle_profile_requests(
     }
 }
 
-pub fn handle_skills_requests(
+pub fn on_client_skills_request(
     clients: Query<&NetClient>,
-    mut requests: EventReader<RequestSkillsEvent>,
+    mut events: EventReader<OnClientSkillsRequest>,
 ) {
-    for request in requests.read() {
-        let client_entity = request.client_entity;
-        let client = match clients.get(client_entity) {
-            Ok(x) => x,
-            _ => continue,
+    for request in events.read() {
+        let Ok(client) = clients.get(request.client_entity) else {
+            continue;
         };
 
         client.send_packet(Skills::Response(SkillsResponse {
@@ -385,52 +388,46 @@ pub fn handle_skills_requests(
     }
 }
 
-/*
-pub fn handle_war_mode(
+pub fn on_client_war_mode_changed(
     mut commands: Commands,
     clients: Query<(&NetClient, &Possessing)>,
     mut characters: Query<&mut WarMode>,
-    mut new_packets: EventReader<ReceivedPacketEvent>,
+    mut events: EventReader<OnClientWarModeChanged>,
 ) {
-    for ReceivedPacketEvent { client_entity, packet } in new_packets.read() {
-        let AnyPacket::WarMode(packet) = packet else {
+    for request in events.read() {
+        let Ok((client, owned)) = clients.get(request.client_entity) else {
             continue;
         };
 
-        let (client, owned) = match clients.get(*client_entity) {
-            Ok(x) => x,
-            _ => continue,
+        let Ok(mut war_mode) = characters.get_mut(owned.entity) else {
+            continue;
         };
 
-        let mut war_mode = match characters.get_mut(owned.entity) {
-            Ok(x) => x,
-            _ => continue,
-        };
-
-        if packet.war {
+        if request.war_mode {
             **war_mode = true;
         } else {
             **war_mode = false;
             commands.entity(owned.entity).remove::<AttackTarget>();
         }
 
-        client.send_packet(packet.clone());
+        client.send_packet(protocol::WarMode { war: **war_mode });
     }
 }
- */
 
 pub fn plugin(app: &mut App) {
     app
-        .add_systems(Update, (
-            handle_move,
-            handle_pick_up,
-            handle_drop,
-            handle_equip,
-            // handle_war_mode,
-            handle_context_menu,
-            handle_profile_requests,
-            handle_skills_requests,
-        ))
-        .add_observer(on_single_click)
-        .add_observer(on_double_click);
+        .add_systems(First, (
+            (
+                on_client_war_mode_changed,
+                on_client_single_click,
+                on_client_double_click,
+                on_client_pick_up,
+                on_client_drop,
+                on_client_equip,
+                on_client_move,
+                on_client_context_menu_request,
+                on_client_profile_request,
+                on_client_skills_request,
+            ).in_set(ServerSet::HandlePackets),
+        ));
 }

@@ -1,13 +1,13 @@
-use std::time::Duration;
 use bevy::prelude::*;
 use serde::Deserialize;
+use std::time::Duration;
 use yewoh::protocol::EquipmentSlot;
-use yewoh_server::world::characters::{Animation, AnimationStartedEvent, CharacterBodyType, Health};
-use yewoh_server::world::combat::{AttackRequestedEvent, AttackTarget, DamagedEvent, SwingEvent};
+use yewoh_server::world::characters::{Animation, CharacterBodyType, Health, OnCharacterAnimationStart};
+use yewoh_server::world::combat::{AttackTarget, OnCharacterDamage, OnCharacterSwing, OnClientAttackRequest};
 use yewoh_server::world::connection::Possessing;
 use yewoh_server::world::entity::{EquippedPosition, Hue, MapPosition};
 use yewoh_server::world::items::{Container, ItemGraphic, ItemQuantity};
-
+use yewoh_server::world::ServerSet;
 use crate::activities::{progress_current_activity, CurrentActivity};
 
 #[derive(Clone, Debug, Default, Reflect, Component)]
@@ -15,7 +15,7 @@ use crate::activities::{progress_current_activity, CurrentActivity};
 pub struct Invulnerable;
 
 #[derive(Debug, Clone, Event)]
-pub struct MeleeDamageDealtEvent {
+pub struct OnDealMeleeDamage {
     pub target: Entity,
     pub source: Entity,
     pub damage: u16,
@@ -23,7 +23,7 @@ pub struct MeleeDamageDealtEvent {
 }
 
 #[derive(Debug, Clone, Event)]
-pub struct CharacterDied {
+pub struct OnCharacterDeath {
     pub character: Entity,
 }
 
@@ -31,7 +31,7 @@ pub struct CharacterDied {
 pub struct Corpse;
 
 #[derive(Debug, Clone, Event)]
-pub struct CorpseSpawned {
+pub struct OnSpawnCorpse {
     pub character: Entity,
     pub corpse: Entity,
 }
@@ -62,15 +62,14 @@ pub struct Unarmed {
 pub const CORPSE_GRAPHIC_ID: u16 = 0x2006;
 pub const CORPSE_BOX_GUMP_ID: u16 = 9;
 
-pub fn handle_attack_requests(
+pub fn on_client_attack_request(
     mut commands: Commands,
-    mut requests: EventReader<AttackRequestedEvent>,
     clients: Query<&Possessing>,
+    mut events: EventReader<OnClientAttackRequest>,
 ) {
-    for request in requests.read() {
-        let possessing = match clients.get(request.client_entity) {
-            Ok(x) => x,
-            _ => continue,
+    for request in events.read() {
+        let Ok(possessing) = clients.get(request.client_entity) else {
+            continue;
         };
 
         commands.entity(possessing.entity).insert(AttackTarget {
@@ -130,8 +129,8 @@ pub fn update_weapon_stats_on_equip(
 }
 
 pub fn attack_current_target(
-    mut damage_events: EventWriter<MeleeDamageDealtEvent>,
-    mut animation_events: EventWriter<AnimationStartedEvent>,
+    mut damage_events: EventWriter<OnDealMeleeDamage>,
+    mut animation_events: EventWriter<OnCharacterAnimationStart>,
     mut actors: Query<
         (Entity, &mut CurrentActivity, &mut AttackTarget, &MapPosition, &MeleeWeapon),
         Without<Invulnerable>,
@@ -152,21 +151,21 @@ pub fn attack_current_target(
             continue;
         }
 
-        animation_events.send(AnimationStartedEvent {
+        animation_events.send(OnCharacterAnimationStart {
             animation: weapon.swing_animation.clone(),
             entity,
             location: *location,
         });
 
         if let Some(animation) = hit_animation.cloned() {
-            animation_events.send(AnimationStartedEvent {
+            animation_events.send(OnCharacterAnimationStart {
                 animation: animation.hit_animation,
                 entity: current_target.target,
                 location: *target_location,
             });
         }
 
-        damage_events.send(MeleeDamageDealtEvent {
+        damage_events.send(OnDealMeleeDamage {
             target: current_target.target,
             source: entity,
             damage: weapon.min_damage,
@@ -178,8 +177,8 @@ pub fn attack_current_target(
 }
 
 pub fn apply_damage(
-    mut damage_events: EventReader<MeleeDamageDealtEvent>,
-    mut died_events: EventWriter<CharacterDied>,
+    mut damage_events: EventReader<OnDealMeleeDamage>,
+    mut died_events: EventWriter<OnCharacterDeath>,
     mut characters: Query<&mut Health, Without<Invulnerable>>,
 ) {
     for event in damage_events.read() {
@@ -193,13 +192,13 @@ pub fn apply_damage(
             continue;
         }
 
-        died_events.send(CharacterDied {
+        died_events.send(OnCharacterDeath {
             character: event.target,
         });
     }
 }
 
-pub fn remove_dead_characters(mut commands: Commands, mut events: EventReader<CharacterDied>) {
+pub fn remove_dead_characters(mut commands: Commands, mut events: EventReader<OnCharacterDeath>) {
     for event in events.read() {
         commands.entity(event.character).despawn_recursive();
     }
@@ -207,8 +206,8 @@ pub fn remove_dead_characters(mut commands: Commands, mut events: EventReader<Ch
 
 pub fn spawn_corpses(
     mut commands: Commands,
-    mut died_events: EventReader<CharacterDied>,
-    mut corpse_events: EventWriter<CorpseSpawned>,
+    mut died_events: EventReader<OnCharacterDeath>,
+    mut corpse_events: EventWriter<OnSpawnCorpse>,
     characters: Query<(&CharacterBodyType, &Hue, &MapPosition)>,
 ) {
     for event in died_events.read() {
@@ -229,7 +228,7 @@ pub fn spawn_corpses(
                 Corpse,
             ))
             .id();
-        corpse_events.send(CorpseSpawned {
+        corpse_events.send(OnSpawnCorpse {
             character: event.character,
             corpse,
         });
@@ -237,17 +236,17 @@ pub fn spawn_corpses(
 }
 
 pub fn send_damage_notices(
-    mut in_damage_events: EventReader<MeleeDamageDealtEvent>,
-    mut out_damage_events: EventWriter<DamagedEvent>,
-    mut out_swing_events: EventWriter<SwingEvent>,
+    mut in_damage_events: EventReader<OnDealMeleeDamage>,
+    mut out_damage_events: EventWriter<OnCharacterDamage>,
+    mut out_swing_events: EventWriter<OnCharacterSwing>,
 ) {
     for event in in_damage_events.read() {
-        out_damage_events.send(DamagedEvent {
+        out_damage_events.send(OnCharacterDamage {
             target: event.target,
             damage: event.damage,
         });
 
-        out_swing_events.send(SwingEvent {
+        out_swing_events.send(OnCharacterSwing {
             target: event.target,
             attacker: event.source,
         });
@@ -263,11 +262,15 @@ impl Plugin for CombatPlugin {
             .register_type::<HitAnimation>()
             .register_type::<MeleeWeapon>()
             .register_type::<Unarmed>()
-            .add_event::<CharacterDied>()
-            .add_event::<CorpseSpawned>()
-            .add_event::<MeleeDamageDealtEvent>()
+            .add_event::<OnCharacterDeath>()
+            .add_event::<OnSpawnCorpse>()
+            .add_event::<OnDealMeleeDamage>()
+            .add_systems(First, (
+                (
+                    on_client_attack_request,
+                ).in_set(ServerSet::HandlePackets),
+            ))
             .add_systems(Update, (
-                handle_attack_requests,
                 update_weapon_stats,
                 update_weapon_stats_on_equip,
                 attack_current_target

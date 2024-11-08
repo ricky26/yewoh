@@ -11,7 +11,7 @@ use yewoh::{EntityId, EntityKind};
 use crate::world::delta_grid::{delta_grid_cell, DeltaEntry, DeltaGrid, DeltaVersion};
 use crate::world::entity::{ContainedPosition, EquippedPosition, Hue, MapPosition, RootPosition, Tooltip};
 use crate::world::map::Static;
-use crate::world::net_id::{NetEntityDestroyed, NetId};
+use crate::world::net_id::{OnDestroyNetEntity, NetId};
 use crate::world::ServerSet;
 
 #[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Deref, DerefMut, Component, Reflect, Serialize, Deserialize)]
@@ -37,7 +37,7 @@ pub struct Container {
 }
 
 #[derive(Debug, Clone, Event)]
-pub struct ContainerOpenedEvent {
+pub struct OnContainerOpen {
     pub client_entity: Entity,
     pub container: Entity,
 }
@@ -303,7 +303,7 @@ pub fn detect_item_changes(
         (ValidItemPosition, Or<(Changed<NetId>, ChangedItemFilter, ChangedPositionFilter)>),
     >,
     net_ids: Query<&NetId>,
-    mut removed_items: EventReader<NetEntityDestroyed>,
+    mut removed_items: EventReader<OnDestroyNetEntity>,
 ) {
     for (entity, net_id, item, position) in &changed_items {
         if net_id.is_changed() || item.is_item_changed() || item.position.is_changed() {
@@ -357,7 +357,7 @@ pub fn detect_item_changes(
     }
 
     for event in removed_items.read() {
-        let NetEntityDestroyed { entity, id } = event.clone();
+        let OnDestroyNetEntity { entity, id } = event.clone();
         if let Some(last_position) = cache.last_position.remove(&entity) {
             let grid_cell = delta_grid_cell(last_position.position.truncate());
             let packet = DeleteEntity {
@@ -377,7 +377,7 @@ pub fn plugin(app: &mut App) {
         .register_type::<ItemQuantity>()
         .register_type::<ItemGraphic>()
         .register_type::<Container>()
-        .add_event::<ContainerOpenedEvent>()
+        .add_event::<OnContainerOpen>()
         .add_systems(PostUpdate, (
             (
                 set_static_root_positions,

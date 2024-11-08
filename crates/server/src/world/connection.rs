@@ -1,23 +1,24 @@
+use std::fmt::Debug;
+use bevy::prelude::*;
 use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use bevy::ecs::system::SystemParam;
-use bevy::prelude::*;
 use tokio::sync::mpsc;
 use tracing::{info, trace, warn};
 use yewoh::protocol::encryption::Encryption;
-use yewoh::protocol::{AnyPacket, CharacterProfile, ClientVersion, ClientVersionRequest, EntityRequestKind, EntityTooltip, EntityTooltipLine, ExtendedCommand, FeatureFlags, GameServerLogin, IntoAnyPacket, SetAttackTarget, SupportedFeatures, UnicodeTextMessageRequest};
+use yewoh::protocol::{AnyPacket, CharacterProfile, ClientVersion, ClientVersionRequest, EntityRequestKind, EntityTooltip, ExtendedCommand, FeatureFlags, GameServerLogin, IntoAnyPacket, SetAttackTarget, SupportedFeatures, UnicodeTextMessageRequest};
 
 use crate::async_runtime::AsyncRuntime;
 use crate::game_server::NewSessionAttempt;
 use crate::lobby::{NewSessionRequest, SessionAllocator};
-use crate::world::account::{CharacterListEvent, CreateCharacterEvent, DeleteCharacterEvent, SelectCharacterEvent, SentCharacterList, User};
-use crate::world::characters::{ProfileEvent, RequestSkillsEvent, RequestStatusEvent};
-use crate::world::chat::ChatRequestEvent;
-use crate::world::combat::AttackRequestedEvent;
-use crate::world::entity::{TooltipRequest, TooltipRequests};
-use crate::world::input::{ContextMenuEvent, ContextMenuRequest, OnClientDoubleClick, DropEvent, EquipEvent, MoveEvent, PickUpEvent, OnClientSingleClick, Targeting, EntityTargetResponse, WorldTargetResponse};
-use crate::world::net_id::{NetEntityLookup, NetId};
+use crate::world::account::{OnClientDeleteCharacter, OnClientCharacterListRequest, OnClientCreateCharacter, OnClientSelectCharacter, SentCharacterList, User};
+use crate::world::characters::{OnClientProfileRequest, OnClientProfileUpdateRequest, OnClientSkillsRequest, OnClientStatusRequest};
+use crate::world::chat::OnClientChatMessage;
+use crate::world::combat::{OnClientAttackRequest, OnClientWarModeChanged};
+use crate::world::entity::OnClientTooltipRequest;
+use crate::world::input::{EntityTargetResponse, OnClientContextMenuAction, OnClientContextMenuRequest, OnClientDoubleClick, OnClientDrop, OnClientEquip, OnClientMove, OnClientPickUp, OnClientSingleClick, Targeting, WorldTargetResponse};
+use crate::world::net_id::NetEntityLookup;
 use crate::world::view::View;
 use crate::world::ServerSet;
 
@@ -262,20 +263,26 @@ pub fn accept_new_clients(
 
 #[derive(SystemParam)]
 pub struct NewPacketEvents<'w> {
-    pub character_list_events: EventWriter<'w, CharacterListEvent>,
-    pub character_creation_events: EventWriter<'w, CreateCharacterEvent>,
-    pub select_character_events: EventWriter<'w, SelectCharacterEvent>,
-    pub delete_character_events: EventWriter<'w, DeleteCharacterEvent>,
-    pub move_events: EventWriter<'w, MoveEvent>,
-    pub chat_events: EventWriter<'w, ChatRequestEvent>,
-    pub pick_up_events: EventWriter<'w, PickUpEvent>,
-    pub drop_events: EventWriter<'w, DropEvent>,
-    pub equip_events: EventWriter<'w, EquipEvent>,
-    pub profile_events: EventWriter<'w, ProfileEvent>,
-    pub skills_events: EventWriter<'w, RequestSkillsEvent>,
-    pub status_events: EventWriter<'w, RequestStatusEvent>,
-    pub context_menu_events: EventWriter<'w, ContextMenuEvent>,
-    pub attack_events: EventWriter<'w, AttackRequestedEvent>,
+    pub character_list_request: EventWriter<'w, OnClientCharacterListRequest>,
+    pub create_character: EventWriter<'w, OnClientCreateCharacter>,
+    pub select_character: EventWriter<'w, OnClientSelectCharacter>,
+    pub delete_character: EventWriter<'w, OnClientDeleteCharacter>,
+    pub move_request: EventWriter<'w, OnClientMove>,
+    pub single_click: EventWriter<'w, OnClientSingleClick>,
+    pub double_click: EventWriter<'w, OnClientDoubleClick>,
+    pub pick_up: EventWriter<'w, OnClientPickUp>,
+    pub drop: EventWriter<'w, OnClientDrop>,
+    pub equip: EventWriter<'w, OnClientEquip>,
+    pub profile_update: EventWriter<'w, OnClientProfileUpdateRequest>,
+    pub profile_request: EventWriter<'w, OnClientProfileRequest>,
+    pub status_request: EventWriter<'w, OnClientStatusRequest>,
+    pub skills_request: EventWriter<'w, OnClientSkillsRequest>,
+    pub chat_message: EventWriter<'w, OnClientChatMessage>,
+    pub tooltip_request: EventWriter<'w, OnClientTooltipRequest>,
+    pub context_menu_request: EventWriter<'w, OnClientContextMenuRequest>,
+    pub context_menu_action: EventWriter<'w, OnClientContextMenuAction>,
+    pub war_mode: EventWriter<'w, OnClientWarModeChanged>,
+    pub attack: EventWriter<'w, OnClientAttackRequest>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -285,7 +292,6 @@ pub fn handle_new_packets(
     lookup: Res<NetEntityLookup>,
     mut clients: Query<(&NetClient, Option<&SentCharacterList>, Option<&mut Targeting>)>,
     mut events: NewPacketEvents,
-    mut tooltips: Query<&mut TooltipRequests>,
 ) {
     while let Ok((client_entity, packet)) = server.received_packets_rx.try_recv() {
         let (client, sent_character_list, targeting) = match clients.get_mut(client_entity) {
@@ -296,84 +302,89 @@ pub fn handle_new_packets(
         match packet {
             // Login packets
             AnyPacket::ClientVersionRequest(_) => {
-                if sent_character_list.is_none() {
-                    commands.entity(client_entity).insert(SentCharacterList);
-
-                    client.send_packet(SupportedFeatures {
-                        feature_flags: FeatureFlags::T2A
-                            | FeatureFlags::UOR
-                            | FeatureFlags::LBR
-                            | FeatureFlags::AOS
-                            | FeatureFlags::SE
-                            | FeatureFlags::ML
-                            | FeatureFlags::NINTH_AGE
-                            | FeatureFlags::LIVE_ACCOUNT
-                            | FeatureFlags::SA
-                            | FeatureFlags::HS
-                            | FeatureFlags::GOTHIC
-                            | FeatureFlags::RUSTIC
-                            | FeatureFlags::JUNGLE
-                            | FeatureFlags::SHADOWGUARD
-                            | FeatureFlags::TOL
-                            | FeatureFlags::EJ,
-                    });
-                    events.character_list_events.send(CharacterListEvent {
-                        client_entity,
-                    });
+                if sent_character_list.is_some() {
+                    continue;
                 }
-            }
-            AnyPacket::CreateCharacterClassic(create_character) => {
-                events.character_creation_events.send(CreateCharacterEvent {
+
+                commands.entity(client_entity).insert(SentCharacterList);
+                client.send_packet(SupportedFeatures {
+                    feature_flags: FeatureFlags::T2A
+                        | FeatureFlags::UOR
+                        | FeatureFlags::LBR
+                        | FeatureFlags::AOS
+                        | FeatureFlags::SE
+                        | FeatureFlags::ML
+                        | FeatureFlags::NINTH_AGE
+                        | FeatureFlags::LIVE_ACCOUNT
+                        | FeatureFlags::SA
+                        | FeatureFlags::HS
+                        | FeatureFlags::GOTHIC
+                        | FeatureFlags::RUSTIC
+                        | FeatureFlags::JUNGLE
+                        | FeatureFlags::SHADOWGUARD
+                        | FeatureFlags::TOL
+                        | FeatureFlags::EJ,
+                });
+
+                events.character_list_request.send(OnClientCharacterListRequest {
                     client_entity,
-                    request: create_character.0,
                 });
             }
-            AnyPacket::CreateCharacterEnhanced(create_character) => {
-                events.character_creation_events.send(CreateCharacterEvent {
+            AnyPacket::CreateCharacterClassic(request) => {
+                events.create_character.send(OnClientCreateCharacter {
                     client_entity,
-                    request: create_character.0,
+                    request: request.0,
                 });
             }
-            AnyPacket::SelectCharacter(select_character) => {
-                events.select_character_events.send(SelectCharacterEvent {
+            AnyPacket::CreateCharacterEnhanced(request) => {
+                events.create_character.send(OnClientCreateCharacter {
                     client_entity,
-                    request: select_character,
+                    request: request.0,
                 });
             }
-            AnyPacket::DeleteCharacter(delete_character) => {
-                events.delete_character_events.send(DeleteCharacterEvent {
+            AnyPacket::SelectCharacter(request) => {
+                events.select_character.send(OnClientSelectCharacter {
                     client_entity,
-                    request: delete_character,
+                    request,
+                });
+            }
+            AnyPacket::DeleteCharacter(request) => {
+                events.delete_character.send(OnClientDeleteCharacter {
+                    client_entity,
+                    request,
                 });
             }
 
             // Input packets
             AnyPacket::Move(request) => {
-                events.move_events.send(MoveEvent { client_entity, request });
+                events.move_request.send(OnClientMove {
+                    client_entity,
+                    request,
+                });
             }
             AnyPacket::SingleClick(request) => {
                 if let Some(target) = lookup.net_to_ecs(request.target_id) {
-                    commands.trigger_targets(OnClientSingleClick {
+                    events.single_click.send(OnClientSingleClick {
                         client_entity,
                         target,
-                    }, client_entity);
+                    });
                 } else {
                     warn!("Single click for non-existent entity {:?}", request.target_id);
                 }
             }
             AnyPacket::DoubleClick(request) => {
                 if let Some(target) = lookup.net_to_ecs(request.target_id) {
-                    commands.trigger_targets(OnClientDoubleClick {
+                    events.double_click.send(OnClientDoubleClick {
                         client_entity,
                         target,
-                    }, client_entity);
+                    });
                 } else {
                     warn!("Double click for non-existent entity {:?}", request.target_id);
                 }
             }
             AnyPacket::PickUpEntity(request) => {
                 if let Some(target) = lookup.net_to_ecs(request.target_id) {
-                    events.pick_up_events.send(PickUpEvent {
+                    events.pick_up.send(OnClientPickUp {
                         client_entity,
                         target,
                     });
@@ -381,7 +392,7 @@ pub fn handle_new_packets(
             }
             AnyPacket::DropEntity(request) => {
                 if let Some(target) = lookup.net_to_ecs(request.target_id) {
-                    events.drop_events.send(DropEvent {
+                    events.drop.send(OnClientDrop {
                         client_entity,
                         target,
                         position: request.position,
@@ -393,7 +404,7 @@ pub fn handle_new_packets(
             AnyPacket::EquipEntity(request) => {
                 if let Some((target, character)) = lookup.net_to_ecs(request.target_id)
                     .zip(lookup.net_to_ecs(request.character_id)) {
-                    events.equip_events.send(EquipEvent {
+                    events.equip.send(OnClientEquip {
                         client_entity,
                         target,
                         character,
@@ -405,11 +416,18 @@ pub fn handle_new_packets(
                 match request {
                     CharacterProfile::Request(request) => {
                         if let Some(target) = lookup.net_to_ecs(request.target_id) {
-                            events.profile_events.send(ProfileEvent {
-                                client_entity,
-                                target,
-                                new_profile: request.new_profile,
-                            });
+                            if let Some(new_profile) = request.new_profile {
+                                events.profile_update.send(OnClientProfileUpdateRequest {
+                                    client_entity,
+                                    target,
+                                    new_profile,
+                                });
+                            } else {
+                                events.profile_request.send(OnClientProfileRequest {
+                                    client_entity,
+                                    target,
+                                });
+                            }
                         }
                     }
                     _ => unreachable!(),
@@ -422,14 +440,24 @@ pub fn handle_new_packets(
                 };
 
                 match request.kind {
-                    EntityRequestKind::Status => { events.status_events.send(RequestStatusEvent { client_entity, target }); }
-                    EntityRequestKind::Skills => { events.skills_events.send(RequestSkillsEvent { client_entity, target }); }
+                    EntityRequestKind::Status => {
+                        events.status_request.send(OnClientStatusRequest {
+                            client_entity,
+                            target,
+                        });
+                    }
+                    EntityRequestKind::Skills => {
+                        events.skills_request.send(OnClientSkillsRequest {
+                            client_entity,
+                            target,
+                        });
+                    }
                 }
             }
 
             // Chat packets
             AnyPacket::AsciiTextMessageRequest(request) => {
-                events.chat_events.send(ChatRequestEvent {
+                events.chat_message.send(OnClientChatMessage {
                     client_entity,
                     request: UnicodeTextMessageRequest {
                         kind: request.kind,
@@ -441,26 +469,21 @@ pub fn handle_new_packets(
                 });
             }
             AnyPacket::UnicodeTextMessageRequest(request) => {
-                events.chat_events.send(ChatRequestEvent { client_entity, request });
+                events.chat_message.send(OnClientChatMessage {
+                    client_entity,
+                    request,
+                });
             }
 
             AnyPacket::EntityTooltip(request) => {
                 if let EntityTooltip::Request(ids) = request {
-                    for id in ids.iter().copied() {
-                        if let Some(entity) = lookup.net_to_ecs(id) {
-                            if let Ok(mut tooltip) = tooltips.get_mut(entity) {
-                                tooltip.requests.push(TooltipRequest {
-                                    client: client_entity,
-                                    entries: Vec::new(),
-                                });
-                            } else {
-                                client.send_packet(EntityTooltip::Response {
-                                    id,
-                                    entries: Vec::new(),
-                                });
-                            }
-                        }
-                    }
+                    let targets = ids.into_iter()
+                        .filter_map(|id| lookup.net_to_ecs(id))
+                        .collect();
+                    events.tooltip_request.send(OnClientTooltipRequest {
+                        client_entity,
+                        targets,
+                    });
                 }
             }
 
@@ -472,10 +495,9 @@ pub fn handle_new_packets(
                             _ => continue,
                         };
 
-                        commands.spawn(ContextMenuRequest {
+                        events.context_menu_request.send(OnClientContextMenuRequest {
                             client_entity,
                             target,
-                            entries: vec![],
                         });
                     }
                     ExtendedCommand::ContextMenuResponse(response) => {
@@ -484,10 +506,10 @@ pub fn handle_new_packets(
                             _ => continue,
                         };
 
-                        events.context_menu_events.send(ContextMenuEvent {
+                        events.context_menu_action.send(OnClientContextMenuAction {
                             client_entity,
                             target,
-                            option: response.id,
+                            action_id: response.id,
                         });
                     }
                     p => {
@@ -498,7 +520,7 @@ pub fn handle_new_packets(
 
             AnyPacket::PickTarget(request) => {
                 let Some(mut targeting) = targeting else {
-                    return;
+                    continue;
                 };
 
                 if let Some(pending) = targeting.pending.front() {
@@ -521,6 +543,12 @@ pub fn handle_new_packets(
                 }
             }
 
+            AnyPacket::WarMode(war_mode) => {
+                events.war_mode.send(OnClientWarModeChanged {
+                    client_entity,
+                    war_mode: war_mode.war,
+                });
+            }
             AnyPacket::AttackRequest(packet) => {
                 let target = match lookup.net_to_ecs(packet.target_id) {
                     Some(x) => x,
@@ -532,7 +560,7 @@ pub fn handle_new_packets(
                     }
                 };
 
-                events.attack_events.send(AttackRequestedEvent {
+                events.attack.send(OnClientAttackRequest {
                     client_entity,
                     target,
                 });
@@ -543,6 +571,7 @@ pub fn handle_new_packets(
     }
 }
 
+/*
 pub fn send_tooltips(
     clients: Query<&NetClient>,
     mut tooltips: Query<(&NetId, &mut TooltipRequests), Changed<TooltipRequests>>,
@@ -553,7 +582,7 @@ pub fn send_tooltips(
         }
 
         let id = net_id.id;
-        for TooltipRequest { client, mut entries } in tooltip.requests.drain(..) {
+        for OnClientTooltipRequest { client_entity: client, mut entries } in tooltip.requests.drain(..) {
             let client = match clients.get(client) {
                 Ok(x) => x,
                 _ => continue,
@@ -573,6 +602,7 @@ pub fn send_tooltips(
         }
     }
 }
+ */
 
 pub fn plugin(app: &mut App) {
     app
@@ -581,8 +611,8 @@ pub fn plugin(app: &mut App) {
             (accept_new_clients, handle_new_packets)
                 .chain()
                 .in_set(ServerSet::Receive),
-        ))
-        .add_systems(Last, (
-            send_tooltips,
-        ).in_set(ServerSet::Send));
+        ));
+        // .add_systems(Last, (
+        //     send_tooltips,
+        // ).in_set(ServerSet::Send));
 }

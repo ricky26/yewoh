@@ -44,15 +44,15 @@ impl Component for NetId {
                 }
             }
             {
-                let mut removed = world.resource_mut::<Events<NetEntityDestroyed>>();
-                removed.send(NetEntityDestroyed { entity, id });
+                let mut removed = world.resource_mut::<Events<OnDestroyNetEntity>>();
+                removed.send(OnDestroyNetEntity { entity, id });
             }
         });
     }
 }
 
 #[derive(Clone, Debug, Event)]
-pub struct NetEntityDestroyed {
+pub struct OnDestroyNetEntity {
     pub entity: Entity,
     pub id: EntityId,
 }
@@ -134,7 +134,7 @@ pub fn assign_net_ids(
 pub fn plugin(app: &mut App) {
     app
         .register_type::<NetId>()
-        .add_event::<NetEntityDestroyed>()
+        .add_event::<OnDestroyNetEntity>()
         .init_resource::<NetIdAllocator>()
         .init_resource::<NetEntityLookup>()
         .add_systems(Last, (
