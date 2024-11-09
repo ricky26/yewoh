@@ -9,6 +9,7 @@ use yewoh_server::world::entity::{EquippedPosition, Hue, MapPosition};
 use yewoh_server::world::items::{Container, ItemGraphic, ItemQuantity};
 use yewoh_server::world::ServerSet;
 use crate::activities::{progress_current_activity, CurrentActivity};
+use crate::items::containers::DoubleClickOpenContainer;
 
 #[derive(Clone, Debug, Default, Reflect, Component)]
 #[reflect(Component)]
@@ -226,6 +227,7 @@ pub fn spawn_corpses(
                     gump_id: CORPSE_BOX_GUMP_ID,
                 },
                 Corpse,
+                DoubleClickOpenContainer,
             ))
             .id();
         corpse_events.send(OnSpawnCorpse {
