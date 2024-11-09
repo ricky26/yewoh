@@ -63,9 +63,10 @@ impl<T: Write> PacketWriteExt for T {
     }
 
     fn write_utf16_pascal(&mut self, src: &str) -> anyhow::Result<()> {
-        let len = src.encode_utf16().count();
-        self.write_u16::<Endian>(len as u16)?;
-        for c in src.encode_utf16() {
+        let utf16 = src.encode_utf16();
+        let len = utf16.clone().count();
+        self.write_u16::<Endian>((len * size_of::<u16>()) as u16)?;
+        for c in utf16 {
             self.write_u16::<Endian>(c)?;
         }
         Ok(())
@@ -73,16 +74,17 @@ impl<T: Write> PacketWriteExt for T {
 
     fn write_utf16le_nul(&mut self, src: &str) -> anyhow::Result<()> {
         for c in src.encode_utf16() {
-            self.write_u16::<Endian>(c)?;
+            self.write_u16::<LE>(c)?;
         }
-        self.write_u16::<Endian>(0)?;
+        self.write_u16::<LE>(0)?;
         Ok(())
     }
 
     fn write_utf16le_pascal(&mut self, src: &str) -> anyhow::Result<()> {
-        let len = src.encode_utf16().count();
-        self.write_u16::<LE>(len as u16)?;
-        for c in src.encode_utf16() {
+        let utf16 = src.encode_utf16();
+        let len = utf16.clone().count();
+        self.write_u16::<Endian>((len * size_of::<u16>()) as u16)?;
+        for c in utf16 {
             self.write_u16::<LE>(c)?;
         }
         Ok(())
