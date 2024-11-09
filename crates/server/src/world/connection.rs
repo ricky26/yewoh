@@ -294,9 +294,8 @@ pub fn handle_new_packets(
     mut events: NewPacketEvents,
 ) {
     while let Ok((client_entity, packet)) = server.received_packets_rx.try_recv() {
-        let (client, sent_character_list, targeting) = match clients.get_mut(client_entity) {
-            Ok(x) => x,
-            _ => continue,
+        let Ok((client, sent_character_list, targeting)) = clients.get_mut(client_entity) else {
+            continue;
         };
 
         match packet {

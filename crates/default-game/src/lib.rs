@@ -16,6 +16,8 @@ use crate::persistence::PersistencePlugin;
 use crate::spawners::SpawnersPlugin;
 use crate::time::send_time;
 
+pub mod entity_events;
+
 pub mod accounts;
 
 pub mod data;
@@ -46,6 +48,13 @@ pub mod hues;
 
 pub mod entities;
 
+#[derive(Clone, Debug, Hash, PartialEq, Eq, SystemSet)]
+pub enum DefaultGameSet {
+    DispatchEvents,
+    HandleEvents,
+    FinishEvents,
+}
+
 #[derive(Default)]
 pub struct DefaultGamePlugins;
 
@@ -74,6 +83,13 @@ impl Plugin for DefaultGamePlugin {
         app
             .add_plugins((
                 actions::plugin,
+            ))
+            .configure_sets(First, (
+                (
+                    DefaultGameSet::DispatchEvents.after(ServerSet::HandlePackets),
+                    DefaultGameSet::HandleEvents,
+                    DefaultGameSet::FinishEvents,
+                ).chain(),
             ))
             .add_systems(First, (
                 on_client_chat_message.in_set(ServerSet::HandlePackets),

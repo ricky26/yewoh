@@ -1,19 +1,17 @@
 use bevy::prelude::*;
 use yewoh::protocol;
-use yewoh::protocol::{CharacterAnimation, CharacterProfile, ContextMenu, ContextMenuEntry, DamageDealt, ExtendedCommand, MoveConfirm, MoveEntityReject, MoveReject, OpenPaperDoll, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind, Swing};
-use yewoh::types::FixedString;
+use yewoh::protocol::{CharacterProfile, MoveConfirm, MoveEntityReject, MoveReject, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind};
 use yewoh_server::world::characters::{CharacterBodyType, CharacterNotoriety, OnClientProfileRequest, OnClientSkillsRequest, WarMode};
 use yewoh_server::world::combat::{AttackTarget, OnClientWarModeChanged};
 use yewoh_server::world::connection::{NetClient, Possessing};
 use yewoh_server::world::entity::{ContainedPosition, EquippedPosition, MapPosition};
-use yewoh_server::world::input::{OnClientContextMenuAction, OnClientContextMenuRequest, OnClientDoubleClick, OnClientDrop, OnClientEquip, OnClientMove, OnClientPickUp, OnClientSingleClick};
-use yewoh_server::world::items::{Container, OnContainerOpen};
+use yewoh_server::world::input::{OnClientDrop, OnClientEquip, OnClientMove, OnClientPickUp};
+use yewoh_server::world::items::Container;
 use yewoh_server::world::map::{Chunk, TileDataResource};
 use yewoh_server::world::navigation::try_move_in_direction;
 use yewoh_server::world::net_id::NetId;
-use yewoh_server::world::ServerSet;
 use yewoh_server::world::spatial::SpatialQuery;
-use yewoh_server::world::view::Synchronized;
+use yewoh_server::world::ServerSet;
 
 #[derive(Debug, Clone, Component, Reflect)]
 pub struct Held {
@@ -65,52 +63,6 @@ pub fn on_client_move(
             sequence: request.request.sequence,
             notoriety,
         });
-    }
-}
-
-pub fn on_client_single_click(
-    mut commands: Commands,
-    mut events: EventReader<OnClientSingleClick>,
-) {
-    for request in events.read() {
-        let client_entity = request.client_entity;
-        commands.trigger_targets(OnClientContextMenuRequest {
-            client_entity,
-            target: request.target,
-        }, client_entity);
-    }
-}
-
-pub fn on_client_double_click(
-    mut opened_containers: EventWriter<OnContainerOpen>,
-    clients: Query<&NetClient, With<Synchronized>>,
-    target_query: Query<(&NetId, Option<&CharacterBodyType>, Option<&Container>)>,
-    mut events: EventReader<OnClientDoubleClick>,
-) {
-    for request in events.read() {
-        let client_entity = request.client_entity;
-        let Ok(client) = clients.get(client_entity) else {
-            continue;
-        };
-
-        let Ok((net, character, container)) = target_query.get(request.target) else {
-            continue;
-        };
-
-        if character.is_some() {
-            client.send_packet(OpenPaperDoll {
-                id: net.id,
-                text: FixedString::from_str("Me, Myself and I"),
-                flags: Default::default(),
-            });
-        }
-
-        if container.is_some() {
-            opened_containers.send(OnContainerOpen {
-                client_entity,
-                container: request.target,
-            });
-        }
     }
 }
 
@@ -268,79 +220,6 @@ pub fn on_client_equip(
     }
 }
 
-pub fn on_client_context_menu_request(
-    net_ids: Query<&NetId>,
-    clients: Query<(&NetClient, &Possessing)>,
-    mut events: EventReader<OnClientContextMenuRequest>,
-) {
-    for request in events.read() {
-        let Ok((client, _)) = clients.get(request.client_entity) else {
-            continue;
-        };
-
-        let Ok(net_id) = net_ids.get(request.target) else {
-            continue;
-        };
-
-        client.send_packet(ExtendedCommand::ContextMenu(ContextMenu {
-            target_id: net_id.id,
-            entries: vec![
-                ContextMenuEntry {
-                    id: 0,
-                    text_id: 3000489,
-                    hue: None,
-                    flags: Default::default(),
-                },
-            ],
-        }));
-    }
-}
-
-pub fn on_client_context_menu_action(
-    net_ids: Query<&NetId>,
-    clients: Query<(&NetClient, &Possessing)>,
-    mut events: EventReader<OnClientContextMenuAction>,
-) {
-    for request in events.read() {
-        let Ok((client, owned)) = clients.get(request.client_entity) else {
-            continue;
-        };
-
-        let Ok(net) = net_ids.get(owned.entity) else {
-            continue;
-        };
-
-        let Ok(target_id) = net_ids.get(request.target) else {
-            continue;
-        };
-
-        client.send_packet(Swing {
-            attacker_id: net.id,
-            target_id: target_id.id,
-        });
-        client.send_packet(CharacterAnimation {
-            target_id: net.id,
-            animation_id: 9,
-            frame_count: 7,
-            repeat_count: 1,
-            reverse: false,
-            speed: 0,
-        });
-        client.send_packet(CharacterAnimation {
-            target_id: target_id.id,
-            animation_id: 7,
-            frame_count: 5,
-            repeat_count: 1,
-            reverse: false,
-            speed: 0,
-        });
-        client.send_packet(DamageDealt {
-            target_id: target_id.id,
-            damage: 1337,
-        });
-    }
-}
-
 pub fn on_client_profile_request(
     net_ids: Query<&NetId>,
     clients: Query<&NetClient>,
@@ -419,13 +298,10 @@ pub fn plugin(app: &mut App) {
         .add_systems(First, (
             (
                 on_client_war_mode_changed,
-                on_client_single_click,
-                on_client_double_click,
                 on_client_pick_up,
                 on_client_drop,
                 on_client_equip,
                 on_client_move,
-                on_client_context_menu_request,
                 on_client_profile_request,
                 on_client_skills_request,
             ).in_set(ServerSet::HandlePackets),

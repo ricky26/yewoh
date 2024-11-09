@@ -594,6 +594,7 @@ pub fn plugin(app: &mut App) {
         .register_type::<WarMode>()
         .register_type::<Animation>()
         .add_event::<OnCharacterAnimationStart>()
+        .add_event::<OnClientProfileUpdateRequest>()
         .add_event::<OnClientProfileRequest>()
         .add_event::<OnClientSkillsRequest>()
         .add_event::<OnClientStatusRequest>()

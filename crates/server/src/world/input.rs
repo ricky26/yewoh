@@ -214,6 +214,7 @@ pub fn plugin(app: &mut App) {
         .add_event::<OnClientPickUp>()
         .add_event::<OnClientDrop>()
         .add_event::<OnClientEquip>()
+        .add_event::<OnClientContextMenuRequest>()
         .add_event::<OnClientContextMenuAction>()
         .add_systems(Last, (
             // send_context_menu,

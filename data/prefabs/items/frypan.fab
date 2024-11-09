@@ -2,7 +2,7 @@ import yewoh_server::world::items::ItemGraphic;
 import yewoh_server::world::entity::Hue;
 import yewoh_server::world::characters::Animation;
 import yewoh_default_game::activities::combat::MeleeWeapon;
-import yewoh_default_game::items::tooltips::StaticTooltips;
+import yewoh_default_game::entities::tooltips::StaticTooltips;
 import bevy_fabricator::humantime::HumanDuration;
 
 $ <- ItemGraphic(0x97f);

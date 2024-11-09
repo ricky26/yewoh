@@ -10,6 +10,12 @@ pub mod position;
 
 pub mod prefabs;
 
+pub mod tooltips;
+
+pub mod context_menu;
+
+pub mod interactions;
+
 #[derive(Debug, Clone, Copy, Default, Reflect, Component)]
 #[reflect(Component)]
 pub struct Persistent;
@@ -46,7 +52,12 @@ pub struct EntitiesPlugin;
 impl Plugin for EntitiesPlugin {
     fn build(&self, app: &mut App) {
         app
-            .add_plugins(persistence::plugin)
+            .add_plugins((
+                persistence::plugin,
+                tooltips::plugin,
+                context_menu::plugin,
+                interactions::plugin,
+            ))
             .register_type::<UniqueId>()
             .register_type::<Persistent>()
             .register_type::<prefabs::Prefab>()

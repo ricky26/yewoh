@@ -102,5 +102,6 @@ pub fn plugin(app: &mut App) {
         .register_type::<ContainedPosition>()
         .register_type::<EquippedPosition>()
         .register_type::<Tooltip>()
-        .register_type::<TooltipRequests>();
+        .register_type::<TooltipRequests>()
+        .add_event::<OnClientTooltipRequest>();
 }
