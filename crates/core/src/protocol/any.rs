@@ -1,7 +1,7 @@
 use std::any::type_name;
 use std::io::Write;
 use std::sync::Arc;
-use crate::protocol::{AccountLogin, AsciiTextMessage, AsciiTextMessageRequest, AttackRequest, BeginEnterWorld, ChangeSeason, CharacterAnimation, CharacterList, CharacterPredefinedAnimation, CharacterProfile, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DamageDealt, DeleteCharacter, DeleteEntity, DoubleClick, DropEntity, EndEnterWorld, EntityLightLevel, EntityRequest, EntityTooltip, EntityTooltipVersion, EquipEntity, ExtendedCommand, ExtendedCommandAos, GameServerLogin, GlobalLightLevel, GumpResult, LocalisedTextMessage, LoginError, Logout, Move, MoveConfirm, PickUpReject, MoveReject, OpenChatWindow, OpenContainer, OpenGump, OpenGumpCompressed, OpenPaperDoll, OutgoingPacket, Packet, PickTarget, PickUpEntity, Ping, PlayMusic, PlaySoundEffect, RenameEntity, RequestHelp, RequestName, Seed, SelectCharacter, SelectGameServer, ServerList, SetAttackTarget, SetTime, ShowPublicHouses, SingleClick, Skills, SupportedFeatures, Swing, SwitchServer, UnicodeTextMessage, UnicodeTextMessageRequest, UpdateCharacter, UpsertContainerContents, UpsertContainerEquipment, UpsertEntityCharacter, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityLegacy, UpsertEntityStats, UpsertEntityWorld, UpsertLocalPlayer, ViewRange, WarMode, DropAccept};
+use crate::protocol::{AccountLogin, AsciiTextMessage, AsciiTextMessageRequest, AttackRequest, BeginEnterWorld, ChangeSeason, CharacterAnimation, CharacterList, CharacterPredefinedAnimation, CharacterProfile, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DamageDealt, DeleteCharacter, DeleteEntity, DoubleClick, DropEntity, EndEnterWorld, EntityLightLevel, EntityRequest, EntityTooltip, EntityTooltipVersion, EquipEntity, ExtendedCommand, ExtendedCommandAos, GameServerLogin, GlobalLightLevel, GumpResult, LocalisedTextMessage, LoginError, Logout, Move, MoveConfirm, PickUpReject, MoveReject, OpenChatWindow, OpenContainer, OpenGump, OpenGumpCompressed, OpenPaperDoll, OutgoingPacket, Packet, PickTarget, PickUpEntity, Ping, PlayMusic, PlaySoundEffect, RenameEntity, RequestHelp, RequestName, Seed, SelectCharacter, SelectGameServer, ServerList, SetAttackTarget, SetTime, ShowPublicHouses, SingleClick, Skills, SupportedFeatures, Swing, SwitchServer, UnicodeTextMessage, UnicodeTextMessageRequest, UpdateCharacter, UpsertContainerContents, UpsertContainerEquipment, UpsertEntityCharacter, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityLegacy, UpsertEntityStats, UpsertEntityWorld, UpsertLocalPlayer, ViewRange, WarMode, DropAccept, TextCommand};
 
 pub trait IntoAnyPacket where Self: Sized {
     fn into_any(self) -> AnyPacket;
@@ -212,6 +212,7 @@ impl_any!(
     GumpResult,
 
     // Chat
+    TextCommand,
     AsciiTextMessage,
     UnicodeTextMessage,
     LocalisedTextMessage,

@@ -12,6 +12,48 @@ use super::{ClientVersion, Endian, Packet};
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, Default, FromRepr)]
+pub enum TextCommandKind {
+    #[default]
+    Go = 0,
+    UseSkill = 0x24,
+    CastSpellFromBook = 0x27,
+    UseScroll = 0x2f,
+    OpenSpellBook = 0x43,
+    CastSpellFromMacro = 0x56,
+    OpenDoor = 0x58,
+    Animate = 0xc7,
+    InvokeVirtues = 0xf4,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TextCommand {
+    pub kind: TextCommandKind,
+    pub command: String,
+}
+
+impl Packet for TextCommand {
+    const PACKET_KIND: u8 = 0x12;
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let kind = TextCommandKind::from_repr(payload.read_u8()?)
+            .ok_or_else(|| anyhow!("invalid text command kind"))?;
+        let command = payload.read_str_nul()?;
+        Ok(TextCommand {
+            kind,
+            command
+        })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_u8(self.kind as u8)?;
+        writer.write_str_nul(&self.command)?;
+        Ok(())
+    }
+}
+
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, Default, FromRepr)]
 pub enum MessageKind
 {
     #[default]
