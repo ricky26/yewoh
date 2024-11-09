@@ -7,7 +7,8 @@ use yewoh_server::world::connection::NetClient;
 use yewoh_server::world::input::{EntityTargetRequest, EntityTargetResponse, WorldTargetRequest, WorldTargetResponse};
 use yewoh_server::world::spatial::SpatialQuery;
 use yewoh_server::world::view::ViewKey;
-use crate::commands::{TextCommand, TextCommandQueue};
+
+use crate::commands::{TextCommand, TextCommandQueue, TextCommandRegistrationExt};
 use crate::networking::NetClientExt;
 
 #[derive(Parser, Resource)]
@@ -117,4 +118,14 @@ pub fn info(
             send_entity_info(world, &type_registry, client, target);
         }
     }
+}
+
+pub fn plugin(app: &mut App) {
+    app
+        .add_text_command::<Info>()
+        .add_text_command::<TileInfo>()
+        .add_systems(Update, (
+            start_info,
+            info,
+        ));
 }

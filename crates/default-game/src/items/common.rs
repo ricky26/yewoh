@@ -55,6 +55,10 @@ pub fn add_item_name_tooltip(
     }
 }
 
+#[derive(Clone, Debug, Default, Component, Reflect)]
+#[reflect(Component)]
+pub struct Stackable;
+
 #[derive(Clone, Debug, Default, Reflect)]
 pub struct GraphicOffsetEntry {
     pub min_quantity: u16,
@@ -93,6 +97,7 @@ pub fn plugin(app: &mut App) {
             EntityEventRoutePlugin::<OnRequestEntityTooltip, (ItemName, ItemQuantity)>::default(),
         ))
         .register_type::<ItemName>()
+        .register_type::<Stackable>()
         .register_type::<GraphicOffsetEntry>()
         .register_type::<GraphicOffsetByQuantity>()
         .register_type_data::<Vec<GraphicOffsetEntry>, ReflectFromReflect>()

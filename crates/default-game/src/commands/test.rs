@@ -7,7 +7,8 @@ use yewoh::Direction;
 use yewoh_server::world::connection::{NetClient, Possessing};
 use yewoh_server::world::entity::{Hue, MapPosition};
 use yewoh_server::world::items::ItemGraphic;
-use crate::commands::{TextCommand, TextCommandQueue};
+
+use crate::commands::{TextCommand, TextCommandQueue, TextCommandRegistrationExt};
 
 #[derive(Parser, Resource)]
 pub struct Echo {
@@ -85,3 +86,16 @@ pub fn test_gump(
         }
     }
 }
+
+pub fn plugin(app: &mut App) {
+    app
+        .add_text_command::<Echo>()
+        .add_text_command::<FryPan>()
+        .add_text_command::<TestGump>()
+        .add_systems(Update, (
+            echo,
+            frypan,
+            test_gump,
+        ));
+}
+

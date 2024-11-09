@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use yewoh::protocol::EquipmentSlot;
 use yewoh_server::world::entity::{ContainedPosition, EquippedPosition, MapPosition};
+use yewoh_server::world::items::ItemPosition;
 
 pub struct MoveToMapPosition {
     pub map_position: MapPosition,
@@ -43,6 +44,16 @@ impl EntityCommand for MoveToContainerPosition {
     }
 }
 
+pub struct RemovePosition;
+
+impl EntityCommand for RemovePosition {
+    fn apply(self, entity: Entity, world: &mut World) {
+        world.entity_mut(entity)
+            .remove_parent()
+            .remove::<(ContainedPosition, EquippedPosition, MapPosition)>();
+    }
+}
+
 pub trait PositionExt {
     fn move_to_map_position(&mut self, map_position: MapPosition) -> &mut Self;
 
@@ -51,6 +62,19 @@ pub trait PositionExt {
     fn move_to_container_position(
         &mut self, parent: Entity, position: ContainedPosition,
     ) -> &mut Self;
+
+    fn remove_position(&mut self) -> &mut Self;
+
+    fn move_to_item_position(&mut self, position: ItemPosition) -> &mut Self {
+        match position {
+            ItemPosition::Map(map_position) =>
+                self.move_to_map_position(map_position),
+            ItemPosition::Equipped(parent, equipped) =>
+                self.move_to_equipped_position(parent, equipped.slot),
+            ItemPosition::Contained(parent, contained) =>
+                self.move_to_container_position(parent, contained),
+        }
+    }
 }
 
 impl PositionExt for EntityCommands<'_> {
@@ -66,6 +90,10 @@ impl PositionExt for EntityCommands<'_> {
         &mut self, parent: Entity, position: ContainedPosition,
     ) -> &mut Self {
         self.queue(MoveToContainerPosition { parent, position })
+    }
+
+    fn remove_position(&mut self) -> &mut Self {
+        self.queue(RemovePosition)
     }
 }
 
@@ -90,5 +118,9 @@ impl PositionExt for EntityWorldMut<'_> {
         &mut self, parent: Entity, position: ContainedPosition,
     ) -> &mut Self {
         entity_world_apply(self, MoveToContainerPosition { parent, position })
+    }
+
+    fn remove_position(&mut self) -> &mut Self {
+        entity_world_apply(self, RemovePosition)
     }
 }

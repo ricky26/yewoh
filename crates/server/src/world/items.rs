@@ -46,7 +46,7 @@ pub struct OnContainerOpen {
     pub container: Entity,
 }
 
-#[derive(Clone, Debug, )]
+#[derive(Clone, Debug, Reflect)]
 pub enum ItemPosition {
     Map(MapPosition),
     Equipped(Entity, EquippedPosition),

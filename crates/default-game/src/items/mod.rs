@@ -6,6 +6,8 @@ pub mod common;
 
 pub mod containers;
 
+pub const MAX_STACK: u16 = 60000;
+
 #[derive(Default)]
 pub struct ItemsPlugin;
 

@@ -7,7 +7,7 @@ use yewoh_server::gump_builder::{GumpBuilder, GumpText};
 use yewoh_server::world::entity::MapPosition;
 use yewoh_server::world::connection::{NetClient, Possessing};
 
-use crate::commands::{TextCommand, TextCommandQueue};
+use crate::commands::{TextCommand, TextCommandQueue, TextCommandRegistrationExt};
 
 #[derive(Parser)]
 pub struct GoCoordinates {
@@ -111,4 +111,12 @@ pub fn go(
             }
         }
     }
+}
+
+pub fn plugin(app: &mut App) {
+    app
+        .add_text_command::<Go>()
+        .add_systems(Update, (
+            go,
+        ));
 }

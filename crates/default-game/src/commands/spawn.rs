@@ -1,3 +1,4 @@
+use bevy::app::{App, Update};
 use bevy::ecs::component::Component;
 use bevy::ecs::entity::Entity;
 use bevy::ecs::system::{Commands, Query, Res, Resource};
@@ -10,7 +11,7 @@ use yewoh_server::world::connection::{NetClient};
 use yewoh_server::world::items::{Container, ItemQuantity};
 use yewoh_server::world::view::ViewKey;
 
-use crate::commands::{TextCommand, TextCommandQueue};
+use crate::commands::{TextCommand, TextCommandQueue, TextCommandRegistrationExt};
 use crate::data::prefabs::{PrefabLibrary, PrefabLibraryWorldExt};
 use crate::entities::Persistent;
 use crate::hues;
@@ -152,4 +153,13 @@ pub fn spawn(
             entity_commands.insert(ItemQuantity(quantity));
         }
     }
+}
+
+pub fn plugin(app: &mut App) {
+    app
+        .add_text_command::<Spawn>()
+        .add_systems(Update, (
+            start_spawn,
+            spawn,
+        ));
 }

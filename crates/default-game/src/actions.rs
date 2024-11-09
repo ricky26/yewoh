@@ -1,21 +1,29 @@
 use bevy::prelude::*;
 use yewoh::protocol;
-use yewoh::protocol::{CharacterProfile, MoveConfirm, MoveEntityReject, MoveReject, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind};
+use yewoh::protocol::{CharacterProfile, MoveConfirm, PickUpReject, MoveReject, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind};
 use yewoh_server::world::characters::{CharacterBodyType, CharacterNotoriety, OnClientProfileRequest, OnClientSkillsRequest, WarMode};
 use yewoh_server::world::combat::{AttackTarget, OnClientWarModeChanged};
 use yewoh_server::world::connection::{NetClient, Possessing};
 use yewoh_server::world::entity::{ContainedPosition, EquippedPosition, MapPosition};
 use yewoh_server::world::input::{OnClientDrop, OnClientEquip, OnClientMove, OnClientPickUp};
-use yewoh_server::world::items::Container;
+use yewoh_server::world::items::{Container, ItemPosition, ItemQuantity, PositionQuery};
 use yewoh_server::world::map::{Chunk, TileDataResource};
 use yewoh_server::world::navigation::try_move_in_direction;
 use yewoh_server::world::net_id::NetId;
 use yewoh_server::world::spatial::SpatialQuery;
 use yewoh_server::world::ServerSet;
 
+use crate::data::prefabs::PrefabLibraryWorldExt;
+use crate::entities::position::PositionExt;
+use crate::entities::{Persistent, PrefabInstance};
+use crate::entities::tooltips::MarkTooltipChanged;
+use crate::items::common::Stackable;
+use crate::items::MAX_STACK;
+
 #[derive(Debug, Clone, Component, Reflect)]
 pub struct Held {
     pub held_entity: Entity,
+    pub previous_position: Option<ItemPosition>,
 }
 
 #[derive(Debug, Clone, Component, Reflect)]
@@ -69,7 +77,7 @@ pub fn on_client_move(
 pub fn on_client_pick_up(
     clients: Query<(&NetClient, &Possessing)>,
     characters: Query<Option<&Held>>,
-    targets: Query<(Entity, Option<&MapPosition>, Option<&ContainedPosition>, Option<&EquippedPosition>)>,
+    targets: Query<(Entity, &PrefabInstance, &ItemQuantity, PositionQuery)>,
     mut commands: Commands,
     mut events: EventReader<OnClientPickUp>,
 ) {
@@ -84,49 +92,55 @@ pub fn on_client_pick_up(
         };
 
         if held.is_some() {
-            client.send_packet(MoveEntityReject::AlreadyHolding);
+            client.send_packet(PickUpReject::AlreadyHolding);
             continue;
         }
 
-        let Ok((entity, position, container, equipped)) = targets.get(request.target) else {
-            client.send_packet(MoveEntityReject::CannotLift);
+        let Ok((entity, prefab, quantity, position)) = targets.get(request.target) else {
+            client.send_packet(PickUpReject::CannotLift);
             continue;
         };
 
-        if position.is_some() {
+        let item_position = position.item_position().unwrap();
+        let quantity_left = (**quantity).saturating_sub(request.quantity);
+        let quantity_taken = **quantity - quantity_left;
+
+        let held_entity = if request.quantity >= **quantity {
             commands.entity(entity)
                 .insert(Holder { held_by: character })
-                .remove::<MapPosition>();
-        } else if container.is_some() {
-            commands.entity(entity)
-                .insert(Holder { held_by: character })
-                .remove_parent()
-                .remove::<ContainedPosition>();
-        } else if equipped.is_some() {
-            commands.entity(entity)
-                .insert(Holder { held_by: character })
-                .remove_parent()
-                .remove::<EquippedPosition>();
+                .remove_position();
+            entity
         } else {
-            // Not sure where this item is, do nothing.
-            client.send_packet(MoveEntityReject::OutOfRange);
-            continue;
-        }
+            commands.entity(entity)
+                .insert(ItemQuantity(quantity_left))
+                .queue(MarkTooltipChanged);
+            commands
+                .fabricate_prefab(&prefab.prefab_name)
+                .insert((
+                    Persistent,
+                    ItemQuantity(quantity_taken),
+                ))
+                .id()
+        };
 
         commands.entity(character)
-            .insert(Held { held_entity: entity });
+            .insert(Held {
+                held_entity,
+                previous_position: Some(item_position),
+            });
     }
 }
 
 pub fn on_client_drop(
-    clients: Query<(&NetClient, &Possessing)>,
+    clients: Query<&Possessing>,
     characters: Query<(&MapPosition, &Held)>,
-    mut containers: Query<&mut Container>,
+    containers: Query<&Container>,
+    stackable: Query<(&PrefabInstance, &ItemQuantity), With<Stackable>>,
     mut commands: Commands,
     mut events: EventReader<OnClientDrop>,
 ) {
     for request in events.read() {
-        let Ok((client, owner)) = clients.get(request.client_entity) else {
+        let Ok(owner) = clients.get(request.client_entity) else {
             continue;
         };
 
@@ -135,22 +149,32 @@ pub fn on_client_drop(
             continue;
         };
 
-        if held.held_entity != request.target {
-            client.send_packet(MoveEntityReject::BelongsToAnother);
-            continue;
-        }
-
-        let target = request.target;
-
+        let target = held.held_entity;
         if let Some(container_entity) = request.dropped_on {
-            if containers.get_mut(container_entity).is_ok() {
+            if containers.get(container_entity).is_ok() {
                 commands.entity(target)
                     .remove::<Holder>()
-                    .set_parent(request.dropped_on.unwrap())
+                    .set_parent(container_entity)
                     .insert(ContainedPosition {
                         position: request.position.truncate(),
                         grid_index: request.grid_index,
                     });
+            } else if let Ok([(a_prefab, a_quantity), (b_prefab, b_quantity)]) = stackable.get_many([target, container_entity]) {
+                let new_quantity = (**a_quantity as u32) + (**b_quantity as u32);
+                if a_prefab.prefab_name != b_prefab.prefab_name || new_quantity > MAX_STACK as u32 {
+                    commands.entity(target)
+                        .remove::<Holder>()
+                        .insert(MapPosition {
+                            position: character_position.position,
+                            map_id: character_position.map_id,
+                            ..Default::default()
+                        });
+                } else {
+                    commands.entity(target).despawn_recursive();
+                    commands.entity(container_entity)
+                        .insert(ItemQuantity(new_quantity as u16))
+                        .queue(MarkTooltipChanged);
+                }
             } else {
                 commands.entity(target)
                     .remove::<Holder>()
@@ -193,7 +217,7 @@ pub fn on_client_equip(
         };
 
         if held.held_entity != request.target {
-            client.send_packet(MoveEntityReject::BelongsToAnother);
+            client.send_packet(PickUpReject::BelongsToAnother);
             continue;
         }
 

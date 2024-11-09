@@ -28,6 +28,7 @@ pub struct OnClientDoubleClick {
 pub struct OnClientPickUp {
     pub client_entity: Entity,
     pub target: Entity,
+    pub quantity: u16,
 }
 
 #[derive(Debug, Clone, Event)]

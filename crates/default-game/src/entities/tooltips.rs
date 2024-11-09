@@ -1,10 +1,12 @@
 use std::cmp::Ordering;
+
 use bevy::prelude::*;
 use yewoh::protocol::{EntityTooltip, EntityTooltipLine};
 use yewoh_server::world::connection::NetClient;
 use yewoh_server::world::entity::{OnClientTooltipRequest, Tooltip};
 use yewoh_server::world::net_id::NetId;
 use yewoh_server::world::ServerSet;
+
 use crate::DefaultGameSet;
 use crate::entity_events::{EntityEvent, EntityEventRoutePlugin, EntityEventPlugin, EntityEventReader};
 
@@ -135,6 +137,19 @@ pub fn finish_tooltips(
             id: net_id.id,
             entries,
         })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct MarkTooltipChanged;
+
+impl EntityCommand for MarkTooltipChanged {
+    fn apply(self, entity: Entity, world: &mut World) {
+        if let Some(mut tooltip) = world.entity_mut(entity)
+            .get_mut::<Tooltip>()
+        {
+            tooltip.mark_changed()
+        }
     }
 }
 

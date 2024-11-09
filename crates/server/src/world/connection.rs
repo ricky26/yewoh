@@ -386,6 +386,7 @@ pub fn handle_new_packets(
                     events.pick_up.send(OnClientPickUp {
                         client_entity,
                         target,
+                        quantity: request.quantity,
                     });
                 }
             }
