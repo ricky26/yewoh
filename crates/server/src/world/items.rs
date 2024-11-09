@@ -241,9 +241,11 @@ pub struct ChangedItemFilter {
 pub struct StaticRootPositionSet;
 
 pub fn set_static_root_positions(
-    mut root_query: Query<(&MapPosition, &mut RootPosition), (With<Static>, Without<StaticRootPositionSet>, Without<Parent>)>,
+    mut commands: Commands,
+    mut root_query: Query<(Entity, &MapPosition, &mut RootPosition), (With<Static>, Without<StaticRootPositionSet>, Without<Parent>)>,
 ) {
-    for (position, mut root) in &mut root_query {
+    for (entity, position, mut root) in &mut root_query {
+        commands.entity(entity).insert(StaticRootPositionSet);
         root.0 = *position;
     }
 }
