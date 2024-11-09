@@ -180,7 +180,7 @@ pub struct DropEntity {
     pub target_id: EntityId,
     pub position: IVec3,
     pub grid_index: u8,
-    pub container_id: Option<EntityId>,
+    pub dropped_on_entity_id: Option<EntityId>,
 }
 
 impl Packet for DropEntity {
@@ -210,7 +210,7 @@ impl Packet for DropEntity {
             target_id,
             position: IVec3::new(x, y, z),
             grid_index,
-            container_id,
+            dropped_on_entity_id: container_id,
         })
     }
 
@@ -222,7 +222,7 @@ impl Packet for DropEntity {
         if client_version >= VERSION_GRID_INVENTORY {
             writer.write_u8(self.grid_index)?;
         }
-        if let Some(container_id) = self.container_id {
+        if let Some(container_id) = self.dropped_on_entity_id {
             writer.write_entity_id(container_id)?;
         } else {
             writer.write_u32::<Endian>(!0)?;

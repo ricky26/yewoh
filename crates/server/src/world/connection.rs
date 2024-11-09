@@ -396,7 +396,7 @@ pub fn handle_new_packets(
                         target,
                         position: request.position,
                         grid_index: request.grid_index,
-                        dropped_on: request.container_id.and_then(|id| lookup.net_to_ecs(id)),
+                        dropped_on: request.dropped_on_entity_id.and_then(|id| lookup.net_to_ecs(id)),
                     });
                 }
             }
