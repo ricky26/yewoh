@@ -7,10 +7,11 @@ use yewoh::protocol::TargetType;
 use yewoh_server::world::entity::{ContainedPosition, MapPosition};
 use yewoh_server::world::input::{EntityTargetRequest, EntityTargetResponse, WorldTargetRequest, WorldTargetResponse};
 use yewoh_server::world::connection::{NetClient};
-use yewoh_server::world::items::Container;
+use yewoh_server::world::items::{Container, ItemQuantity};
 use yewoh_server::world::view::ViewKey;
+
 use crate::commands::{TextCommand, TextCommandQueue};
-use crate::data::prefabs::{PrefabLibrary, PrefabLibraryEntityExt};
+use crate::data::prefabs::{PrefabLibrary, PrefabLibraryWorldExt};
 use crate::entities::Persistent;
 use crate::hues;
 use crate::networking::NetClientExt;
@@ -21,6 +22,8 @@ pub struct Spawn {
     in_container: bool,
 
     prefab: String,
+
+    quantity: Option<u16>,
 }
 
 impl TextCommand for Spawn {
@@ -32,6 +35,7 @@ impl TextCommand for Spawn {
 #[derive(Debug, Clone, Component)]
 pub struct SpawnRequest {
     prefab_name: String,
+    quantity: Option<u16>,
 }
 
 pub fn start_spawn(
@@ -50,7 +54,7 @@ pub fn start_spawn(
             continue;
         };
 
-        let spawn_request = SpawnRequest { prefab_name: request.prefab };
+        let spawn_request = SpawnRequest { prefab_name: request.prefab, quantity: request.quantity };
         if request.in_container {
             commands
                 .spawn((
@@ -95,9 +99,10 @@ pub fn spawn(
         // TODO: check whether location is obstructed.
 
         let map_id = view_key.map_id;
-        commands
-            .spawn_empty()
-            .fabricate_prefab(&spawn.prefab_name)
+        let mut entity_commands = commands
+            .fabricate_prefab(&spawn.prefab_name);
+
+        entity_commands
             .insert((
                 Persistent,
                 MapPosition {
@@ -106,6 +111,10 @@ pub fn spawn(
                     direction: Default::default(),
                 },
             ));
+
+        if let Some(quantity) = spawn.quantity {
+            entity_commands.insert(ItemQuantity(quantity));
+        }
     }
 
     for (entity, spawn, request, response) in completed_entity.iter() {
@@ -129,13 +138,18 @@ pub fn spawn(
             }
         };
 
-        commands
-            .spawn_empty()
-            .fabricate_prefab(&spawn.prefab_name)
+        let mut entity_commands = commands
+            .fabricate_prefab(&spawn.prefab_name);
+
+        entity_commands
             .insert((
                 Persistent,
                 ContainedPosition::default(),
             ))
             .set_parent(target);
+
+        if let Some(quantity) = spawn.quantity {
+            entity_commands.insert(ItemQuantity(quantity));
+        }
     }
 }
