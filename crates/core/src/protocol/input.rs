@@ -233,7 +233,7 @@ impl Packet for DropEntity {
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, FromRepr)]
-pub enum MoveEntityReject {
+pub enum PickUpReject {
     CannotLift = 0,
     OutOfRange = 1,
     OutOfSight = 2,
@@ -241,18 +241,39 @@ pub enum MoveEntityReject {
     AlreadyHolding = 4,
 }
 
-impl Packet for MoveEntityReject {
+impl Packet for PickUpReject {
     const PACKET_KIND: u8 = 0x27;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
-        MoveEntityReject::from_repr(payload.read_u8()?)
+        PickUpReject::from_repr(payload.read_u8()?)
             .ok_or_else(|| anyhow!("Invalid rejection reason"))
     }
 
     fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u8(*self as u8)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct DropAccept {
+    pub target_id: EntityId,
+}
+
+impl Packet for DropAccept {
+    const PACKET_KIND: u8 = 0x28;
+
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
+
+    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let target_id = payload.read_entity_id()?;
+        Ok(DropAccept { target_id })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_entity_id(self.target_id)?;
         Ok(())
     }
 }
