@@ -5,8 +5,10 @@ import yewoh_default_game::ai::behaviours::wander::WanderPrefab;
 import yewoh_default_game::entities::prefabs::{Prefab, EquippedBy};
 import yewoh_default_game::characters::paperdoll::{Paperdoll, DoubleClickPaperdoll};
 import bevy_fabricator::humantime::HumanDuration;
-import bevy_fabricator::operations::Spawn;
+import bevy_fabricator::operations::{Spawn, Fabricate};
+import "../prefabs/characters/human.fab" as humanPrefab;
 
+$ <- Fabricate(humanPrefab);
 $ <- CharacterName("Gerome");
 $ <- CharacterBodyType(0x190);
 $ <- Hue(0x909);
@@ -17,8 +19,6 @@ $ <- MapPosition {
     map_id: 1,
     position: (1324, 1624, 55),
 };
-$ <- Paperdoll;
-$ <- DoubleClickPaperdoll;
 
 local top = Spawn;
 top <- Prefab("test_top");
