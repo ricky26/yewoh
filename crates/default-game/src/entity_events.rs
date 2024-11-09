@@ -100,7 +100,7 @@ impl<'w, E: EntityEvent, B: Bundle> EntityEventReader<'w, E, B> {
             .copied()
             .map(move |index| {
                 // SAFETY: pending_events never includes duplicates.
-                unsafe { events.offset(index as isize).as_mut().unwrap() }
+                unsafe { events.add(index).as_mut().unwrap() }
             })
     }
 }
