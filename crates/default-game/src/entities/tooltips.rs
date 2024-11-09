@@ -8,12 +8,14 @@ use yewoh_server::world::ServerSet;
 use crate::DefaultGameSet;
 use crate::entity_events::{EntityEvent, EntityEventRoutePlugin, EntityEventPlugin, EntityEventReader};
 
+pub const TOOLTIP_NAME_PRIORITY: i32 = -1000;
+
 #[derive(Debug, Clone, Eq, PartialEq, Reflect)]
 #[reflect(Default)]
 pub struct TooltipLine {
     pub text_id: u32,
     pub arguments: String,
-    pub priority: u32,
+    pub priority: i32,
 }
 
 impl Default for TooltipLine {
@@ -27,7 +29,7 @@ impl Default for TooltipLine {
 }
 
 impl TooltipLine {
-    pub fn from_static(text_id: u32, priority: u32) -> TooltipLine {
+    pub fn from_static(text_id: u32, priority: i32) -> TooltipLine {
         Self {
             text_id,
             arguments: Default::default(),
@@ -35,7 +37,7 @@ impl TooltipLine {
         }
     }
 
-    pub fn from_str(text: String, priority: u32) -> TooltipLine {
+    pub fn from_str(text: String, priority: i32) -> TooltipLine {
         Self {
             text_id: 1042971,
             arguments: text,

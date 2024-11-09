@@ -1,10 +1,12 @@
 import yewoh_server::world::items::{ItemGraphic, Container};
 import yewoh_default_game::items::containers::DoubleClickOpenContainer;
 import yewoh_default_game::entities::context_menu::SingleClickContextMenu;
+import yewoh_default_game::entities::common::Weight;
 
 $ <- ItemGraphic(0xe75);
 $ <- Container {
     gump_id: 0x3c,
 };
+$ <- Weight(3);
 $ <- SingleClickContextMenu;
 $ <- DoubleClickOpenContainer;

@@ -2,6 +2,8 @@ use bevy::prelude::*;
 
 pub mod persistence;
 
+pub mod common;
+
 pub mod containers;
 
 #[derive(Default)]
@@ -12,6 +14,7 @@ impl Plugin for ItemsPlugin {
         app
             .add_plugins((
                 persistence::plugin,
+                common::plugin,
                 containers::plugin,
             ));
     }

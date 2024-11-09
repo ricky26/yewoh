@@ -16,6 +16,8 @@ pub mod context_menu;
 
 pub mod interactions;
 
+pub mod common;
+
 #[derive(Debug, Clone, Copy, Default, Reflect, Component)]
 #[reflect(Component)]
 pub struct Persistent;
@@ -57,6 +59,7 @@ impl Plugin for EntitiesPlugin {
                 tooltips::plugin,
                 context_menu::plugin,
                 interactions::plugin,
+                common::plugin,
             ))
             .register_type::<UniqueId>()
             .register_type::<Persistent>()

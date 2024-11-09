@@ -17,8 +17,12 @@ use crate::world::ServerSet;
 #[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Deref, DerefMut, Component, Reflect, Serialize, Deserialize)]
 #[reflect(Component, Default, Serialize, Deserialize)]
 #[serde(transparent)]
-#[require(Hue, ItemQuantity, Tooltip, RootPosition)]
+#[require(Hue, ItemGraphicOffset, ItemQuantity, Tooltip, RootPosition)]
 pub struct ItemGraphic(pub u16);
+
+#[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Deref, DerefMut, Component, Reflect)]
+#[reflect(Component, Default)]
+pub struct ItemGraphicOffset(pub u8);
 
 #[derive(Debug, Clone, Eq, PartialEq, Component, Reflect, Deref, DerefMut)]
 #[reflect(Component, Default)]
@@ -128,6 +132,7 @@ pub struct ValidItemPosition {
 #[derive(QueryData)]
 pub struct ItemQuery {
     pub graphic: Ref<'static, ItemGraphic>,
+    pub graphic_offset: Ref<'static, ItemGraphicOffset>,
     pub hue: Ref<'static, Hue>,
     pub quantity: Ref<'static, ItemQuantity>,
     pub tooltip: Ref<'static, Tooltip>,
@@ -151,7 +156,7 @@ impl ItemQueryItem<'_> {
             id,
             kind: EntityKind::Item,
             graphic_id: **self.graphic,
-            graphic_inc: 0,
+            graphic_inc: **self.graphic_offset,
             direction: position.direction,
             quantity: **self.quantity,
             position: position.position,
@@ -180,7 +185,7 @@ impl ItemQueryItem<'_> {
         Some(UpsertEntityContained {
             id,
             graphic_id: **self.graphic,
-            graphic_inc: 0,
+            graphic_inc: **self.graphic_offset,
             quantity: **self.quantity,
             position: contained.position,
             grid_index: contained.grid_index,
@@ -215,6 +220,7 @@ impl ItemQueryItem<'_> {
 
     pub fn is_item_changed(&self) -> bool {
         self.graphic.is_changed() ||
+            self.graphic_offset.is_changed() ||
             self.hue.is_changed() ||
             self.quantity.is_changed()
     }

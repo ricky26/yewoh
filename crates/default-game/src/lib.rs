@@ -48,6 +48,8 @@ pub mod hues;
 
 pub mod entities;
 
+pub mod format;
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq, SystemSet)]
 pub enum DefaultGameSet {
     DispatchEvents,
