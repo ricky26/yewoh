@@ -2,6 +2,7 @@ import yewoh_server::world::entity::Hue;
 import yewoh_server::world::characters::{CharacterBodyType, CharacterName, CharacterRace, CharacterSex, Animation};
 import yewoh_server::remote_reflect::RaceRemote;
 import yewoh_default_game::activities::combat::Unarmed;
+import yewoh_default_game::characters::paperdoll::{Paperdoll, DoubleClickPaperdoll};
 import bevy_fabricator::humantime::HumanDuration;
 
 in body_type: u16;
@@ -23,3 +24,5 @@ $ <- Unarmed {
         swing_animation: Animation::Predefined({ action: 31 }),
     },
 };
+$ <- Paperdoll;
+$ <- DoubleClickPaperdoll;

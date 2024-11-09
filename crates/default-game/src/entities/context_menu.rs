@@ -46,13 +46,13 @@ impl ContextMenuEntry {
 }
 
 #[derive(Clone, Debug, Event)]
-pub struct OnRequestEntityContextMenu {
+pub struct OnEntityContextMenuRequest {
     pub client_entity: Entity,
     pub target: Entity,
     pub entries: Vec<ContextMenuEntry>,
 }
 
-impl EntityEvent for OnRequestEntityContextMenu {
+impl EntityEvent for OnEntityContextMenuRequest {
     fn target(&self) -> Entity {
         self.target
     }
@@ -77,10 +77,10 @@ pub struct SingleClickContextMenu;
 
 pub fn on_client_context_menu_request(
     mut events: EventReader<OnClientContextMenuRequest>,
-    mut out_events: EventWriter<OnRequestEntityContextMenu>,
+    mut out_events: EventWriter<OnEntityContextMenuRequest>,
 ) {
     for request in events.read() {
-        out_events.send(OnRequestEntityContextMenu {
+        out_events.send(OnEntityContextMenuRequest {
             client_entity: request.client_entity,
             target: request.target,
             entries: Vec::new(),
@@ -91,7 +91,7 @@ pub fn on_client_context_menu_request(
 pub fn finish_context_menu(
     clients: Query<&NetClient>,
     net_objects: Query<&NetId>,
-    mut events: EntityEventReader<OnRequestEntityContextMenu, ()>,
+    mut events: EntityEventReader<OnEntityContextMenuRequest, ()>,
 ) {
     for event in events.read() {
         let Ok(client) = clients.get(event.client_entity) else {
@@ -148,9 +148,9 @@ pub fn plugin(app: &mut App) {
     app
         .register_type::<SingleClickContextMenu>()
         .add_plugins((
-            EntityEventPlugin::<OnRequestEntityContextMenu>::default(),
+            EntityEventPlugin::<OnEntityContextMenuRequest>::default(),
             EntityEventPlugin::<OnEntityContextMenuAction>::default(),
-            EntityEventRoutePlugin::<OnRequestEntityContextMenu, ()>::default(),
+            EntityEventRoutePlugin::<OnEntityContextMenuRequest, ()>::default(),
             EntityEventRoutePlugin::<OnEntitySingleClick, SingleClickContextMenu>::default(),
         ))
         .add_systems(First, (

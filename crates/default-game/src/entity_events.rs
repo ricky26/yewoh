@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use bevy::ecs::archetype::{ArchetypeId, Archetypes};
-use bevy::ecs::component::{ComponentId, Components};
+use bevy::ecs::component::ComponentId;
 use bevy::ecs::entity::Entities;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
@@ -33,13 +33,12 @@ pub struct EntityEventRoute<E: EntityEvent> {
 }
 
 impl<E: EntityEvent> EntityEventRoute<E> {
-    pub fn for_bundle<B: Bundle>(components: &Components) -> EntityEventRoute<E> {
+    pub fn for_bundle<B: Bundle>(world: &mut World) -> EntityEventRoute<E> {
         let mut required_components = Vec::new();
 
-        B::get_component_ids(components, &mut |id| {
-            if let Some(id) = id {
-                required_components.push(id);
-            }
+        world.register_bundle::<B>();
+        B::get_component_ids(world.components(), &mut |id| {
+            required_components.push(id.expect("missing bundle component ID"));
         });
 
         EntityEventRoute {
@@ -198,7 +197,7 @@ impl<E: EntityEvent, B: Bundle> Plugin for EntityEventRoutePlugin<E, B> {
     fn build(&self, app: &mut App) {
         let query_state = app.world_mut().query_filtered::<(), With<EntityEventRouteMarker<E, B>>>();
         if query_state.is_empty(app.world(), app.world().last_change_tick(), app.world().last_change_tick()) {
-            let route = EntityEventRoute::<E>::for_bundle::<B>(app.world().components());
+            let route = EntityEventRoute::<E>::for_bundle::<B>(app.world_mut());
             app.world_mut().spawn((
                 route,
                 EntityEventQueue::<E>::default(),

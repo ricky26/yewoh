@@ -5,6 +5,8 @@ pub mod player;
 
 pub mod persistence;
 
+pub mod paperdoll;
+
 #[derive(Clone, Debug, Default, Event)]
 pub struct OnCharacterMove {
     pub blocked: bool,
@@ -18,5 +20,6 @@ pub fn plugin(app: &mut App) {
         .add_plugins((
             player::plugin,
             persistence::plugin,
+            paperdoll::plugin,
         ));
 }
