@@ -137,6 +137,13 @@ fn main() -> anyhow::Result<()> {
     app.finish();
     app.cleanup();
 
+    // Load prefabs
+    info!("Loading prefabs...");
+    let (prefabs, prefab_handles) = load_prefabs(&mut app, load_wait, &args.data_path, "prefabs")?;
+    app
+        .insert_resource(prefabs)
+        .insert_resource(prefab_handles);
+
     let (static_data, map_infos, tile_data, multi_data, map_entities, static_entities) = block_on(async {
         let static_data = static_data::load_from_directory(&args.data_path).await?;
         let map_infos = static_data.maps.map_infos();
@@ -173,13 +180,6 @@ fn main() -> anyhow::Result<()> {
         .insert_resource(SpatialStaticItemLookup::new(&map_infos))
         .insert_resource(ChunkLookup::new(&map_infos))
         .insert_resource(DeltaGrid::new(&map_infos));
-
-    // Load prefabs
-    info!("Loading prefabs...");
-    let (prefabs, prefab_handles) = load_prefabs(&mut app, load_wait, &args.data_path, "prefabs")?;
-    app
-        .insert_resource(prefabs)
-        .insert_resource(prefab_handles);
 
     // Spawn static entities
     load_static_entities(&mut app, load_wait, &args.data_path, "entities")?;
