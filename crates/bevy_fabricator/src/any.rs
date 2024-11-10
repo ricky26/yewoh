@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 
-use crate::traits::{Evaluate, ReflectEvaluate};
-use crate::Fabricated;
+use crate::traits::{Context, Evaluate, ReflectEvaluate};
 
 #[derive(Reflect)]
 #[reflect(from_reflect = false, FromReflect, Evaluate)]
@@ -30,9 +29,7 @@ impl Default for Any {
 }
 
 impl Evaluate for Any {
-    fn evaluate(
-        &self, _world: &mut World, _fabricated: &mut Fabricated,
-    ) -> anyhow::Result<Box<dyn PartialReflect>> {
+    fn evaluate(&self, _ctx: &mut Context) -> anyhow::Result<Box<dyn PartialReflect>> {
         let cloned = self.0.clone_value();
         Ok(cloned)
     }

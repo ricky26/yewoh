@@ -1,18 +1,17 @@
 use bevy::prelude::*;
 use bevy::reflect::ReflectRef;
+
 use crate::any::Any;
-use crate::traits::{Apply, Evaluate, ReflectApply, ReflectEvaluate};
-use crate::{Fabricated, Fabricator};
+use crate::traits::{Apply, Context, Evaluate, ReflectApply, ReflectEvaluate};
+use crate::Fabricator;
 
 #[derive(Clone, Default, Reflect)]
 #[reflect(Default, Evaluate)]
 pub struct Spawn;
 
 impl Evaluate for Spawn {
-    fn evaluate(
-        &self, world: &mut World, _fabricated: &mut Fabricated,
-    ) -> anyhow::Result<Box<dyn PartialReflect>> {
-        Ok(Box::new(world.spawn_empty().id()))
+    fn evaluate(&self, ctx: &mut Context) -> anyhow::Result<Box<dyn PartialReflect>> {
+        Ok(Box::new(ctx.world.spawn_empty().id()))
     }
 }
 
@@ -53,11 +52,10 @@ impl FromReflect for Fabricate {
 }
 
 impl Apply for Fabricate {
-    fn apply(
-        &self, world: &mut World, entity: Entity, _fabricated: &mut Fabricated,
-    ) -> anyhow::Result<()> {
-        let fabricated = self.fabricator.fabricate(self.parameters.0.as_ref(), world, entity)?;
-        world.entity_mut(entity).insert(fabricated);
+    fn apply(&self, ctx: &mut Context, entity: Entity) -> anyhow::Result<()> {
+        let fabricated = self.fabricator.fabricate(
+            self.parameters.0.as_ref(), ctx.world, entity)?;
+        ctx.world.entity_mut(entity).insert(fabricated);
         Ok(())
     }
 }

@@ -1,6 +1,7 @@
 #![allow(clippy::type_complexity)]
 
 use std::any::TypeId;
+use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, LazyLock, Weak};
 use anyhow::bail;
 use bevy::asset::LoadState;
@@ -20,6 +21,7 @@ pub mod loader;
 pub mod any;
 pub mod values;
 pub mod hot_reload;
+pub mod glam;
 
 #[cfg(feature = "humantime")]
 pub mod humantime;
@@ -27,24 +29,17 @@ pub mod humantime;
 pub type Factory = Arc<dyn Fn(Entity, &dyn PartialReflect, &mut World) -> anyhow::Result<Fabricated> + Send + Sync>;
 pub type WeakFactory = Weak<dyn Fn(Entity, &dyn PartialReflect, &mut World) -> anyhow::Result<Fabricated> + Send + Sync>;
 
-#[derive(Clone, Reflect)]
+#[derive(Clone, Debug, Reflect)]
 pub struct FabricationParameter {
     pub parameter_type: TypeId,
     pub optional: bool,
 }
 
 #[derive(Clone, Reflect, Asset)]
-#[reflect(from_reflect = false, FromReflect)]
+#[reflect(opaque, Debug)]
 pub struct Fabricator {
     pub parameters: HashMap<String, FabricationParameter>,
-    #[reflect(ignore)]
     pub factory: Factory,
-}
-
-impl FromReflect for Fabricator {
-    fn from_reflect(reflect: &dyn PartialReflect) -> Option<Self> {
-        reflect.try_downcast_ref::<Fabricator>().cloned()
-    }
 }
 
 impl Fabricator {
@@ -52,6 +47,18 @@ impl Fabricator {
         &self, parameters: &dyn PartialReflect, world: &mut World, entity: Entity,
     ) -> anyhow::Result<Fabricated> {
         (self.factory)(entity, parameters, world)
+    }
+}
+
+impl Debug for Fabricator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut s = f.debug_struct("Fabricator");
+
+        for (k, v) in &self.parameters {
+            s.field(&k, v);
+        }
+
+        s.finish()
     }
 }
 
@@ -224,6 +231,9 @@ impl Plugin for FabricatorPlugin {
         let type_registry = app.world().resource::<AppTypeRegistry>().clone();
 
         app
+            .add_plugins((
+                glam::register,
+            ))
             .register_type::<Fabricate>()
             .register_type::<Fabricated>()
             .register_type::<any::Any>()
