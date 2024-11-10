@@ -3,11 +3,14 @@ use yewoh_server::world::characters::CharacterBodyType;
 use yewoh_server::world::entity::{ContainedPosition, EquipmentSlot, EquippedPosition, Hue, MapPosition};
 use yewoh_server::world::items::ItemQuantity;
 use yewoh_server::world::ServerSet;
+
 use crate::activities::butchering::ButcheringPrefab;
 use crate::activities::loot::LootPrefab;
 use crate::data::prefabs::{PrefabLibraryEntityExt, PrefabLibraryWorldExt};
+use crate::entities::persistence::CustomHue;
 use crate::entities::Persistent;
 use crate::entities::position::PositionExt;
+use crate::items::persistence::CustomQuantity;
 
 #[derive(Debug, Default, Clone, Component, Reflect)]
 #[reflect(Component)]
@@ -66,9 +69,10 @@ pub fn spawn_corpses(
 
         corpse.insert((
             *map_position,
+            CustomQuantity,
+            CustomHue,
             ItemQuantity(**body_type),
             Hue(**hue),
-            Corpse,
             Persistent,
         ));
 
@@ -77,7 +81,7 @@ pub fn spawn_corpses(
         }
 
         if let Some(loot) = loot {
-            corpse.fabricate_prefab(&loot.0);
+            corpse.fabricate_insert(&loot.0);
         }
 
         if let Some(butchering) = butchering {

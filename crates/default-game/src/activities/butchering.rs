@@ -81,7 +81,7 @@ pub fn finish_butchering(
 
         commands.entity(target_entity)
             .insert(Butchered)
-            .fabricate_prefab(&prefab.0);
+            .fabricate_insert(&prefab.0);
     }
 }
 

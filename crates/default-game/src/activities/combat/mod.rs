@@ -94,7 +94,8 @@ pub fn update_weapon_stats(
 }
 
 pub fn update_weapon_stats_on_equip(
-    mut characters: Query<&mut MeleeWeapon, With<CharacterBodyType>>,
+    mut commands: Commands,
+    characters: Query<(), With<CharacterBodyType>>,
     weapons: Query<
         (&Parent, &EquippedPosition, &MeleeWeapon),
         (Without<CharacterBodyType>, Or<(Changed<NetId>, Changed<EquippedPosition>, Changed<MeleeWeapon>)>,
@@ -105,11 +106,11 @@ pub fn update_weapon_stats_on_equip(
             continue;
         };
 
-        let Ok(mut out_weapon) = characters.get_mut(parent.get()) else {
+        if !characters.contains(parent.get()) {
             continue;
         };
 
-        *out_weapon = weapon.clone();
+        commands.entity(parent.get()).insert(weapon.clone());
     }
 }
 

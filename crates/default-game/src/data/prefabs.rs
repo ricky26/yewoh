@@ -84,7 +84,7 @@ pub fn fabricate_from_library(
     Ok(())
 }
 
-fn fabricate_prefab_impl(
+pub fn fabricate_insert(
     world: &mut World, entity: Entity, prefab_name: &str,
 ) -> anyhow::Result<Fabricated> {
     let library = world.resource::<PrefabLibrary>();
@@ -100,7 +100,7 @@ pub fn fabricate_prefab(
     let prefab_instance = PrefabInstance {
         prefab_name: prefab_name.to_string(),
     };
-    match fabricate_prefab_impl(world, entity, prefab_name) {
+    match fabricate_insert(world, entity, prefab_name) {
         Ok(fabricated) => {
             world.entity_mut(entity)
                 .insert((
@@ -161,6 +161,8 @@ pub trait PrefabLibraryEntityExt {
     fn fabricate_from_library(&mut self, request: impl Into<PrefabLibraryRequest>) -> &mut Self;
 
     fn fabricate_prefab(&mut self, prefab_name: impl Into<String>) -> &mut Self;
+
+    fn fabricate_insert(&mut self, prefab_name: impl Into<String>) -> &mut Self;
 }
 
 impl PrefabLibraryEntityExt for EntityCommands<'_> {
@@ -177,6 +179,15 @@ impl PrefabLibraryEntityExt for EntityCommands<'_> {
         let prefab_name = prefab_name.into();
         self.queue(move |entity, world: &mut World| {
             if let Err(err) = fabricate_prefab(world, entity, &prefab_name) {
+                warn!("failed to fabricate {prefab_name}: {err}");
+            }
+        })
+    }
+
+    fn fabricate_insert(&mut self, prefab_name: impl Into<String>) -> &mut Self {
+        let prefab_name = prefab_name.into();
+        self.queue(move |entity, world: &mut World| {
+            if let Err(err) = fabricate_insert(world, entity, &prefab_name) {
                 warn!("failed to fabricate {prefab_name}: {err}");
             }
         })
@@ -200,6 +211,17 @@ impl PrefabLibraryEntityExt for EntityWorldMut<'_> {
         let prefab_name = prefab_name.into();
         self.world_scope(move |world| {
             if let Err(err) = fabricate_prefab(world, entity, &prefab_name) {
+                warn!("failed to fabricate {prefab_name}: {err}");
+            }
+        });
+        self
+    }
+
+    fn fabricate_insert(&mut self, prefab_name: impl Into<String>) -> &mut Self {
+        let entity = self.id();
+        let prefab_name = prefab_name.into();
+        self.world_scope(move |world| {
+            if let Err(err) = fabricate_insert(world, entity, &prefab_name) {
                 warn!("failed to fabricate {prefab_name}: {err}");
             }
         });

@@ -1,6 +1,8 @@
 import yewoh_server::world::items::{ItemGraphic, Container};
 import yewoh_default_game::items::containers::DoubleClickOpenContainer;
+import yewoh_default_game::characters::corpses::Corpse;
 
+$ <- Corpse;
 $ <- ItemGraphic(0x2006);
 $ <- Container {
     gump_id: 9,
