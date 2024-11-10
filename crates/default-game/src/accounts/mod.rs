@@ -138,7 +138,7 @@ pub fn handle_list_characters_callback(
                                     ..Default::default()
                                 }))
                         .collect(),
-                    cities: static_data.cities.to_starting_cities(),
+                    cities: static_data.cities.to_starting_cities().into(),
                     flags,
                 };
 

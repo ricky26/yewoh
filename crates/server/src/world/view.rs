@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use glam::ivec2;
 use bevy::ecs::entity::{EntityHashMap, EntityHashSet};
+use smallvec::SmallVec;
 use yewoh::protocol::{BeginEnterWorld, ChangeSeason, EndEnterWorld, ExtendedCommand};
 use yewoh::protocol::{CharacterEquipment, OpenContainer, UpsertContainerContents};
 
@@ -424,7 +425,7 @@ pub fn send_opened_containers(
 
         seen.open_containers.insert(event.container);
 
-        let mut contents = Vec::new();
+        let mut contents = SmallVec::new();
         if let Some(children) = children {
             contents.reserve(children.len());
 

@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
+use smallvec::smallvec;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::spawn;
 use tokio::sync::{mpsc, oneshot};
@@ -150,7 +151,7 @@ impl ServerRepository for LocalServerRepository {
     async fn list_servers(&mut self, _user: &str) -> anyhow::Result<ServerList> {
         Ok(ServerList {
             system_info_flags: 0,
-            game_servers: vec![
+            game_servers: smallvec![
                 GameServer {
                     server_index: 0,
                     server_name: FixedString::from_str(&self.shared.server_name),

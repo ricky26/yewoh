@@ -5,6 +5,7 @@ use bevy::ecs::query::{QueryData, QueryFilter};
 use bevy::prelude::*;
 use bevy::utils::Entry;
 use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
 use yewoh::protocol::{AnyPacket, CharacterAnimation, CharacterEquipment, CharacterPredefinedAnimation, DeleteEntity, EntityFlags, EntityTooltipVersion, IntoAnyPacket, Race, UpdateCharacter, UpsertEntityCharacter, UpsertEntityStats};
 use yewoh::{EntityId, Notoriety};
 use yewoh::types::FixedString;
@@ -263,7 +264,7 @@ impl CharacterQueryItem<'_> {
             self.summary.is_changed()
     }
 
-    pub fn to_upsert(&self, id: EntityId, equipment: Vec<CharacterEquipment>) -> UpsertEntityCharacter {
+    pub fn to_upsert(&self, id: EntityId, equipment: impl Into<SmallVec<[CharacterEquipment; 32]>>) -> UpsertEntityCharacter {
         UpsertEntityCharacter {
             id,
             body_type: **self.body_type,
@@ -272,7 +273,7 @@ impl CharacterQueryItem<'_> {
             hue: **self.hue,
             flags: self.flags(),
             notoriety: **self.notoriety,
-            equipment,
+            equipment: equipment.into(),
         }
     }
 

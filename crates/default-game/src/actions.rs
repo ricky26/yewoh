@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use smallvec::smallvec;
 use yewoh::protocol;
 use yewoh::protocol::{CharacterProfile, MoveConfirm, PickUpReject, MoveReject, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind};
 use yewoh_server::world::characters::{CharacterBodyType, CharacterNotoriety, OnClientProfileRequest, OnClientSkillsRequest, WarMode};
@@ -278,7 +279,7 @@ pub fn on_client_skills_request(
 
         client.send_packet(Skills::Response(SkillsResponse {
             kind: SkillsResponseKind::FullWithCaps,
-            skills: vec![
+            skills: smallvec![
                 SkillEntry {
                     id: 1,
                     value: 724,

@@ -31,3 +31,4 @@ sqlx = { workspace = true, features = ["postgres", "runtime-tokio", "tls-rustls"
 argon2 = { workspace = true }
 password-hash = { workspace = true, features = ["std"] }
 uuid = { workspace = true, features = ["serde"] }
+smallvec = "1.13.2"
