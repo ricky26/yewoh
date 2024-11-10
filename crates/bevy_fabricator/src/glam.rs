@@ -22,6 +22,11 @@ macro_rules! impl_vec3 {
                     Ok(Box::new($vec { x, y, z }))
                 }
 
+                let from = match from.try_downcast::<$vec>() {
+                    Ok(value) => return Ok(value),
+                    Err(value) => value,
+                };
+
                 match from.reflect_ref() {
                     ReflectRef::Struct(_) => {
                         if let Some(value) = <$vec>::from_reflect(from.as_ref()) {
@@ -67,6 +72,11 @@ macro_rules! impl_vec2 {
                         .ok_or_else(|| anyhow!("failed convert y from {x:?}"))?;
                     Ok(Box::new($vec { x, y }))
                 }
+
+                let from = match from.try_downcast::<$vec>() {
+                    Ok(value) => return Ok(value),
+                    Err(value) => value,
+                };
 
                 match from.reflect_ref() {
                     ReflectRef::Struct(_) => {

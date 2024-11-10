@@ -86,7 +86,7 @@ impl FabricatorSource for FabricatorMap {
 }
 
 macro_rules! impl_load_number {
-    ($steps:expr, $index:expr, $type_id:expr, $n:expr, $ty:ty) => {
+    ($steps:expr, $index:expr, $type_id:expr, $n:expr, $conv:ident, $ty:ty) => {
         if $type_id == Some(TypeId::of::<$ty>()) {
             let value = Arc::new(match $n {
                 Number::I64(v) => *v as $ty,
@@ -94,9 +94,11 @@ macro_rules! impl_load_number {
                 Number::F64(v) => *v as $ty,
             });
             let index = $index;
-            $steps.push(Box::new(move |_, registers, _| {
+            $steps.push(Box::new(move |ctx, registers, _| {
                 if registers[index].is_none() {
-                    registers[index] = Some(value.clone());
+                    let value = value.as_ref().clone_value();
+                    let value = $conv.convert(ctx, value)?;
+                    registers[index] = Some(value.into());
                 }
                 Ok(())
             }));
@@ -180,16 +182,19 @@ impl Constructor {
 
 #[derive(Clone)]
 struct ValueConverter {
+    type_id: TypeId,
     convert: Option<ReflectConvert>,
     constructor: Constructor,
 }
 
 impl ValueConverter {
     pub fn from_registration(type_registration: &TypeRegistration) -> ValueConverter {
+        let type_id = type_registration.type_id();
         let convert = type_registration.data::<ReflectConvert>().cloned();
         let constructor = Constructor::from_registration(type_registration);
 
         ValueConverter {
+            type_id,
             convert,
             constructor,
         }
@@ -200,6 +205,12 @@ impl ValueConverter {
         ctx: &mut Context,
         value: Box<dyn PartialReflect>,
     ) -> anyhow::Result<Box<dyn PartialReflect>> {
+        if let Some(type_info) = value.get_represented_type_info() {
+            if type_info.type_id() == self.type_id {
+                return Ok(value);
+            }
+        }
+
         if let Some(convert) = self.convert.as_ref() {
             return convert.convert(value);
         }
@@ -453,6 +464,12 @@ pub fn convert(
                     .ok_or_else(|| anyhow!("unknown type {path:?}"))?;
                 register_type = Some(id.id());
             }
+            Some(Expression::List(Some(path), _)) => {
+                let path = resolve_alias(&aliases, path);
+                let id = lookup_type_or_variant(type_registry, &path)
+                    .ok_or_else(|| anyhow!("unknown type {path:?}"))?;
+                register_type = Some(id.id());
+            }
             Some(Expression::Path(path)) => {
                 let path = resolve_alias(&aliases, path);
 
@@ -681,34 +698,45 @@ pub fn convert(
         if let Some(value) = &register.expression {
             match value {
                 Expression::Number(n) => {
-                    impl_load_number!(steps, index, register_type_id, n, u8);
-                    impl_load_number!(steps, index, register_type_id, n, i8);
-                    impl_load_number!(steps, index, register_type_id, n, u16);
-                    impl_load_number!(steps, index, register_type_id, n, i16);
-                    impl_load_number!(steps, index, register_type_id, n, u32);
-                    impl_load_number!(steps, index, register_type_id, n, isize);
-                    impl_load_number!(steps, index, register_type_id, n, usize);
-                    impl_load_number!(steps, index, register_type_id, n, i32);
-                    impl_load_number!(steps, index, register_type_id, n, f32);
+                    let type_reg = register_type_reg
+                        .ok_or_else(|| anyhow!("untyped number"))?;
+                    let converter = ValueConverter::from_registration(type_reg);
+
+                    impl_load_number!(steps, index, register_type_id, n, converter, u8);
+                    impl_load_number!(steps, index, register_type_id, n, converter, i8);
+                    impl_load_number!(steps, index, register_type_id, n, converter, u16);
+                    impl_load_number!(steps, index, register_type_id, n, converter, i16);
+                    impl_load_number!(steps, index, register_type_id, n, converter, u32);
+                    impl_load_number!(steps, index, register_type_id, n, converter, isize);
+                    impl_load_number!(steps, index, register_type_id, n, converter, usize);
+                    impl_load_number!(steps, index, register_type_id, n, converter, i32);
+                    impl_load_number!(steps, index, register_type_id, n, converter, f32);
 
                     let value = Arc::new(match n {
                         Number::I64(v) => *v as f64,
                         Number::U64(v) => *v as f64,
                         Number::F64(v) => *v,
                     });
-                    steps.push(Box::new(move |_, registers, _| {
+                    steps.push(Box::new(move |ctx, registers, _| {
                         if registers[index].is_none() {
-                            registers[index] = Some(value.clone());
+                            let value = value.as_ref().clone_value();
+                            let value = converter.convert(ctx, value)?;
+                            registers[index] = Some(value.into());
                         }
                         Ok(())
                     }));
                 }
                 Expression::String(s) => {
+                    let type_reg = register_type_reg
+                        .ok_or_else(|| anyhow!("untyped string"))?;
+                    let converter = ValueConverter::from_registration(type_reg);
                     let (_, value) = parse_string(s).unwrap().unwrap();
                     let value = Arc::new(value);
-                    steps.push(Box::new(move |_, registers, _| {
+                    steps.push(Box::new(move |ctx, registers, _| {
                         if registers[index].is_none() {
-                            registers[index] = Some(value.clone());
+                            let value = value.as_ref().clone_value();
+                            let value = converter.convert(ctx, value)?;
+                            registers[index] = Some(value.into());
                         }
                         Ok(())
                     }));
@@ -756,22 +784,31 @@ pub fn convert(
                                 }));
                             }
                         }
-                    } else if register_type_reg.map_or(false, |r| r.type_info().kind() == ReflectKind::TupleStruct) {
-                        let factory = build_tuple_struct(body);
-                        steps.push(Box::new(move |ctx, registers, _| {
-                            if registers[index].is_none() {
-                                registers[index] = Some(Arc::new(factory(ctx, registers)?));
-                            }
-                            Ok(())
-                        }));
                     } else {
-                        let factory = build_tuple(body);
-                        steps.push(Box::new(move |ctx, registers, _| {
-                            if registers[index].is_none() {
-                                registers[index] = Some(Arc::new(factory(ctx, registers)?));
-                            }
-                            Ok(())
-                        }));
+                        let type_reg = register_type_reg
+                            .ok_or_else(|| anyhow!("untyped tuple"))?;
+                        let converter = ValueConverter::from_registration(type_reg);
+                        if type_reg.type_info().kind() == ReflectKind::TupleStruct {
+                            let factory = build_tuple_struct(body);
+                            steps.push(Box::new(move |ctx, registers, _| {
+                                if registers[index].is_none() {
+                                    let value = Box::new(factory(ctx, registers)?);
+                                    let value = converter.convert(ctx, value)?;
+                                    registers[index] = Some(value.into());
+                                }
+                                Ok(())
+                            }));
+                        } else {
+                            let factory = build_tuple(body);
+                            steps.push(Box::new(move |ctx, registers, _| {
+                                if registers[index].is_none() {
+                                    let value = Box::new(factory(ctx, registers)?);
+                                    let value = converter.convert(ctx, value)?;
+                                    registers[index] = Some(value.into());
+                                }
+                                Ok(())
+                            }));
+                        }
                     }
                 }
                 Expression::Struct(type_path, body) => {
@@ -817,6 +854,16 @@ pub fn convert(
                                 }));
                             }
                         }
+                    } else if let Some(type_reg) = register_type_reg {
+                        let converter = ValueConverter::from_registration(type_reg);
+                        steps.push(Box::new(move |ctx, registers, _| {
+                            if registers[index].is_none() {
+                                let value = Box::new(factory(ctx, registers)?);
+                                let value = converter.convert(ctx, value)?;
+                                registers[index] = Some(value.into());
+                            }
+                            Ok(())
+                        }));
                     } else {
                         steps.push(Box::new(move |ctx, registers, _| {
                             if registers[index].is_none() {
