@@ -1,0 +1,9 @@
+import yewoh_server::world::items::ItemGraphic;
+import yewoh_default_game::entities::common::Weight;
+import yewoh_default_game::items::persistence::CustomQuantity;
+import yewoh_default_game::items::common::Stackable;
+
+$ <- ItemGraphic(0x9f1);
+$ <- Weight(1);
+$ <- CustomQuantity;
+$ <- Stackable;

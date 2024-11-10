@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use yewoh_server::world::characters::CharacterBodyType;
 use yewoh_server::world::entity::{Hue, MapPosition};
 use yewoh_server::world::items::ItemQuantity;
+use crate::activities::butchering::ButcheringPrefab;
 use crate::activities::loot::LootPrefab;
 use crate::data::prefabs::{PrefabLibraryEntityExt, PrefabLibraryWorldExt};
 use crate::entities::Persistent;
@@ -41,11 +42,12 @@ pub fn spawn_corpses(
         &MapPosition,
         &CorpsePrefab,
         Option<&LootPrefab>,
+        Option<&ButcheringPrefab>,
         Has<Persistent>,
     )>,
 ) {
     for event in died_events.read() {
-        let Ok((body_type, hue, map_position, prefab, loot, is_persistent)) = characters.get(event.character) else {
+        let Ok((body_type, hue, map_position, prefab, loot, butchering, is_persistent)) = characters.get(event.character) else {
             continue;
         };
 
@@ -65,6 +67,10 @@ pub fn spawn_corpses(
 
         if let Some(loot) = loot {
             corpse.fabricate_prefab(&loot.0);
+        }
+
+        if let Some(butchering) = butchering {
+            corpse.insert(butchering.clone());
         }
 
         let corpse = corpse.id();

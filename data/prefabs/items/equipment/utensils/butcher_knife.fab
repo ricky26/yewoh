@@ -1,0 +1,17 @@
+import yewoh_server::world::items::ItemGraphic;
+import yewoh_server::world::characters::Animation;
+import yewoh_default_game::activities::combat::MeleeWeapon;
+import yewoh_default_game::activities::butchering::ButcheringKnife;
+import yewoh_default_game::entities::common::Weight;
+import bevy_fabricator::humantime::HumanDuration;
+
+$ <- ItemGraphic(0x13f6);
+$ <- MeleeWeapon {
+    min_damage: 10,
+    max_damage: 13,
+    delay: HumanDuration("2250ms"),
+    range: 2,
+    swing_animation: Animation::Predefined({ kind: 0, action: 4 }),
+};
+$ <- Weight(1);
+$ <- ButcheringKnife;

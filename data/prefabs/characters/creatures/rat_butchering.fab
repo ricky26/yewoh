@@ -1,0 +1,10 @@
+import yewoh_default_game::activities::loot::LootRoll;
+import bevy_fabricator::operations::Spawn;
+
+local ribs = Spawn;
+ribs <- LootRoll {
+    target: $,
+    min_quantity: 1,
+    max_quantity: 2,
+    prefab_name: "raw_ribs",
+};

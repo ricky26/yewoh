@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-
+use yewoh_server::world::connection::Possessing;
 use yewoh_server::world::input::{OnClientDoubleClick, OnClientSingleClick};
 use yewoh_server::world::ServerSet;
 
@@ -20,6 +20,7 @@ impl EntityEvent for OnEntitySingleClick {
 #[derive(Clone, Debug, Event)]
 pub struct OnEntityDoubleClick {
     pub client_entity: Entity,
+    pub character: Entity,
     pub target: Entity,
 }
 
@@ -44,10 +45,16 @@ pub fn on_client_single_click(
 pub fn on_client_double_click(
     mut events: EventReader<OnClientDoubleClick>,
     mut out_events: EventWriter<OnEntityDoubleClick>,
+    possessing: Query<&Possessing>,
 ) {
     for request in events.read() {
+        let Ok(possessing) = possessing.get(request.client_entity) else {
+            continue;
+        };
+
         out_events.send(OnEntityDoubleClick {
             client_entity: request.client_entity,
+            character: possessing.entity,
             target: request.target,
         });
     }

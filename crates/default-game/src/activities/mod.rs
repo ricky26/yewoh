@@ -7,6 +7,8 @@ pub mod combat;
 
 pub mod loot;
 
+pub mod butchering;
+
 #[derive(Debug, Clone, Component)]
 pub enum CurrentActivity {
     Idle,
@@ -55,6 +57,7 @@ impl Plugin for ActivitiesPlugin {
             .add_plugins((
                 CombatPlugin,
                 loot::plugin,
+                butchering::plugin,
             ))
             .add_systems(Update, (
                 progress_current_activity,
