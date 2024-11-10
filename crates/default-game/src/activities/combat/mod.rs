@@ -1,15 +1,15 @@
 use bevy::prelude::*;
 use serde::Deserialize;
 use std::time::Duration;
-use yewoh::protocol::EquipmentSlot;
 use yewoh_server::world::characters::{Animation, CharacterBodyType, Health, OnCharacterAnimationStart};
 use yewoh_server::world::combat::{AttackTarget, OnCharacterDamage, OnCharacterSwing, OnClientAttackRequest};
 use yewoh_server::world::connection::Possessing;
-use yewoh_server::world::entity::{EquippedPosition, MapPosition};
+use yewoh_server::world::entity::{EquipmentSlot, EquippedPosition, MapPosition};
+use yewoh_server::world::net_id::NetId;
 use yewoh_server::world::ServerSet;
 
 use crate::activities::{progress_current_activity, CurrentActivity};
-use crate::characters::corpses::{remove_dead_characters, spawn_corpses, OnCharacterDeath};
+use crate::characters::corpses::{spawn_corpses, OnCharacterDeath};
 
 #[derive(Clone, Debug, Default, Reflect, Component)]
 #[reflect(Component)]
@@ -97,7 +97,7 @@ pub fn update_weapon_stats_on_equip(
     mut characters: Query<&mut MeleeWeapon, With<CharacterBodyType>>,
     weapons: Query<
         (&Parent, &EquippedPosition, &MeleeWeapon),
-        (Without<CharacterBodyType>, Or<(Changed<EquippedPosition>, Changed<MeleeWeapon>)>,
+        (Without<CharacterBodyType>, Or<(Changed<NetId>, Changed<EquippedPosition>, Changed<MeleeWeapon>)>,
     )>,
 ) {
     for (parent, equipped, weapon) in &weapons {
@@ -223,7 +223,7 @@ impl Plugin for CombatPlugin {
                     .after(progress_current_activity)
                     .after(update_weapon_stats),
                 (
-                    apply_damage.before(spawn_corpses).before(remove_dead_characters),
+                    apply_damage.before(spawn_corpses),
                     send_damage_notices,
                 ).after(attack_current_target),
             ));

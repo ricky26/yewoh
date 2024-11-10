@@ -1,9 +1,8 @@
 use bevy::prelude::*;
 use yewoh::assets::map::MapTile;
 use yewoh::assets::tiles::{TileData, TileFlags};
-use yewoh::Direction;
 
-use crate::world::entity::MapPosition;
+use crate::world::entity::{Direction, MapPosition};
 use crate::world::map::Chunk;
 use crate::world::spatial::{Collider, SpatialQuery};
 

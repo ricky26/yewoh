@@ -3,9 +3,8 @@ use clap::Parser;
 use glam::IVec2;
 use tracing::info;
 use yewoh::protocol::{GumpLayout, OpenGump};
-use yewoh::Direction;
 use yewoh_server::world::connection::{NetClient, Possessing};
-use yewoh_server::world::entity::{Hue, MapPosition};
+use yewoh_server::world::entity::{Direction, Hue, MapPosition};
 use yewoh_server::world::items::ItemGraphic;
 
 use crate::commands::{TextCommand, TextCommandQueue, TextCommandRegistrationExt};

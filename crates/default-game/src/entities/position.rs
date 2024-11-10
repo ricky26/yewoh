@@ -1,6 +1,5 @@
 use bevy::prelude::*;
-use yewoh::protocol::EquipmentSlot;
-use yewoh_server::world::entity::{ContainedPosition, EquippedPosition, MapPosition};
+use yewoh_server::world::entity::{ContainedPosition, EquipmentSlot, EquippedPosition, MapPosition};
 use yewoh_server::world::items::ItemPosition;
 
 pub struct MoveToMapPosition {

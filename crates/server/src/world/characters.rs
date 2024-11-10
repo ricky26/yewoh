@@ -1,14 +1,16 @@
 use std::sync::Arc;
 
-use bevy::ecs::entity::EntityHashMap;
+use bevy::ecs::entity::{EntityHashMap, MapEntities, VisitEntities, VisitEntitiesMut};
 use bevy::ecs::query::{QueryData, QueryFilter};
+use bevy::ecs::reflect::ReflectMapEntities;
 use bevy::prelude::*;
-use bevy::utils::Entry;
+use bevy::utils::{Entry, HashSet};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use yewoh::protocol::{AnyPacket, CharacterAnimation, CharacterEquipment, CharacterPredefinedAnimation, DeleteEntity, EntityFlags, EntityTooltipVersion, IntoAnyPacket, Race, UpdateCharacter, UpsertEntityCharacter, UpsertEntityStats};
 use yewoh::{EntityId, Notoriety};
 use yewoh::types::FixedString;
+
 use crate::world::connection::{NetClient, OwningClient};
 use crate::world::delta_grid::{delta_grid_cell, DeltaEntry, DeltaGrid, DeltaVersion};
 use crate::world::entity::{Frozen, Hidden, Hue, MapPosition, RootPosition, Tooltip};
@@ -24,7 +26,6 @@ use crate::world::ServerSet;
     CharacterSex,
     CharacterRace,
     CharacterStats,
-    CharacterNotoriety,
     CharacterSummary,
     Health,
     Stamina,
@@ -33,11 +34,18 @@ use crate::world::ServerSet;
     DamageResists,
     Frozen,
     Hidden,
+    Protected,
+    Invulnerable,
+    Criminal,
+    Murderer,
     Hue,
     Tooltip,
     MapPosition,
     RootPosition,
     WarMode,
+    Allies,
+    Enemies,
+    Aggressors,
 )]
 pub struct CharacterBodyType(pub u16);
 
@@ -53,11 +61,34 @@ pub enum CharacterSex {
     Female,
 }
 
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Deref, DerefMut)]
-#[derive(Reflect, Component, Serialize, Deserialize)]
-#[reflect(Component, Default, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct CharacterRace(#[reflect(remote = crate::remote_reflect::Race)] pub Race);
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Reflect, Component)]
+#[reflect(Component, Default)]
+pub enum CharacterRace {
+    #[default]
+    Human,
+    Elf,
+    Gargoyle,
+}
+
+impl From<Race> for CharacterRace {
+    fn from(value: Race) -> Self {
+        match value {
+            Race::Human => CharacterRace::Human,
+            Race::Elf => CharacterRace::Elf,
+            Race::Gargoyle => CharacterRace::Gargoyle,
+        }
+    }
+}
+
+impl From<CharacterRace> for Race {
+    fn from(value: CharacterRace) -> Self {
+        match value {
+            CharacterRace::Human => Race::Human,
+            CharacterRace::Elf => Race::Elf,
+            CharacterRace::Gargoyle => Race::Gargoyle,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Default, Component, Reflect)]
 #[reflect(Component, Default)]
@@ -150,11 +181,65 @@ pub struct CharacterSummary {
     pub max_mana_bonus: u16,
 }
 
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Deref, DerefMut)]
-#[derive(Reflect, Component, Serialize, Deserialize)]
-#[reflect(Component, Default, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct CharacterNotoriety(#[reflect(remote = crate::remote_reflect::Notoriety)] pub Notoriety);
+#[derive(Clone, Copy, Debug, Default, Deref, DerefMut, Reflect, Component)]
+#[reflect(Default, Component)]
+pub struct Protected(pub bool);
+
+#[derive(Clone, Copy, Debug, Default, Deref, DerefMut, Reflect, Component)]
+#[reflect(Default, Component)]
+pub struct Invulnerable(pub bool);
+
+#[derive(Clone, Copy, Debug, Default, Deref, DerefMut, Reflect, Component)]
+#[reflect(Default, Component)]
+pub struct Criminal(pub bool);
+
+#[derive(Clone, Copy, Debug, Default, Deref, DerefMut, Reflect, Component)]
+#[reflect(Default, Component)]
+pub struct Murderer(pub bool);
+
+#[derive(Debug, Clone, Copy, Reflect, Component, VisitEntities, VisitEntitiesMut)]
+#[reflect(Component, MapEntities)]
+pub struct ControlledBy(pub Entity);
+
+fn map_hash_set_entities(hash_set: &mut HashSet<Entity>, entity_mapper: &mut impl EntityMapper) {
+    let old_entries = std::mem::take(hash_set);
+    hash_set.reserve(old_entries.len());
+
+    for entity in old_entries {
+        let entity = entity_mapper.map_entity(entity);
+        hash_set.insert(entity);
+    }
+}
+
+#[derive(Debug, Clone, Default, Reflect, Component)]
+#[reflect(Component, Default, MapEntities)]
+pub struct Allies(pub HashSet<Entity>);
+
+impl MapEntities for Allies {
+    fn map_entities<M: EntityMapper>(&mut self, entity_mapper: &mut M) {
+        map_hash_set_entities(&mut self.0, entity_mapper);
+    }
+}
+
+#[derive(Debug, Clone, Default, Reflect, Component)]
+#[reflect(Component, Default, MapEntities)]
+pub struct Enemies(pub HashSet<Entity>);
+
+impl MapEntities for Enemies {
+    fn map_entities<M: EntityMapper>(&mut self, entity_mapper: &mut M) {
+        map_hash_set_entities(&mut self.0, entity_mapper);
+    }
+}
+
+#[derive(Debug, Clone, Default, Reflect, Component)]
+#[reflect(Component, Default, MapEntities)]
+pub struct Aggressors(pub HashSet<Entity>);
+
+impl MapEntities for Aggressors {
+    fn map_entities<M: EntityMapper>(&mut self, entity_mapper: &mut M) {
+        map_hash_set_entities(&mut self.0, entity_mapper);
+    }
+}
 
 #[derive(Clone, Copy, Debug, Default, Deref, DerefMut, Reflect, Component)]
 #[reflect(Default, Component)]
@@ -193,6 +278,37 @@ pub struct OnClientSkillsRequest {
 }
 
 #[derive(QueryData)]
+pub struct NotorietyQuery {
+    pub protected: Ref<'static, Protected>,
+    pub invulnerable: Ref<'static, Invulnerable>,
+    pub criminal: Ref<'static, Criminal>,
+    pub murderer: Ref<'static, Murderer>,
+}
+
+impl NotorietyQueryItem<'_> {
+    pub fn is_changed(&self) -> bool {
+        self.protected.is_changed() ||
+            self.invulnerable.is_changed() ||
+            self.criminal.is_changed() ||
+            self.murderer.is_changed()
+    }
+
+    pub fn notoriety(&self) -> Notoriety {
+        if **self.invulnerable {
+            Notoriety::Invulnerable
+        } else if **self.murderer {
+            Notoriety::Murderer
+        } else if **self.criminal {
+            Notoriety::Criminal
+        } else if **self.protected {
+            Notoriety::Innocent
+        } else {
+            Notoriety::Neutral
+        }
+    }
+}
+
+#[derive(QueryData)]
 pub struct CharacterQuery {
     pub body_type: Ref<'static, CharacterBodyType>,
     pub race: Ref<'static, CharacterRace>,
@@ -207,7 +323,7 @@ pub struct CharacterQuery {
     pub damage_resists: Ref<'static, DamageResists>,
     pub frozen: Ref<'static, Frozen>,
     pub hidden: Ref<'static, Hidden>,
-    pub notoriety: Ref<'static, CharacterNotoriety>,
+    pub notoriety: NotorietyQuery,
     pub summary: Ref<'static, CharacterSummary>,
     pub war_mode: Ref<'static, WarMode>,
     pub tooltip: Ref<'static, Tooltip>,
@@ -235,6 +351,10 @@ impl CharacterQueryItem<'_> {
         }
 
         flags
+    }
+
+    pub fn notoriety(&self) -> Notoriety {
+        self.notoriety.notoriety()
     }
 
     pub fn is_character_changed(&self) -> bool {
@@ -269,10 +389,10 @@ impl CharacterQueryItem<'_> {
             id,
             body_type: **self.body_type,
             position: self.position.position,
-            direction: self.position.direction,
+            direction: self.position.direction.into(),
             hue: **self.hue,
             flags: self.flags(),
-            notoriety: **self.notoriety,
+            notoriety: self.notoriety(),
             equipment: equipment.into(),
         }
     }
@@ -282,10 +402,10 @@ impl CharacterQueryItem<'_> {
             id,
             body_type: **self.body_type,
             position: self.position.position,
-            direction: self.position.direction,
+            direction: self.position.direction.into(),
             hue: **self.hue,
             flags: self.flags(),
-            notoriety: **self.notoriety,
+            notoriety: self.notoriety(),
         }
     }
 
@@ -308,7 +428,7 @@ impl CharacterQueryItem<'_> {
             name: FixedString::from_str(self.name.as_str()),
             allow_name_change: true,
             female: *self.sex == CharacterSex::Female,
-            race: **self.race,
+            race: (*self.race).into(),
             hp: self.health.hp,
             max_hp: self.health.max_hp,
             str: self.stats.str,
@@ -368,7 +488,10 @@ pub struct ChangedCharacterFilter {
         Changed<CharacterName>,
         Changed<CharacterSex>,
         Changed<Health>,
-        Changed<CharacterNotoriety>,
+        Changed<Protected>,
+        Changed<Invulnerable>,
+        Changed<Criminal>,
+        Changed<Murderer>,
         Changed<MapPosition>,
     )>,
 }
@@ -385,7 +508,6 @@ pub struct ChangedFullStatusFilter {
         Changed<Mana>,
         Changed<Encumbrance>,
         Changed<DamageResists>,
-        Changed<CharacterNotoriety>,
         Changed<CharacterSummary>,
     )>,
 }
@@ -554,7 +676,7 @@ impl Animation {
 }
 
 
-pub fn detect_animations(
+pub fn queue_animations(
     delta_version: Res<DeltaVersion>,
     mut delta_grid: ResMut<DeltaGrid>,
     animation_targets: Query<(&NetId, &RootPosition)>,
@@ -585,8 +707,14 @@ pub fn plugin(app: &mut App) {
         .register_type::<CharacterRace>()
         .register_type::<CharacterSex>()
         .register_type::<CharacterStats>()
-        .register_type::<CharacterNotoriety>()
         .register_type::<CharacterSummary>()
+        .register_type::<Protected>()
+        .register_type::<Invulnerable>()
+        .register_type::<Criminal>()
+        .register_type::<Murderer>()
+        .register_type::<Allies>()
+        .register_type::<Enemies>()
+        .register_type::<Aggressors>()
         .register_type::<Health>()
         .register_type::<Stamina>()
         .register_type::<Mana>()
@@ -600,10 +728,8 @@ pub fn plugin(app: &mut App) {
         .add_event::<OnClientSkillsRequest>()
         .add_event::<OnClientStatusRequest>()
         .add_systems(Last, (
-            (
-                detect_character_changes,
-                detect_animations,
-            ).in_set(ServerSet::DetectChanges),
+            queue_animations.in_set(ServerSet::QueueDeltas),
+            detect_character_changes.in_set(ServerSet::DetectChanges),
             send_updated_full_status.in_set(ServerSet::Send),
         ));
 }

@@ -5,17 +5,17 @@ use std::marker::PhantomData;
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
-use yewoh::Direction;
 
-use yewoh::protocol::{CharacterFromList, CharacterList, CharacterListFlags, EquipmentSlot, Race};
+use yewoh::protocol::{CharacterFromList, CharacterList, CharacterListFlags};
 use yewoh::types::FixedString;
 use yewoh_server::async_runtime::AsyncRuntime;
 use yewoh_server::world::account::{OnClientDeleteCharacter, OnClientCharacterListRequest, OnClientCreateCharacter, OnClientSelectCharacter, User};
-use yewoh_server::world::characters::{CharacterBodyType, CharacterName};
+use yewoh_server::world::characters::{CharacterBodyType, CharacterName, CharacterRace};
 use yewoh_server::world::connection::{NetClient, OwningClient, Possessing};
-use yewoh_server::world::entity::{Hue, MapPosition};
+use yewoh_server::world::entity::{Direction, EquipmentSlot, Hue, MapPosition};
 use yewoh_server::world::items::ItemGraphic;
 use yewoh_server::world::ServerSet;
+
 use crate::accounts::repository::{AccountCharacters, AccountRepository, CharacterToSpawn, NewCharacterInfo};
 use crate::characters::persistence::{CustomName, CustomStats};
 use crate::characters::player::NewPlayerCharacter;
@@ -227,9 +227,9 @@ pub fn create_new_character(
     info: NewCharacterInfo,
 ) -> Entity {
     let race_name = match info.race {
-        Race::Human => "human",
-        Race::Elf => "elf",
-        Race::Gargoyle => "gargoyle",
+        CharacterRace::Human => "human",
+        CharacterRace::Elf => "elf",
+        CharacterRace::Gargoyle => "gargoyle",
     };
 
     let gender_name = match info.female {

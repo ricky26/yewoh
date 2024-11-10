@@ -4,8 +4,7 @@ use bevy::prelude::*;
 use rand::{thread_rng, Rng};
 use serde::Deserialize;
 use bevy_fabricator::traits::{Apply, Context, ReflectApply};
-use yewoh::Direction;
-use yewoh_server::world::entity::MapPosition;
+use yewoh_server::world::entity::{Direction, MapPosition};
 use yewoh_server::world::map::{Chunk, TileDataResource};
 use yewoh_server::world::navigation::try_move_in_direction;
 use yewoh_server::world::spatial::SpatialQuery;
@@ -32,7 +31,7 @@ pub fn wander(
             continue;
         }
 
-        let direction = Direction::from_repr(rng.gen_range(0..8)).unwrap();
+        let direction = rng.gen::<Direction>();
         if let Ok(new_position) = try_move_in_direction(&spatial_query, &chunk_query, &tile_data, *position, direction, Some(entity)) {
             *position = new_position;
         }

@@ -1,9 +1,8 @@
 use bevy::prelude::*;
-use yewoh::protocol::EquipmentSlot;
 use yewoh_server::world::characters::CharacterBodyType;
-use yewoh_server::world::entity::{ContainedPosition, EquippedPosition, Hue, MapPosition};
+use yewoh_server::world::entity::{ContainedPosition, EquipmentSlot, EquippedPosition, Hue, MapPosition};
 use yewoh_server::world::items::ItemQuantity;
-
+use yewoh_server::world::ServerSet;
 use crate::activities::butchering::ButcheringPrefab;
 use crate::activities::loot::LootPrefab;
 use crate::data::prefabs::{PrefabLibraryEntityExt, PrefabLibraryWorldExt};
@@ -26,7 +25,6 @@ pub struct Corpse;
 #[derive(Debug, Default, Clone, Component, Reflect)]
 #[reflect(Component)]
 pub struct CorpseEquipment {
-    #[reflect(remote = yewoh_server::remote_reflect::EquipmentSlot)]
     pub slot: EquipmentSlot,
 }
 
@@ -116,9 +114,9 @@ pub fn plugin(app: &mut App) {
         .add_event::<OnCharacterDeath>()
         .add_event::<OnSpawnCorpse>()
         .add_systems(Update, (
-            (
-                spawn_corpses,
-                remove_dead_characters,
-            ).chain(),
+            spawn_corpses,
+        ))
+        .add_systems(Last, (
+            remove_dead_characters.in_set(ServerSet::DestroyEntities),
         ));
 }

@@ -8,9 +8,8 @@ use tokio::task::JoinSet;
 use yewoh::assets::map::{load_map, load_statics, map_chunk_count, MapChunk, StaticVisitor, CHUNK_SIZE};
 use yewoh::assets::multi::MultiData;
 use yewoh::assets::tiles::{TileData, TileFlags};
-use yewoh::Direction;
 
-use crate::world::entity::{Hue, MapPosition};
+use crate::world::entity::{Direction, Hue, MapPosition};
 use crate::world::items::ItemGraphic;
 
 #[derive(Debug, Clone, Default, Reflect)]

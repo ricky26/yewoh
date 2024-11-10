@@ -194,7 +194,7 @@ pub fn send_deltas(
                                 equipment.push(CharacterEquipment {
                                     id: child_id.id,
                                     graphic_id: **item.graphic,
-                                    slot: equipped.slot,
+                                    slot: equipped.slot.into(),
                                     hue: **item.hue,
                                 });
                             }
@@ -289,7 +289,7 @@ pub fn sync_visible_entities(
                                 equipment.push(CharacterEquipment {
                                     id: child_id.id,
                                     graphic_id: **item.graphic,
-                                    slot: equipped.slot,
+                                    slot: equipped.slot.into(),
                                     hue: **item.hue,
                                 });
                             }
@@ -377,7 +377,7 @@ pub fn send_change_map(
             entity_id: possessed_net.id,
             body_type: **body_type,
             position: map_position.position,
-            direction: map_position.direction,
+            direction: map_position.direction.into(),
             map_size: map.size,
         });
         client.send_packet(ExtendedCommand::ChangeMap(map_position.map_id));

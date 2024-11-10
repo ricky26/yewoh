@@ -16,7 +16,7 @@ use crate::world::account::{OnClientDeleteCharacter, OnClientCharacterListReques
 use crate::world::characters::{OnClientProfileRequest, OnClientProfileUpdateRequest, OnClientSkillsRequest, OnClientStatusRequest};
 use crate::world::chat::OnClientChatMessage;
 use crate::world::combat::{OnClientAttackRequest, OnClientWarModeChanged};
-use crate::world::entity::OnClientTooltipRequest;
+use crate::world::entity::{EquipmentSlot, OnClientTooltipRequest};
 use crate::world::input::{EntityTargetResponse, OnClientContextMenuAction, OnClientContextMenuRequest, OnClientDoubleClick, OnClientDrop, OnClientEquip, OnClientMove, OnClientPickUp, OnClientSingleClick, Targeting, WorldTargetResponse};
 use crate::world::net_id::NetEntityLookup;
 use crate::world::view::View;
@@ -358,7 +358,10 @@ pub fn handle_new_packets(
             AnyPacket::Move(request) => {
                 events.move_request.send(OnClientMove {
                     client_entity,
-                    request,
+                    direction: request.direction.into(),
+                    run: request.run,
+                    sequence: request.sequence,
+                    fast_walk: request.fast_walk,
                 });
             }
             AnyPacket::SingleClick(request) => {
@@ -404,12 +407,16 @@ pub fn handle_new_packets(
             AnyPacket::EquipEntity(request) => {
                 if let Some((target, character)) = lookup.net_to_ecs(request.target_id)
                     .zip(lookup.net_to_ecs(request.character_id)) {
-                    events.equip.send(OnClientEquip {
-                        client_entity,
-                        target,
-                        character,
-                        slot: request.slot,
-                    });
+                    if let Some(slot) = EquipmentSlot::from_protocol(request.slot) {
+                        events.equip.send(OnClientEquip {
+                            client_entity,
+                            target,
+                            character,
+                            slot,
+                        });
+                    } else {
+                        warn!("invalid equipment slot on equip packet");
+                    }
                 }
             }
             AnyPacket::CharacterProfile(request) => {

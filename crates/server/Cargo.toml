@@ -11,11 +11,10 @@ edition = "2021"
 yewoh = { path = "../core" }
 tokio = { workspace = true, default_features = false, features = ["net"] }
 serde = { workspace = true, features = ["derive"] }
-futures = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 tracing = { workspace = true }
 bevy = { workspace = true, default-features = false }
 glam = { workspace = true }
-bitflags = { workspace = true }
 smallvec = { workspace = true }
+rand = { workspace = true }

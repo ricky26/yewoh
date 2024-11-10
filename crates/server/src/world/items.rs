@@ -157,7 +157,7 @@ impl ItemQueryItem<'_> {
             kind: EntityKind::Item,
             graphic_id: **self.graphic,
             graphic_inc: **self.graphic_offset,
-            direction: position.direction,
+            direction: position.direction.into(),
             quantity: **self.quantity,
             position: position.position,
             hue: **self.hue,
@@ -172,7 +172,7 @@ impl ItemQueryItem<'_> {
         Some(UpsertEntityEquipped {
             id,
             parent_id,
-            slot: equipped.slot,
+            slot: equipped.slot.into(),
             graphic_id: **self.graphic,
             hue: **self.hue,
         })

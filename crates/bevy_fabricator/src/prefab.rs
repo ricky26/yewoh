@@ -399,10 +399,15 @@ pub fn convert(
     let mut aliases = HashMap::new();
     let mut file_imports = HashMap::new();
     let mut locals = HashMap::new();
+    let mut constants = HashMap::<String, Arc<dyn PartialReflect>>::new();
     let mut inputs = HashMap::new();
     let mut requires_an_input = false;
     let mut steps: Vec<Step> = Vec::new();
     let mut register_types = vec![None; doc.registers.len()];
+
+    // Add constants
+    constants.insert("true".to_string(), Arc::new(true));
+    constants.insert("false".to_string(), Arc::new(false));
 
     // Add fixed root entity
     let root_index = register_types.len();
@@ -412,6 +417,10 @@ pub fn convert(
     // First pass: collect names & types
     for (index, register) in doc.registers.iter().enumerate() {
         if let Some(name) = register.name {
+            if constants.contains_key(name) {
+                bail!("variable '{name}' shadows constant");
+            }
+
             if let Some(last_index) = locals.insert(name.to_string(), index) {
                 bail!("duplicate variable name: '{name}' (index {index} and {last_index})");
             }
@@ -474,7 +483,8 @@ pub fn convert(
                 let path = resolve_alias(&aliases, path);
 
                 if path.len() == 1 {
-                    if let Some(source) = locals.get(path.0[0]) {
+                    let identifier = path.0[0];
+                    if let Some(source) = locals.get(identifier) {
                         register_type = register_type.or(register_types[*source]);
                     }
                 }
@@ -549,7 +559,7 @@ pub fn convert(
                             if let Some(type_path) = &type_path {
                                 let type_path = resolve_alias(&aliases, type_path);
                                 let variant = enum_info.variant(type_path.0.last().unwrap())
-                                    .ok_or_else(|| anyhow!("unknown variant {type_path:?}"))?;
+                                    .ok_or_else(|| anyhow!("unknown tuple variant {type_path:?}"))?;
                                 match variant {
                                     VariantInfo::Struct(struct_info) => {
                                         for (field_index, register_index) in body.iter().enumerate() {
@@ -611,8 +621,7 @@ pub fn convert(
                             if let Some(type_path) = &type_path {
                                 let type_path = resolve_alias(&aliases, type_path);
                                 let variant = enum_info.variant(type_path.0.last().unwrap())
-                                    .ok_or_else(|| anyhow!("unknown variant {type_path:?}"))?;
-
+                                    .ok_or_else(|| anyhow!("unknown struct variant {type_path:?}"))?;
                                 if let VariantInfo::Struct(struct_info) = variant {
                                     for (field_name, register_index) in body.iter() {
                                         let Some(field_info) = struct_info.field(field_name) else {
@@ -662,7 +671,8 @@ pub fn convert(
                 }
                 Expression::Path(path) => {
                     if path.len() == 1 {
-                        if let Some(source_index) = locals.get(path.0[0]) {
+                        let identifier = path.0[0];
+                        if let Some(source_index) = locals.get(identifier) {
                             register_types[*source_index] = register_types[*source_index]
                                 .or(register_types[index]);
                         }
@@ -907,7 +917,19 @@ pub fn convert(
                     let path = resolve_alias(&aliases, path);
 
                     if path.len() == 1 {
-                        if let Some(fabricator) = file_imports.get(path.0[0]) {
+                        let identifier = path.0[0];
+                        if let Some(value) = constants.get(identifier) {
+                            let value = value.clone();
+                            steps.push(Box::new(move |_, registers, _| {
+                                if registers[index].is_none() {
+                                    registers[index] = Some(value.clone());
+                                }
+                                Ok(())
+                            }));
+                            continue;
+                        }
+
+                        if let Some(fabricator) = file_imports.get(identifier) {
                             let fabricator = fabricator.clone();
                             steps.push(Box::new(move |_, registers, _| {
                                 if registers[index].is_none() {
@@ -918,7 +940,7 @@ pub fn convert(
                             continue;
                         }
 
-                        if let Some(source_index) = locals.get(path.0[0]) {
+                        if let Some(source_index) = locals.get(identifier) {
                             let source = *source_index;
                             steps.push(Box::new(move |_, registers, _| {
                                 if registers[index].is_none() {

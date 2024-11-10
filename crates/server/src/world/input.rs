@@ -1,15 +1,19 @@
 use std::collections::VecDeque;
 
 use bevy::prelude::*;
-use yewoh::protocol::{EquipmentSlot, Move, PickTarget, TargetType};
+use yewoh::protocol::{PickTarget, TargetType};
 
 use crate::world::connection::NetClient;
+use crate::world::entity::{Direction, EquipmentSlot};
 use crate::world::ServerSet;
 
 #[derive(Debug, Clone, Event)]
 pub struct OnClientMove {
     pub client_entity: Entity,
-    pub request: Move,
+    pub direction: Direction,
+    pub run: bool,
+    pub sequence: u8,
+    pub fast_walk: u32,
 }
 
 #[derive(Debug, Clone, Event)]

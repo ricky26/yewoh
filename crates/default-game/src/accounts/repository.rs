@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use bevy::prelude::*;
 use uuid::Uuid;
 use yewoh::protocol;
-use yewoh::protocol::{CreateCharacter, DeleteCharacter, Race};
-use yewoh_server::world::characters::CharacterStats;
+use yewoh::protocol::{CreateCharacter, DeleteCharacter};
+use yewoh_server::world::characters::{CharacterRace, CharacterStats};
 
 #[derive(Debug, Copy, Clone, Default, Reflect)]
 pub enum NewCharacterProfession {
@@ -43,8 +43,7 @@ pub struct NewCharacterSkill {
 #[reflect(Default)]
 pub struct NewCharacterInfo {
     pub name: String,
-    #[reflect(remote = yewoh_server::remote_reflect::Race)]
-    pub race: Race,
+    pub race: CharacterRace,
     pub female: bool,
     pub hue: u16,
     pub hair: u16,
@@ -63,7 +62,7 @@ impl NewCharacterInfo {
     pub fn from_request(request: &CreateCharacter) -> Self {
         Self {
             name: request.character_name.to_string(),
-            race: request.race,
+            race: request.race.into(),
             female: request.is_female,
             hue: request.hue,
             hair: request.hair.graphic,

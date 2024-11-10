@@ -1,6 +1,5 @@
 import yewoh_server::world::entity::Hue;
-import yewoh_server::world::characters::{CharacterBodyType, CharacterName, CharacterRace, CharacterSex, Animation};
-import yewoh_server::remote_reflect::Race;
+import yewoh_server::world::characters::{CharacterBodyType, CharacterName, CharacterRace, CharacterSex, Protected, Animation};
 import yewoh_default_game::activities::combat::Unarmed;
 import yewoh_default_game::characters::paperdoll::{Paperdoll, DoubleClickPaperdoll};
 import bevy_fabricator::humantime::HumanDuration;
@@ -9,8 +8,9 @@ import "character.fab" as baseCharacter;
 
 $ <- Fabricate(baseCharacter);
 $ <- CharacterBodyType(400);
-$ <- CharacterRace(Race::Human);
+$ <- CharacterRace::Human;
 $ <- CharacterSex::Male;
+$ <- Protected(true);
 $ <- Unarmed {
     weapon: {
         min_damage: 1,

@@ -1,8 +1,6 @@
 use bevy::prelude::*;
-use yewoh::protocol::EquipmentSlot;
 use bevy_fabricator::traits::{Apply, Context, ReflectApply};
-use yewoh::Direction;
-use yewoh_server::world::entity::{ContainedPosition, MapPosition};
+use yewoh_server::world::entity::{ContainedPosition, Direction, EquipmentSlot, MapPosition};
 use crate::data::prefabs::PrefabLibraryEntityExt;
 use crate::entities::position::PositionExt;
 
@@ -21,7 +19,6 @@ impl Apply for Prefab {
 #[reflect(Apply)]
 pub struct EquippedBy {
     pub parent: Entity,
-    #[reflect(remote = yewoh_server::remote_reflect::EquipmentSlot)]
     pub slot: EquipmentSlot,
 }
 
@@ -52,7 +49,6 @@ impl Apply for ContainedBy {
 pub struct AtMapPosition {
     pub position: IVec3,
     pub map_id: u8,
-    #[reflect(remote = yewoh_server::remote_reflect::Direction)]
     pub direction: Direction,
 }
 

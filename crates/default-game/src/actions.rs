@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use smallvec::smallvec;
 use yewoh::protocol;
 use yewoh::protocol::{CharacterProfile, MoveConfirm, PickUpReject, MoveReject, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind};
-use yewoh_server::world::characters::{CharacterBodyType, CharacterNotoriety, OnClientProfileRequest, OnClientSkillsRequest, WarMode};
+use yewoh_server::world::characters::{CharacterBodyType, NotorietyQuery, OnClientProfileRequest, OnClientSkillsRequest, WarMode};
 use yewoh_server::world::combat::{AttackTarget, OnClientWarModeChanged};
 use yewoh_server::world::connection::{NetClient, Possessing};
 use yewoh_server::world::entity::{ContainedPosition, EquippedPosition, MapPosition};
@@ -37,7 +37,7 @@ pub fn on_client_move(
     chunk_query: Query<(&MapPosition, &Chunk)>,
     tile_data: Res<TileDataResource>,
     connection_query: Query<(&NetClient, &Possessing)>,
-    mut characters: Query<(&mut MapPosition, &CharacterNotoriety), Without<Chunk>>,
+    mut characters: Query<(&mut MapPosition, NotorietyQuery), Without<Chunk>>,
     mut events: EventReader<OnClientMove>,
 ) {
     for request in events.read() {
@@ -50,26 +50,26 @@ pub fn on_client_move(
             continue;
         };
 
-        if map_position.direction != request.request.direction {
-            map_position.direction = request.request.direction;
+        if map_position.direction != request.direction {
+            map_position.direction = request.direction;
         } else {
-            match try_move_in_direction(&spatial_query, &chunk_query, &tile_data, *map_position, request.request.direction, Some(primary_entity)) {
+            match try_move_in_direction(&spatial_query, &chunk_query, &tile_data, *map_position, request.direction, Some(primary_entity)) {
                 Ok(new_position) => {
                     *map_position = new_position;
                 }
                 Err(_) => {
                     client.send_packet(MoveReject {
-                        sequence: request.request.sequence,
+                        sequence: request.sequence,
                         position: map_position.position,
-                        direction: map_position.direction,
+                        direction: map_position.direction.into(),
                     });
                 }
             }
         }
 
-        let notoriety = **notoriety;
+        let notoriety = notoriety.notoriety();
         client.send_packet(MoveConfirm {
-            sequence: request.request.sequence,
+            sequence: request.sequence,
             notoriety,
         });
     }

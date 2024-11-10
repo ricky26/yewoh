@@ -84,7 +84,7 @@ pub fn send_updated_attack_target(
     }
 }
 
-pub fn detect_damage_notices(
+pub fn damage_notices(
     delta_version: Res<DeltaVersion>,
     mut delta_grid: ResMut<DeltaGrid>,
     damage_targets: Query<(&NetId, &RootPosition)>,
@@ -111,7 +111,7 @@ pub fn detect_damage_notices(
     }
 }
 
-pub fn detect_swings(
+pub fn queue_swings(
     delta_version: Res<DeltaVersion>,
     mut delta_grid: ResMut<DeltaGrid>,
     characters: Query<(&NetId, &RootPosition)>,
@@ -155,8 +155,8 @@ pub fn plugin(app: &mut App) {
             send_updated_attack_target
                 .in_set(ServerSet::SendLast),
             (
-                detect_damage_notices,
-                detect_swings,
-            ).in_set(ServerSet::DetectChanges)
+                damage_notices,
+                queue_swings,
+            ).in_set(ServerSet::QueueDeltas)
         ));
 }

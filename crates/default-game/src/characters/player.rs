@@ -1,7 +1,6 @@
 use bevy::prelude::*;
-use yewoh::protocol::EquipmentSlot;
 use yewoh_server::world::characters::CharacterSex;
-use yewoh_server::world::entity::Hue;
+use yewoh_server::world::entity::{EquipmentSlot, Hue};
 
 use crate::data::prefabs::PrefabLibraryWorldExt;
 use crate::entities::persistence::CustomHue;

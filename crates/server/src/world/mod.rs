@@ -35,6 +35,8 @@ pub enum ServerSet {
     UpdateVisibility,
     AssignNetIds,
     SendFirst,
+    QueueDeltas,
+    DestroyEntities,
     DetectChanges,
     SendEntities,
     Send,
@@ -61,7 +63,6 @@ impl Plugin for ServerPlugin {
                 items::plugin,
                 characters::plugin,
                 account::plugin,
-                crate::remote_reflect::plugin,
             ))
             .configure_sets(First, (
                 (

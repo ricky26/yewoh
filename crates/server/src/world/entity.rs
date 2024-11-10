@@ -1,10 +1,9 @@
 use bevy::prelude::*;
 use glam::{IVec2, IVec3};
+use rand::distributions::Distribution;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
-
-use yewoh::protocol::EquipmentSlot;
-use yewoh::Direction;
-
+use yewoh::protocol;
 use crate::math::IVecExt;
 
 #[derive(Clone, Copy, Debug, Default, Deref, DerefMut, Reflect, Component)]
@@ -24,13 +23,191 @@ pub struct Hue(pub u16);
 #[reflect(Component, Default)]
 pub struct Multi(pub u16);
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Reflect, Serialize, Deserialize)]
+#[reflect(Default, Serialize, Deserialize)]
+pub enum Direction {
+    #[default]
+    North,
+    Right,
+    East,
+    Down,
+    South,
+    Left,
+    West,
+    Up,
+}
+
+impl From<yewoh::Direction> for Direction {
+    fn from(value: yewoh::Direction) -> Self {
+        match value {
+            yewoh::Direction::North => Direction::North,
+            yewoh::Direction::Right => Direction::Right,
+            yewoh::Direction::East => Direction::East,
+            yewoh::Direction::Down => Direction::Down,
+            yewoh::Direction::South => Direction::South,
+            yewoh::Direction::Left => Direction::Left,
+            yewoh::Direction::West => Direction::West,
+            yewoh::Direction::Up => Direction::Up,
+        }
+    }
+}
+
+impl From<Direction> for yewoh::Direction {
+    fn from(value: Direction) -> Self {
+        match value {
+            Direction::North => yewoh::Direction::North,
+            Direction::Right => yewoh::Direction::Right,
+            Direction::East => yewoh::Direction::East,
+            Direction::Down => yewoh::Direction::Down,
+            Direction::South => yewoh::Direction::South,
+            Direction::Left => yewoh::Direction::Left,
+            Direction::West => yewoh::Direction::West,
+            Direction::Up => yewoh::Direction::Up,
+        }
+    }
+}
+
+impl Direction {
+    pub fn as_vec2(self) -> IVec2 {
+        match self {
+            Direction::North => IVec2::new(0, -1),
+            Direction::Right => IVec2::new(1, -1),
+            Direction::East => IVec2::new(1, 0),
+            Direction::Down => IVec2::new(1, 1),
+            Direction::South => IVec2::new(0, 1),
+            Direction::Left => IVec2::new(-1, 1),
+            Direction::West => IVec2::new(-1, 0),
+            Direction::Up => IVec2::new(-1, -1),
+        }
+    }
+}
+
+impl Distribution<Direction> for rand::distributions::Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Direction {
+        match rng.gen_range(0..8) {
+            0 => Direction::North,
+            1 => Direction::Right,
+            2 => Direction::East,
+            3 => Direction::Down,
+            4 => Direction::South,
+            5 => Direction::Left,
+            6 => Direction::West,
+            7 => Direction::Up,
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialOrd, Ord, PartialEq, Eq, Reflect, Serialize, Deserialize)]
+#[reflect(Default, Serialize, Deserialize)]
+pub enum EquipmentSlot {
+    #[default]
+    MainHand,
+    OffHand,
+    Shoes,
+    Bottom,
+    Top,
+    Head,
+    Hands,
+    Ring,
+    Talisman,
+    Neck,
+    Hair,
+    Waist,
+    InnerTorso,
+    Bracelet,
+    FacialHair,
+    MiddleTorso,
+    Earrings,
+    Arms,
+    Cloak,
+    Backpack,
+    OuterTorso,
+    OuterLegs,
+    InnerLegs,
+    Mount,
+    ShopBuy,
+    ShopBuyback,
+    ShopSell,
+    Bank,
+}
+
+impl EquipmentSlot {
+    pub fn from_protocol(slot: protocol::EquipmentSlot) -> Option<EquipmentSlot> {
+        match slot {
+            protocol::EquipmentSlot::Invalid => None,
+            protocol::EquipmentSlot::MainHand => Some(EquipmentSlot::MainHand),
+            protocol::EquipmentSlot::OffHand => Some(EquipmentSlot::OffHand),
+            protocol::EquipmentSlot::Shoes => Some(EquipmentSlot::Shoes),
+            protocol::EquipmentSlot::Bottom => Some(EquipmentSlot::Bottom),
+            protocol::EquipmentSlot::Top => Some(EquipmentSlot::Top),
+            protocol::EquipmentSlot::Head => Some(EquipmentSlot::Head),
+            protocol::EquipmentSlot::Hands => Some(EquipmentSlot::Hands),
+            protocol::EquipmentSlot::Ring => Some(EquipmentSlot::Ring),
+            protocol::EquipmentSlot::Talisman => Some(EquipmentSlot::Talisman),
+            protocol::EquipmentSlot::Neck => Some(EquipmentSlot::Neck),
+            protocol::EquipmentSlot::Hair => Some(EquipmentSlot::Hair),
+            protocol::EquipmentSlot::Waist => Some(EquipmentSlot::Waist),
+            protocol::EquipmentSlot::InnerTorso => Some(EquipmentSlot::InnerTorso),
+            protocol::EquipmentSlot::Bracelet => Some(EquipmentSlot::Bracelet),
+            protocol::EquipmentSlot::FacialHair => Some(EquipmentSlot::FacialHair),
+            protocol::EquipmentSlot::MiddleTorso => Some(EquipmentSlot::MiddleTorso),
+            protocol::EquipmentSlot::Earrings => Some(EquipmentSlot::Earrings),
+            protocol::EquipmentSlot::Arms => Some(EquipmentSlot::Arms),
+            protocol::EquipmentSlot::Cloak => Some(EquipmentSlot::Cloak),
+            protocol::EquipmentSlot::Backpack => Some(EquipmentSlot::Backpack),
+            protocol::EquipmentSlot::OuterTorso => Some(EquipmentSlot::OuterTorso),
+            protocol::EquipmentSlot::OuterLegs => Some(EquipmentSlot::OuterLegs),
+            protocol::EquipmentSlot::InnerLegs => Some(EquipmentSlot::InnerLegs),
+            protocol::EquipmentSlot::Mount => Some(EquipmentSlot::Mount),
+            protocol::EquipmentSlot::ShopBuy => Some(EquipmentSlot::ShopBuy),
+            protocol::EquipmentSlot::ShopBuyback => Some(EquipmentSlot::ShopBuyback),
+            protocol::EquipmentSlot::ShopSell => Some(EquipmentSlot::ShopSell),
+            protocol::EquipmentSlot::Bank => Some(EquipmentSlot::Bank),
+        }
+    }
+}
+
+impl From<EquipmentSlot> for protocol::EquipmentSlot {
+    fn from(value: EquipmentSlot) -> Self {
+        match value {
+            EquipmentSlot::MainHand => protocol::EquipmentSlot::MainHand,
+            EquipmentSlot::OffHand => protocol::EquipmentSlot::OffHand,
+            EquipmentSlot::Shoes => protocol::EquipmentSlot::Shoes,
+            EquipmentSlot::Bottom => protocol::EquipmentSlot::Bottom,
+            EquipmentSlot::Top => protocol::EquipmentSlot::Top,
+            EquipmentSlot::Head => protocol::EquipmentSlot::Head,
+            EquipmentSlot::Hands => protocol::EquipmentSlot::Hands,
+            EquipmentSlot::Ring => protocol::EquipmentSlot::Ring,
+            EquipmentSlot::Talisman => protocol::EquipmentSlot::Talisman,
+            EquipmentSlot::Neck => protocol::EquipmentSlot::Neck,
+            EquipmentSlot::Hair => protocol::EquipmentSlot::Hair,
+            EquipmentSlot::Waist => protocol::EquipmentSlot::Waist,
+            EquipmentSlot::InnerTorso => protocol::EquipmentSlot::InnerTorso,
+            EquipmentSlot::Bracelet => protocol::EquipmentSlot::Bracelet,
+            EquipmentSlot::FacialHair => protocol::EquipmentSlot::FacialHair,
+            EquipmentSlot::MiddleTorso => protocol::EquipmentSlot::MiddleTorso,
+            EquipmentSlot::Earrings => protocol::EquipmentSlot::Earrings,
+            EquipmentSlot::Arms => protocol::EquipmentSlot::Arms,
+            EquipmentSlot::Cloak => protocol::EquipmentSlot::Cloak,
+            EquipmentSlot::Backpack => protocol::EquipmentSlot::Backpack,
+            EquipmentSlot::OuterTorso => protocol::EquipmentSlot::OuterTorso,
+            EquipmentSlot::OuterLegs => protocol::EquipmentSlot::OuterLegs,
+            EquipmentSlot::InnerLegs => protocol::EquipmentSlot::InnerLegs,
+            EquipmentSlot::Mount => protocol::EquipmentSlot::Mount,
+            EquipmentSlot::ShopBuy => protocol::EquipmentSlot::ShopBuy,
+            EquipmentSlot::ShopBuyback => protocol::EquipmentSlot::ShopBuyback,
+            EquipmentSlot::ShopSell => protocol::EquipmentSlot::ShopSell,
+            EquipmentSlot::Bank => protocol::EquipmentSlot::Bank,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Component, Reflect, Serialize, Deserialize)]
-#[reflect(Default, Component)]
+#[reflect(Default, Component, Serialize, Deserialize)]
 pub struct MapPosition {
     pub position: IVec3,
     pub map_id: u8,
-    #[serde(default)]
-    #[reflect(remote = crate::remote_reflect::Direction)]
     pub direction: Direction,
 }
 
@@ -53,9 +230,8 @@ impl MapPosition {
 }
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Component, Reflect, Serialize, Deserialize)]
-#[reflect(Component, Serialize, Deserialize)]
+#[reflect(Default, Component, Serialize, Deserialize)]
 pub struct EquippedPosition {
-    #[reflect(remote = crate::remote_reflect::EquipmentSlot)]
     pub slot: EquipmentSlot,
 }
 

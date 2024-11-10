@@ -1,4 +1,3 @@
-use glam::IVec2;
 use serde::{Deserialize, Serialize};
 use strum_macros::FromRepr;
 
@@ -41,21 +40,6 @@ pub enum Direction {
     Up = 7,
 }
 
-impl Direction {
-    pub fn as_vec2(self) -> IVec2 {
-        match self {
-            Direction::North => IVec2::new(0, -1),
-            Direction::Right => IVec2::new(1, -1),
-            Direction::East => IVec2::new(1, 0),
-            Direction::Down => IVec2::new(1, 1),
-            Direction::South => IVec2::new(0, 1),
-            Direction::Left => IVec2::new(-1, 1),
-            Direction::West => IVec2::new(-1, 0),
-            Direction::Up => IVec2::new(-1, -1),
-        }
-    }
-}
-
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, Default, FromRepr)]
 pub enum EntityKind {
@@ -68,9 +52,9 @@ pub enum EntityKind {
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, FromRepr, Serialize, Deserialize)]
 pub enum Notoriety {
-    #[default]
     Innocent = 1,
-    Friend = 2,
+    Ally = 2,
+    #[default]
     Neutral = 3,
     Criminal = 4,
     Enemy = 5,
