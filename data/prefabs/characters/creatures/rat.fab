@@ -2,7 +2,10 @@ import yewoh_server::world::characters::{CharacterBodyType, CharacterName};
 import yewoh_server::world::characters::Animation;
 import yewoh_default_game::ai::behaviours::wander::WanderPrefab;
 import bevy_fabricator::humantime::HumanDuration;
+import bevy_fabricator::operations::Fabricate;
+import "../character.fab" as baseCharacter;
 
+$ <- Fabricate(baseCharacter);
 $ <- CharacterName("Rat");
 $ <- CharacterBodyType(0xee);
 $ <- WanderPrefab {

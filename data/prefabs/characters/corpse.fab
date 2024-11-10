@@ -1,0 +1,8 @@
+import yewoh_server::world::items::{ItemGraphic, Container};
+import yewoh_default_game::items::containers::DoubleClickOpenContainer;
+
+$ <- ItemGraphic(0x2006);
+$ <- Container {
+    gump_id: 9,
+};
+$ <- DoubleClickOpenContainer;

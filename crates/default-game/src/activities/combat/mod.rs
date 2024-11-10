@@ -5,11 +5,11 @@ use yewoh::protocol::EquipmentSlot;
 use yewoh_server::world::characters::{Animation, CharacterBodyType, Health, OnCharacterAnimationStart};
 use yewoh_server::world::combat::{AttackTarget, OnCharacterDamage, OnCharacterSwing, OnClientAttackRequest};
 use yewoh_server::world::connection::Possessing;
-use yewoh_server::world::entity::{EquippedPosition, Hue, MapPosition};
-use yewoh_server::world::items::{Container, ItemGraphic, ItemQuantity};
+use yewoh_server::world::entity::{EquippedPosition, MapPosition};
 use yewoh_server::world::ServerSet;
+
 use crate::activities::{progress_current_activity, CurrentActivity};
-use crate::items::containers::DoubleClickOpenContainer;
+use crate::characters::corpses::{remove_dead_characters, spawn_corpses, OnCharacterDeath};
 
 #[derive(Clone, Debug, Default, Reflect, Component)]
 #[reflect(Component)]
@@ -21,20 +21,6 @@ pub struct OnDealMeleeDamage {
     pub source: Entity,
     pub damage: u16,
     pub location: MapPosition,
-}
-
-#[derive(Debug, Clone, Event)]
-pub struct OnCharacterDeath {
-    pub character: Entity,
-}
-
-#[derive(Debug, Default, Clone, Component)]
-pub struct Corpse;
-
-#[derive(Debug, Clone, Event)]
-pub struct OnSpawnCorpse {
-    pub character: Entity,
-    pub corpse: Entity,
 }
 
 #[derive(Debug, Clone, Default, Reflect, Component)]
@@ -60,8 +46,6 @@ pub struct Unarmed {
     pub weapon: MeleeWeapon,
 }
 
-pub const CORPSE_GRAPHIC_ID: u16 = 0x2006;
-pub const CORPSE_BOX_GUMP_ID: u16 = 9;
 
 pub fn on_client_attack_request(
     mut commands: Commands,
@@ -199,44 +183,6 @@ pub fn apply_damage(
     }
 }
 
-pub fn remove_dead_characters(mut commands: Commands, mut events: EventReader<OnCharacterDeath>) {
-    for event in events.read() {
-        commands.entity(event.character).despawn_recursive();
-    }
-}
-
-pub fn spawn_corpses(
-    mut commands: Commands,
-    mut died_events: EventReader<OnCharacterDeath>,
-    mut corpse_events: EventWriter<OnSpawnCorpse>,
-    characters: Query<(&CharacterBodyType, &Hue, &MapPosition)>,
-) {
-    for event in died_events.read() {
-        let (body_type, hue, map_position) = match characters.get(event.character) {
-            Ok(x) => x,
-            _ => continue,
-        };
-
-        let corpse = commands
-            .spawn((
-                *map_position,
-                ItemGraphic(CORPSE_GRAPHIC_ID),
-                ItemQuantity(**body_type),
-                Hue(**hue),
-                Container {
-                    gump_id: CORPSE_BOX_GUMP_ID,
-                },
-                Corpse,
-                DoubleClickOpenContainer,
-            ))
-            .id();
-        corpse_events.send(OnSpawnCorpse {
-            character: event.character,
-            corpse,
-        });
-    }
-}
-
 pub fn send_damage_notices(
     mut in_damage_events: EventReader<OnDealMeleeDamage>,
     mut out_damage_events: EventWriter<OnCharacterDamage>,
@@ -264,8 +210,6 @@ impl Plugin for CombatPlugin {
             .register_type::<HitAnimation>()
             .register_type::<MeleeWeapon>()
             .register_type::<Unarmed>()
-            .add_event::<OnCharacterDeath>()
-            .add_event::<OnSpawnCorpse>()
             .add_event::<OnDealMeleeDamage>()
             .add_systems(First, (
                 (
@@ -279,11 +223,9 @@ impl Plugin for CombatPlugin {
                     .after(progress_current_activity)
                     .after(update_weapon_stats),
                 (
-                    apply_damage,
+                    apply_damage.before(spawn_corpses).before(remove_dead_characters),
                     send_damage_notices,
                 ).after(attack_current_target),
-                remove_dead_characters.after(apply_damage),
-                spawn_corpses.after(apply_damage).before(remove_dead_characters),
             ));
     }
 }

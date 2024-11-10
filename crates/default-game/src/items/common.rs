@@ -2,8 +2,7 @@ use std::borrow::Cow;
 
 use bevy::prelude::*;
 use yewoh_server::world::items::{ItemGraphic, ItemGraphicOffset, ItemQuantity};
-
-use crate::activities::combat::Corpse;
+use crate::characters::corpses::Corpse;
 use crate::DefaultGameSet;
 use crate::entities::tooltips::{OnRequestEntityTooltip, TooltipLine, TOOLTIP_NAME_PRIORITY};
 use crate::entity_events::{EntityEventReader, EntityEventRoutePlugin};

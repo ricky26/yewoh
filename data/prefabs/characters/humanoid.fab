@@ -4,7 +4,10 @@ import yewoh_server::remote_reflect::Race;
 import yewoh_default_game::activities::combat::Unarmed;
 import yewoh_default_game::characters::paperdoll::{Paperdoll, DoubleClickPaperdoll};
 import bevy_fabricator::humantime::HumanDuration;
+import bevy_fabricator::operations::Fabricate;
+import "character.fab" as baseCharacter;
 
+$ <- Fabricate(baseCharacter);
 $ <- CharacterBodyType(400);
 $ <- CharacterRace(Race::Human);
 $ <- CharacterSex::Male;

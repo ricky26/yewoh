@@ -11,6 +11,8 @@ pub mod persistence;
 
 pub mod paperdoll;
 
+pub mod corpses;
+
 #[derive(Clone, Debug, Default, Event)]
 pub struct OnCharacterMove {
     pub blocked: bool,
@@ -38,6 +40,7 @@ pub fn plugin(app: &mut App) {
             player::plugin,
             persistence::plugin,
             paperdoll::plugin,
+            corpses::plugin,
         ))
         .add_event::<OnCharacterMove>()
         .add_systems(First, (

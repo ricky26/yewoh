@@ -1,0 +1,5 @@
+import yewoh_server::world::characters::CharacterBodyType;
+import yewoh_default_game::characters::corpses::CorpsePrefab;
+
+$ <- CharacterBodyType(0);
+$ <- CorpsePrefab("corpse");
