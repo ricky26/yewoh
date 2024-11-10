@@ -52,6 +52,8 @@ pub mod format;
 
 pub mod l10n;
 
+pub mod reflect;
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq, SystemSet)]
 pub enum DefaultGameSet {
     DispatchEvents,

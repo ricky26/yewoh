@@ -54,6 +54,7 @@ impl Plugin for ActivitiesPlugin {
         app
             .add_plugins((
                 CombatPlugin,
+                loot::plugin,
             ))
             .add_systems(Update, (
                 progress_current_activity,

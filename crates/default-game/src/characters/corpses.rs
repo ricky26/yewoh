@@ -2,8 +2,8 @@ use bevy::prelude::*;
 use yewoh_server::world::characters::CharacterBodyType;
 use yewoh_server::world::entity::{Hue, MapPosition};
 use yewoh_server::world::items::ItemQuantity;
-
-use crate::data::prefabs::PrefabLibraryWorldExt;
+use crate::activities::loot::LootPrefab;
+use crate::data::prefabs::{PrefabLibraryEntityExt, PrefabLibraryWorldExt};
 use crate::entities::Persistent;
 
 #[derive(Debug, Default, Clone, Component, Reflect)]
@@ -35,22 +35,39 @@ pub fn spawn_corpses(
     mut commands: Commands,
     mut died_events: EventReader<OnCharacterDeath>,
     mut corpse_events: EventWriter<OnSpawnCorpse>,
-    characters: Query<(&CharacterBodyType, &Hue, &MapPosition, &CorpsePrefab, Has<Persistent>)>,
+    characters: Query<(
+        &CharacterBodyType,
+        &Hue,
+        &MapPosition,
+        &CorpsePrefab,
+        Option<&LootPrefab>,
+        Has<Persistent>,
+    )>,
 ) {
     for event in died_events.read() {
-        let Ok((body_type, hue, map_position, prefab, is_persistent)) = characters.get(event.character) else {
+        let Ok((body_type, hue, map_position, prefab, loot, is_persistent)) = characters.get(event.character) else {
             continue;
         };
 
-        let corpse = commands
-            .fabricate_prefab(&prefab.0)
-            .insert((
-                *map_position,
-                ItemQuantity(**body_type),
-                Hue(**hue),
-                Corpse,
-            ))
-            .id();
+        let mut corpse = commands
+            .fabricate_prefab(&prefab.0);
+
+        corpse.insert((
+            *map_position,
+            ItemQuantity(**body_type),
+            Hue(**hue),
+            Corpse,
+        ));
+
+        if is_persistent {
+            corpse.insert(Persistent);
+        }
+
+        if let Some(loot) = loot {
+            corpse.fabricate_prefab(&loot.0);
+        }
+
+        let corpse = corpse.id();
         corpse_events.send(OnSpawnCorpse {
             character: event.character,
             corpse,

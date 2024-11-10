@@ -1,10 +1,12 @@
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use bevy::prelude::*;
 use bevy_fabricator::parser::FormatterFn;
 use bevy_fabricator::traits::{Convert, ReflectConvert};
+
+use crate::reflect::{assert_struct_fields, reflect_optional_field};
 
 pub const EMPTY_TEXT_1: u32 = 1042971;
 pub const EMPTY_TEXT_2: u32 = 1070722;
@@ -71,20 +73,11 @@ impl<'a> Convert for LocalisedString<'a> {
         } else {
             let s = from.reflect_ref().as_struct()
                 .with_context(|| format!("value {from:?}"))?;
-            let mut text_id = EMPTY_TEXT_1;
-            let mut arguments = Cow::Borrowed("");
-
-            if let Some(id) = s.field("text_id") {
-                text_id = u32::from_reflect(id)
-                    .ok_or_else(|| anyhow!("expected text_id to be of type u32 (got {id:?})"))?;
-            }
-
-            if let Some(args) = s.field("arguments") {
-                let args = <&str>::from_reflect(args)
-                    .ok_or_else(|| anyhow!("expected arguments to be a string (got {args:?})"))?;
-                arguments = Cow::Owned(args.to_owned());
-            }
-
+            assert_struct_fields(s, &["text_id", "arguments"])?;
+            let text_id = reflect_optional_field(s, "text_id")?
+                .unwrap_or(EMPTY_TEXT_1);
+            let arguments = reflect_optional_field::<String>(s, "arguments")?
+                .map_or(Cow::Borrowed(""), |v| Cow::Owned(v));
             Ok(Box::new(LocalisedString { text_id, arguments }))
         }
     }

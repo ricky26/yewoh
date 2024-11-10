@@ -1,0 +1,10 @@
+import yewoh_default_game::activities::loot::LootRoll;
+import bevy_fabricator::operations::Spawn;
+
+local gold = Spawn;
+gold <- LootRoll {
+    target: $,
+    min_quantity: 25,
+    max_quantity: 50,
+    prefab_name: "gold",
+};
