@@ -3,7 +3,7 @@ use yewoh_server::world::characters::CharacterSex;
 use yewoh_server::world::entity::{EquipmentSlot, Hue};
 
 use crate::data::prefabs::PrefabLibraryWorldExt;
-use crate::entities::persistence::CustomHue;
+use crate::entities::persistence::PersistHue;
 use crate::entities::position::PositionExt;
 use crate::entities::Persistent;
 
@@ -30,7 +30,7 @@ pub fn spawn_starting_items(
         commands.fabricate_prefab("test_top")
             .insert((
                 Persistent,
-                CustomHue,
+                PersistHue,
                 Hue(request.shirt_hue),
             ))
             .move_to_equipped_position(entity, EquipmentSlot::Top);
@@ -39,7 +39,7 @@ pub fn spawn_starting_items(
         commands.fabricate_prefab(bottom_name)
             .insert((
                 Persistent,
-                CustomHue,
+                PersistHue,
                 Hue(request.pants_hue),
             ))
             .move_to_equipped_position(entity, EquipmentSlot::Bottom);

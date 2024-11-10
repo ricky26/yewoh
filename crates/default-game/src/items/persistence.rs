@@ -7,14 +7,14 @@ use crate::persistence::{BundleSerializer, SerializationSetupExt};
 
 #[derive(Clone, Debug, Default, Reflect, Component)]
 #[reflect(Component)]
-pub struct CustomGraphic;
+pub struct PersistGraphic;
 
 #[derive(Default)]
-pub struct CustomGraphicSerializer;
+pub struct GraphicSerializer;
 
-impl BundleSerializer for CustomGraphicSerializer {
+impl BundleSerializer for GraphicSerializer {
     type Query = &'static ItemGraphic;
-    type Filter = (With<CustomGraphic>, With<Persistent>);
+    type Filter = (With<PersistGraphic>, With<Persistent>);
     type Bundle = u16;
 
     fn id() -> &'static str {
@@ -28,7 +28,7 @@ impl BundleSerializer for CustomGraphicSerializer {
     fn insert(world: &mut World, entity: Entity, bundle: Self::Bundle) {
         world.entity_mut(entity)
             .insert((
-                CustomGraphic,
+                PersistGraphic,
                 ItemGraphic(bundle),
             ));
     }
@@ -36,14 +36,14 @@ impl BundleSerializer for CustomGraphicSerializer {
 
 #[derive(Clone, Debug, Default, Reflect, Component)]
 #[reflect(Component)]
-pub struct CustomQuantity;
+pub struct PersistQuantity;
 
 #[derive(Default)]
-pub struct CustomQuantitySerializer;
+pub struct QuantitySerializer;
 
-impl BundleSerializer for CustomQuantitySerializer {
+impl BundleSerializer for QuantitySerializer {
     type Query = &'static ItemQuantity;
-    type Filter = (With<CustomQuantity>, With<Persistent>);
+    type Filter = (With<PersistQuantity>, With<Persistent>);
     type Bundle = u16;
 
     fn id() -> &'static str {
@@ -57,7 +57,7 @@ impl BundleSerializer for CustomQuantitySerializer {
     fn insert(world: &mut World, entity: Entity, bundle: Self::Bundle) {
         world.entity_mut(entity)
             .insert((
-                CustomQuantity,
+                PersistQuantity,
                 ItemQuantity(bundle),
             ));
     }
@@ -65,8 +65,8 @@ impl BundleSerializer for CustomQuantitySerializer {
 
 pub fn plugin(app: &mut App) {
     app
-        .register_type::<CustomGraphic>()
-        .register_type::<CustomQuantity>()
-        .register_serializer::<CustomGraphicSerializer>()
-        .register_serializer::<CustomQuantitySerializer>();
+        .register_type::<PersistGraphic>()
+        .register_type::<PersistQuantity>()
+        .register_serializer::<GraphicSerializer>()
+        .register_serializer::<QuantitySerializer>();
 }

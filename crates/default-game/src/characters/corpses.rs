@@ -7,10 +7,10 @@ use yewoh_server::world::ServerSet;
 use crate::activities::butchering::ButcheringPrefab;
 use crate::activities::loot::LootPrefab;
 use crate::data::prefabs::{PrefabLibraryEntityExt, PrefabLibraryWorldExt};
-use crate::entities::persistence::CustomHue;
+use crate::entities::persistence::PersistHue;
 use crate::entities::Persistent;
 use crate::entities::position::PositionExt;
-use crate::items::persistence::CustomQuantity;
+use crate::items::persistence::PersistQuantity;
 
 #[derive(Debug, Default, Clone, Component, Reflect)]
 #[reflect(Component)]
@@ -69,8 +69,8 @@ pub fn spawn_corpses(
 
         corpse.insert((
             *map_position,
-            CustomQuantity,
-            CustomHue,
+            PersistQuantity,
+            PersistHue,
             ItemQuantity(**body_type),
             Hue(**hue),
             Persistent,

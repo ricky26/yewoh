@@ -7,14 +7,14 @@ use crate::persistence::{BundleSerializer, SerializationSetupExt};
 
 #[derive(Clone, Debug, Default, Reflect, Component)]
 #[reflect(Component)]
-pub struct CustomName;
+pub struct PersistName;
 
 #[derive(Default)]
-pub struct CustomNameSerializer;
+pub struct NameSerializer;
 
-impl BundleSerializer for CustomNameSerializer {
+impl BundleSerializer for NameSerializer {
     type Query = &'static CharacterName;
-    type Filter = (With<CustomName>, With<Persistent>);
+    type Filter = (With<PersistName>, With<Persistent>);
     type Bundle = String;
 
     fn id() -> &'static str {
@@ -28,7 +28,7 @@ impl BundleSerializer for CustomNameSerializer {
     fn insert(world: &mut World, entity: Entity, bundle: Self::Bundle) {
         world.entity_mut(entity)
             .insert((
-                CustomName,
+                PersistName,
                 CharacterName(bundle),
             ));
     }
@@ -36,14 +36,14 @@ impl BundleSerializer for CustomNameSerializer {
 
 #[derive(Clone, Debug, Default, Reflect, Component)]
 #[reflect(Component)]
-pub struct CustomStats;
+pub struct PersistStats;
 
 #[derive(Default)]
-pub struct CustomStatsSerializer;
+pub struct StatsSerializer;
 
-impl BundleSerializer for CustomStatsSerializer {
+impl BundleSerializer for StatsSerializer {
     type Query = &'static CharacterStats;
-    type Filter = (With<CustomStats>, With<Persistent>);
+    type Filter = (With<PersistStats>, With<Persistent>);
     type Bundle = CharacterStats;
 
     fn id() -> &'static str {
@@ -57,7 +57,7 @@ impl BundleSerializer for CustomStatsSerializer {
     fn insert(world: &mut World, entity: Entity, bundle: Self::Bundle) {
         world.entity_mut(entity)
             .insert((
-                CustomStats,
+                PersistStats,
                 bundle,
             ));
     }
@@ -65,7 +65,7 @@ impl BundleSerializer for CustomStatsSerializer {
 
 pub fn plugin(app: &mut App) {
     app
-        .register_type::<CustomStats>()
-        .register_serializer::<CustomNameSerializer>()
-        .register_serializer::<CustomStatsSerializer>();
+        .register_type::<PersistStats>()
+        .register_serializer::<NameSerializer>()
+        .register_serializer::<StatsSerializer>();
 }

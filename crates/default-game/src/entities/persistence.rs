@@ -140,14 +140,14 @@ impl BundleSerializer for PositionSerializer {
 
 #[derive(Clone, Debug, Default, Reflect, Component)]
 #[reflect(Component)]
-pub struct CustomHue;
+pub struct PersistHue;
 
 #[derive(Default)]
-pub struct CustomHueSerializer;
+pub struct HueSerializer;
 
-impl BundleSerializer for CustomHueSerializer {
+impl BundleSerializer for HueSerializer {
     type Query = &'static Hue;
-    type Filter = (With<CustomHue>, With<Persistent>);
+    type Filter = (With<PersistHue>, With<Persistent>);
     type Bundle = u16;
 
     fn id() -> &'static str {
@@ -161,7 +161,7 @@ impl BundleSerializer for CustomHueSerializer {
     fn insert(world: &mut World, entity: Entity, bundle: Self::Bundle) {
         world.entity_mut(entity)
             .insert((
-                CustomHue,
+                PersistHue,
                 Hue(bundle),
             ));
     }
@@ -169,9 +169,9 @@ impl BundleSerializer for CustomHueSerializer {
 
 pub fn plugin(app: &mut App) {
     app
-        .register_type::<CustomHue>()
+        .register_type::<PersistHue>()
         .register_serializer::<PrefabSerializer>()
         .register_serializer::<UniqueIdSerializer>()
         .register_serializer::<PositionSerializer>()
-        .register_serializer::<CustomHueSerializer>();
+        .register_serializer::<HueSerializer>();
 }

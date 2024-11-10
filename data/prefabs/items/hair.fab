@@ -1,7 +1,7 @@
 import yewoh_server::world::items::ItemGraphic;
-import yewoh_default_game::entities::persistence::CustomHue;
-import yewoh_default_game::items::persistence::CustomGraphic;
+import yewoh_default_game::entities::persistence::PersistHue;
+import yewoh_default_game::items::persistence::PersistGraphic;
 
-$ <- CustomGraphic;
-$ <- CustomHue;
+$ <- PersistGraphic;
+$ <- PersistHue;
 $ <- ItemGraphic;

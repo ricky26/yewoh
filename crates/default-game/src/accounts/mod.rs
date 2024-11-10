@@ -17,11 +17,11 @@ use yewoh_server::world::items::ItemGraphic;
 use yewoh_server::world::ServerSet;
 
 use crate::accounts::repository::{AccountCharacters, AccountRepository, CharacterToSpawn, NewCharacterInfo};
-use crate::characters::persistence::{CustomName, CustomStats};
+use crate::characters::persistence::{PersistName, PersistStats};
 use crate::characters::player::NewPlayerCharacter;
 use crate::data::prefabs::PrefabLibraryWorldExt;
 use crate::data::static_data::StaticData;
-use crate::entities::persistence::CustomHue;
+use crate::entities::persistence::PersistHue;
 use crate::entities::position::PositionExt;
 use crate::entities::{Persistent, UniqueId};
 
@@ -247,9 +247,9 @@ pub fn create_new_character(
         .fabricate_prefab(prefab_name)
         .insert((
             Persistent,
-            CustomStats,
-            CustomName,
-            CustomHue,
+            PersistStats,
+            PersistName,
+            PersistHue,
             CharacterName(info.name.clone()),
             Hue(info.hue),
             info.stats,
