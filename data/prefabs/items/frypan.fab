@@ -18,6 +18,6 @@ $ <- MeleeWeapon {
 $ <- Weight(1);
 $ <- StaticTooltips {
     entries: [
-        { arguments: "Cook things, yo", priority: 1 },
+        { text: "Cook things, yo", priority: 10 },
     ],
 }

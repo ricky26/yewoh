@@ -1,16 +1,20 @@
+use std::borrow::Cow;
+
 use bevy::prelude::*;
 use yewoh_server::world::items::{ItemGraphic, ItemGraphicOffset, ItemQuantity};
+
 use crate::activities::combat::Corpse;
 use crate::DefaultGameSet;
 use crate::entities::tooltips::{OnRequestEntityTooltip, TooltipLine, TOOLTIP_NAME_PRIORITY};
 use crate::entity_events::{EntityEventReader, EntityEventRoutePlugin};
 use crate::format::FormatInteger;
+use crate::l10n::LocalisedString;
 
 #[derive(Clone, Debug, Component, Reflect)]
 #[reflect(Component)]
 pub enum ItemName {
-    Localised(u32),
-    Dynamic(String),
+    Localised(LocalisedString<'static>),
+    Dynamic(Cow<'static, str>),
 }
 
 pub fn add_item_names(
@@ -18,7 +22,9 @@ pub fn add_item_names(
     query: Query<(Entity, &ItemGraphic), Without<ItemName>>,
 ) {
     for (entity, graphic) in &query {
-        commands.entity(entity).insert(ItemName::Localised(1020000 + (**graphic as u32)));
+        commands.entity(entity)
+            .insert(ItemName::Localised(
+                LocalisedString::from_id(1020000 + (**graphic as u32))));
     }
 }
 
@@ -31,27 +37,28 @@ pub fn add_item_name_tooltip(
             continue;
         };
 
-        let line = if **quantity == 1 {
+        let text = if **quantity == 1 {
             match name {
-                ItemName::Localised(index) =>
-                    TooltipLine::from_static(*index, TOOLTIP_NAME_PRIORITY),
+                ItemName::Localised(index) => index.clone(),
                 ItemName::Dynamic(name) =>
-                    TooltipLine::from_str(name.to_string(), TOOLTIP_NAME_PRIORITY),
+                    LocalisedString::from_str(name.to_string()),
             }
         } else {
             let arguments = match name {
-                ItemName::Localised(index) =>
-                    format!("{}\t#{}", FormatInteger::from(**quantity), *index),
+                ItemName::Localised(s) =>
+                    format!("{}\t{}", FormatInteger::from(**quantity), s.as_argument()),
                 ItemName::Dynamic(name) =>
                     format!("{}\t{}", FormatInteger::from(**quantity), name),
             };
-            TooltipLine {
+            LocalisedString {
                 text_id: 1050039,
-                arguments,
-                priority: TOOLTIP_NAME_PRIORITY,
+                arguments: arguments.into(),
             }
         };
-        event.lines.push(line);
+        event.lines.push(TooltipLine {
+            text,
+            priority: TOOLTIP_NAME_PRIORITY,
+        });
     }
 }
 

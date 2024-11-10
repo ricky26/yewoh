@@ -5,6 +5,7 @@ use crate::entities::tooltips::{OnRequestEntityTooltip, TooltipLine};
 use crate::entity_events::{EntityEventReader, EntityEventRoutePlugin};
 use crate::format::FormatInteger;
 use crate::DefaultGameSet;
+use crate::l10n::LocalisedString;
 
 #[derive(Clone, Copy, Debug, Default, Deref, DerefMut, Component, Reflect)]
 #[reflect(Component)]
@@ -36,8 +37,10 @@ pub fn add_weight_tooltip(
             1072789
         };
         event.lines.push(TooltipLine {
-            text_id,
-            arguments: FormatInteger::from(weight).to_string(),
+            text: LocalisedString {
+                text_id,
+                arguments: FormatInteger::from(weight).to_string().into(),
+            },
             priority: 1,
         });
     }

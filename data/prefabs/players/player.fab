@@ -1,12 +1,12 @@
 import yewoh_server::world::entity::Hue;
 import yewoh_server::world::characters::{CharacterBodyType, CharacterName, CharacterRace, CharacterSex};
-import yewoh_server::remote_reflect::RaceRemote;
+import yewoh_server::remote_reflect::Race;
 import bevy_fabricator::operations::Fabricate;
 import "../characters/humanoid.fab" as humanoid;
 
 in body_type: u16;
 in hue: u16 = 0x909;
-in race: RaceRemote;
+in race: Race;
 in sex: CharacterSex;
 
 $ <- Fabricate(humanoid);

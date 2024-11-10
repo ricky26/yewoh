@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::cmp::Ordering;
 
 use bevy::prelude::*;
@@ -9,40 +10,28 @@ use yewoh_server::world::ServerSet;
 
 use crate::DefaultGameSet;
 use crate::entity_events::{EntityEvent, EntityEventRoutePlugin, EntityEventPlugin, EntityEventReader};
+use crate::l10n::LocalisedString;
 
 pub const TOOLTIP_NAME_PRIORITY: i32 = -1000;
 
-#[derive(Debug, Clone, Eq, PartialEq, Reflect)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Reflect)]
 #[reflect(Default)]
 pub struct TooltipLine {
-    pub text_id: u32,
-    pub arguments: String,
+    pub text: LocalisedString<'static>,
     pub priority: i32,
-}
-
-impl Default for TooltipLine {
-    fn default() -> Self {
-        TooltipLine {
-            text_id: 1042971,
-            arguments: String::new(),
-            priority: 0,
-        }
-    }
 }
 
 impl TooltipLine {
     pub fn from_static(text_id: u32, priority: i32) -> TooltipLine {
         Self {
-            text_id,
-            arguments: Default::default(),
+            text: LocalisedString::from_id(text_id),
             priority,
         }
     }
 
-    pub fn from_str(text: String, priority: i32) -> TooltipLine {
+    pub fn from_str(text: impl Into<Cow<'static, str>>, priority: i32) -> TooltipLine {
         Self {
-            text_id: 1042971,
-            arguments: text,
+            text: LocalisedString::from_str(text),
             priority,
         }
     }
@@ -57,8 +46,7 @@ impl PartialOrd for TooltipLine {
 impl Ord for TooltipLine {
     fn cmp(&self, other: &Self) -> Ordering {
         self.priority.cmp(&other.priority)
-            .then_with(|| self.text_id.cmp(&other.text_id))
-            .then_with(|| self.arguments.cmp(&other.arguments))
+            .then_with(|| self.text.cmp(&other.text))
     }
 }
 
@@ -128,8 +116,8 @@ pub fn finish_tooltips(
         event.lines.sort_by_key(|l| l.priority);
         let entries = event.lines.drain(..)
             .map(|l| EntityTooltipLine {
-                text_id: l.text_id,
-                params: l.arguments,
+                text_id: l.text.text_id,
+                params: l.text.arguments.clone(),
             })
             .collect();
 

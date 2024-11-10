@@ -3,14 +3,12 @@ use std::time::Duration;
 
 use bevy::ecs::component::Component;
 use bevy::ecs::entity::Entity;
-use bevy::ecs::prelude::World;
 use bevy::ecs::system::{Commands, Query, Res};
 use bevy::prelude::*;
 use bevy::reflect::{DynamicList, DynamicStruct};
 use bevy::time::{Time, Timer, TimerMode};
 use bevy::utils::HashMap;
-use bevy_fabricator::traits::{Apply, ReflectApply};
-use bevy_fabricator::Fabricated;
+use bevy_fabricator::traits::{Apply, Context, ReflectApply};
 use serde::Deserialize;
 use serde_yaml::Value;
 use yewoh_server::world::entity::MapPosition;
@@ -66,9 +64,7 @@ pub struct SpawnerPrefab {
 }
 
 impl Apply for SpawnerPrefab {
-    fn apply(
-        &self, world: &mut World, entity: Entity, _fabricated: &mut Fabricated,
-    ) -> anyhow::Result<()> {
+    fn apply(&self, ctx: &mut Context, entity: Entity) -> anyhow::Result<()> {
         let mut parameters = DynamicStruct::default();
 
         for (k, v) in &self.parameters {
@@ -76,7 +72,7 @@ impl Apply for SpawnerPrefab {
         }
 
         let parameters = Arc::new(parameters) as Arc<dyn PartialReflect>;
-        world.entity_mut(entity)
+        ctx.world.entity_mut(entity)
             .insert(Spawner {
                 prefab: self.prefab.clone(),
                 parameters,

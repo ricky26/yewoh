@@ -43,7 +43,7 @@ pub struct NewCharacterSkill {
 #[reflect(Default)]
 pub struct NewCharacterInfo {
     pub name: String,
-    #[reflect(remote = yewoh_server::remote_reflect::RaceRemote)]
+    #[reflect(remote = yewoh_server::remote_reflect::Race)]
     pub race: Race,
     pub female: bool,
     pub hue: u16,

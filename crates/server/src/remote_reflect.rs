@@ -1,12 +1,10 @@
 use bevy::prelude::*;
 use bevy::reflect::reflect_remote;
-use yewoh::protocol::{EntityFlags, EquipmentSlot, Race};
-use yewoh::{Direction, Notoriety};
 
-#[reflect_remote(EquipmentSlot)]
+#[reflect_remote(yewoh::protocol::EquipmentSlot)]
 #[derive(Default)]
 #[reflect(Default)]
-pub enum EquipmentSlotRemote {
+pub enum EquipmentSlot {
     Invalid,
     MainHand,
     OffHand,
@@ -38,10 +36,10 @@ pub enum EquipmentSlotRemote {
     Bank,
 }
 
-#[reflect_remote(Notoriety)]
+#[reflect_remote(yewoh::Notoriety)]
 #[derive(Default)]
 #[reflect(Default)]
-pub enum NotorietyRemote {
+pub enum Notoriety {
     Innocent,
     Friend,
     Neutral,
@@ -51,10 +49,10 @@ pub enum NotorietyRemote {
     Invulnerable,
 }
 
-#[reflect_remote(Direction)]
+#[reflect_remote(yewoh::Direction)]
 #[derive(Default)]
 #[reflect(Default)]
-pub enum DirectionRemote {
+pub enum Direction {
     North,
     Right,
     East,
@@ -65,15 +63,10 @@ pub enum DirectionRemote {
     Up,
 }
 
-#[reflect_remote(EntityFlags)]
+#[reflect_remote(yewoh::protocol::Race)]
 #[derive(Default)]
 #[reflect(Default)]
-pub struct EntityFlagsRemote;
-
-#[reflect_remote(Race)]
-#[derive(Default)]
-#[reflect(Default)]
-pub enum RaceRemote {
+pub enum Race {
     Human,
     Elf,
     Gargoyle,
@@ -81,9 +74,8 @@ pub enum RaceRemote {
 
 pub fn plugin(app: &mut App) {
     app
-        .register_type::<EquipmentSlotRemote>()
-        .register_type::<NotorietyRemote>()
-        .register_type::<DirectionRemote>()
-        .register_type::<EntityFlagsRemote>()
-        .register_type::<RaceRemote>();
+        .register_type::<EquipmentSlot>()
+        .register_type::<Notoriety>()
+        .register_type::<Direction>()
+        .register_type::<Race>();
 }

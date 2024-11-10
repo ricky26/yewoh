@@ -3,8 +3,7 @@ use std::time::Duration;
 use bevy::prelude::*;
 use rand::{thread_rng, Rng};
 use serde::Deserialize;
-use bevy_fabricator::Fabricated;
-use bevy_fabricator::traits::{Apply, ReflectApply};
+use bevy_fabricator::traits::{Apply, Context, ReflectApply};
 use yewoh::Direction;
 use yewoh_server::world::entity::MapPosition;
 use yewoh_server::world::map::{Chunk, TileDataResource};
@@ -48,10 +47,8 @@ pub struct WanderPrefab {
 }
 
 impl Apply for WanderPrefab {
-    fn apply(
-        &self, world: &mut World, entity: Entity, _fabricated: &mut Fabricated,
-    ) -> anyhow::Result<()> {
-        world.entity_mut(entity)
+    fn apply(&self, ctx: &mut Context, entity: Entity) -> anyhow::Result<()> {
+        ctx.world.entity_mut(entity)
             .insert(Wander)
             .insert(MoveTimer {
                 next_move: Timer::new(self.interval, TimerMode::Repeating),

@@ -30,7 +30,7 @@ pub struct MapPosition {
     pub position: IVec3,
     pub map_id: u8,
     #[serde(default)]
-    #[reflect(remote = crate::remote_reflect::DirectionRemote)]
+    #[reflect(remote = crate::remote_reflect::Direction)]
     pub direction: Direction,
 }
 
@@ -55,7 +55,7 @@ impl MapPosition {
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Component, Reflect, Serialize, Deserialize)]
 #[reflect(Component, Serialize, Deserialize)]
 pub struct EquippedPosition {
-    #[reflect(remote = crate::remote_reflect::EquipmentSlotRemote)]
+    #[reflect(remote = crate::remote_reflect::EquipmentSlot)]
     pub slot: EquipmentSlot,
 }
 

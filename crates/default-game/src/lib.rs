@@ -50,6 +50,8 @@ pub mod entities;
 
 pub mod format;
 
+pub mod l10n;
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq, SystemSet)]
 pub enum DefaultGameSet {
     DispatchEvents,
@@ -85,6 +87,7 @@ impl Plugin for DefaultGamePlugin {
         app
             .add_plugins((
                 actions::plugin,
+                l10n::plugin,
             ))
             .configure_sets(First, (
                 (

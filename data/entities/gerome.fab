@@ -1,6 +1,6 @@
 import yewoh_server::world::entity::{Hue, MapPosition};
 import yewoh_server::world::characters::{CharacterBodyType, CharacterName};
-import yewoh::protocol::entity::EquipmentSlot;
+import yewoh_server::remote_reflect::EquipmentSlot;
 import yewoh_default_game::ai::behaviours::wander::WanderPrefab;
 import yewoh_default_game::entities::prefabs::{Prefab, EquippedBy};
 import yewoh_default_game::characters::paperdoll::{Paperdoll, DoubleClickPaperdoll};

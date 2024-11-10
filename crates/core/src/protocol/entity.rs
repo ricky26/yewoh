@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::io::Write;
 use std::mem::size_of;
 
@@ -575,7 +576,7 @@ impl Packet for EntityTooltipVersion {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct EntityTooltipLine {
     pub text_id: u32,
-    pub params: String,
+    pub params: Cow<'static, str>,
 }
 
 #[derive(Debug, Clone)]
@@ -608,7 +609,7 @@ impl Packet for EntityTooltip {
                     break;
                 }
 
-                let params = payload.read_utf16le_pascal()?;
+                let params = Cow::Owned(payload.read_utf16le_pascal()?);
                 entries.push(EntityTooltipLine { text_id, params });
             }
 

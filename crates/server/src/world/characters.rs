@@ -56,7 +56,7 @@ pub enum CharacterSex {
 #[derive(Reflect, Component, Serialize, Deserialize)]
 #[reflect(Component, Default, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct CharacterRace(#[reflect(remote = crate::remote_reflect::RaceRemote)] pub Race);
+pub struct CharacterRace(#[reflect(remote = crate::remote_reflect::Race)] pub Race);
 
 #[derive(Debug, Clone, Default, Component, Reflect)]
 #[reflect(Component, Default)]
@@ -153,7 +153,7 @@ pub struct CharacterSummary {
 #[derive(Reflect, Component, Serialize, Deserialize)]
 #[reflect(Component, Default, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct CharacterNotoriety(#[reflect(remote = crate::remote_reflect::NotorietyRemote)] pub Notoriety);
+pub struct CharacterNotoriety(#[reflect(remote = crate::remote_reflect::Notoriety)] pub Notoriety);
 
 #[derive(Clone, Copy, Debug, Default, Deref, DerefMut, Reflect, Component)]
 #[reflect(Default, Component)]
