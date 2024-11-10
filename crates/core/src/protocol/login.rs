@@ -6,6 +6,7 @@ use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use glam::{IVec3, UVec2};
 use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
 use strum_macros::FromRepr;
 
 use crate::{Direction, EntityId};
@@ -138,7 +139,7 @@ pub struct GameServer {
 #[derive(Debug, Clone, Default)]
 pub struct ServerList {
     pub system_info_flags: u8,
-    pub game_servers: Vec<GameServer>,
+    pub game_servers: SmallVec<[GameServer; 8]>,
 }
 
 impl Packet for ServerList {
@@ -149,7 +150,7 @@ impl Packet for ServerList {
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let system_info_flags = payload.read_u8()?;
         let game_server_count = payload.read_u16::<Endian>()? as usize;
-        let mut game_servers = Vec::with_capacity(game_server_count);
+        let mut game_servers = SmallVec::new();
 
         for _ in 0..game_server_count {
             let server_index = payload.read_u16::<Endian>()?;
@@ -392,8 +393,8 @@ bitflags! {
 
 #[derive(Debug, Clone, Default)]
 pub struct CharacterList {
-    pub characters: Vec<Option<CharacterFromList>>,
-    pub cities: Vec<StartingCity>,
+    pub characters: SmallVec<[Option<CharacterFromList>; 8]>,
+    pub cities: SmallVec<[StartingCity; 16]>,
     pub flags: CharacterListFlags,
 }
 
@@ -410,7 +411,7 @@ impl Packet for CharacterList {
         let text_length = if new_character_list { 32 } else { 31 };
 
         let slot_count = payload.read_u8()? as usize;
-        let mut characters = Vec::with_capacity(slot_count);
+        let mut characters = SmallVec::new();
 
         for _ in 0..slot_count {
             let name = payload.read_str_fixed()?;
@@ -427,7 +428,7 @@ impl Packet for CharacterList {
         }
 
         let city_count = payload.read_u8()? as usize;
-        let mut cities = Vec::with_capacity(city_count);
+        let mut cities = SmallVec::new();
 
         for _ in 0..city_count {
             let index = payload.read_u8()?;

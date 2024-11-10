@@ -6,7 +6,7 @@ use flate2::Compression;
 use flate2::read::ZlibDecoder;
 use flate2::write::{ZlibEncoder};
 use glam::IVec2;
-
+use smallvec::SmallVec;
 use crate::EntityId;
 use crate::protocol::{EntityFlags, PacketReadExt, PacketWriteExt};
 use crate::protocol::client_version::VERSION_HIGH_SEAS;
@@ -285,7 +285,7 @@ pub struct GumpResult {
     pub id: u32,
     pub type_id: u32,
     pub button_id: u32,
-    pub on_switches: Vec<u32>,
+    pub on_switches: SmallVec<[u32; 16]>,
     pub text_fields: Vec<String>,
 }
 
@@ -299,7 +299,7 @@ impl Packet for GumpResult {
         let type_id = payload.read_u32::<Endian>()?;
         let button_id = payload.read_u32::<Endian>()?;
         let switch_count = payload.read_u32::<Endian>()? as usize;
-        let mut on_switches = Vec::with_capacity(switch_count);
+        let mut on_switches = SmallVec::new();
         for _ in 0..switch_count {
             on_switches.push(payload.read_u32::<Endian>()?);
         }

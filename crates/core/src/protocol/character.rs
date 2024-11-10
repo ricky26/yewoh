@@ -2,6 +2,7 @@ use std::io::Write;
 
 use anyhow::anyhow;
 use byteorder::{ReadBytesExt, WriteBytesExt};
+use smallvec::SmallVec;
 use strum_macros::FromRepr;
 
 use crate::EntityId;
@@ -117,7 +118,7 @@ pub struct SkillEntry {
 #[derive(Debug, Clone)]
 pub struct SkillsResponse {
     pub kind: SkillsResponseKind,
-    pub skills: Vec<SkillEntry>,
+    pub skills: SmallVec<[SkillEntry; 64]>,
 }
 
 #[derive(Debug, Clone)]
@@ -146,7 +147,7 @@ impl Packet for Skills {
         } else {
             let kind = SkillsResponseKind::from_repr(payload.read_u8()?)
                 .ok_or_else(|| anyhow!("invalid skills response"))?;
-            let mut skills = Vec::new();
+            let mut skills = SmallVec::new();
 
             while payload.len() > 2 {
                 let id = payload.read_u16::<Endian>()?;

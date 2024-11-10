@@ -3,6 +3,7 @@ use std::io::Write;
 use anyhow::anyhow;
 use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
+use smallvec::SmallVec;
 use tracing::warn;
 
 use crate::protocol::{ClientFlags, PacketReadExt, PacketWriteExt};
@@ -37,7 +38,7 @@ pub struct ContextMenuEntry {
 #[derive(Debug, Clone)]
 pub struct ContextMenu {
     pub target_id: EntityId,
-    pub entries: Vec<ContextMenuEntry>,
+    pub entries: SmallVec<[ContextMenuEntry; 16]>,
 }
 
 #[derive(Debug, Clone)]
@@ -110,7 +111,7 @@ impl Packet for ExtendedCommand {
                 let subcommand = payload.read_u16::<Endian>()?;
                 let target_id = payload.read_entity_id()?;
                 let count = payload.read_u8()? as usize;
-                let mut entries = Vec::with_capacity(count);
+                let mut entries = SmallVec::new();
 
                 match subcommand {
                     1 => {

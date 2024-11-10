@@ -2,6 +2,7 @@ use std::io::Write;
 
 use anyhow::anyhow;
 use byteorder::{ReadBytesExt, WriteBytesExt};
+use smallvec::SmallVec;
 use strum_macros::FromRepr;
 
 use crate::EntityId;
@@ -283,7 +284,7 @@ pub struct UnicodeTextMessageRequest {
     pub font: u16,
     pub language: FixedString<4>,
     pub text: String,
-    pub keywords: Vec<u16>,
+    pub keywords: SmallVec<[u16; 8]>,
 }
 
 impl UnicodeTextMessageRequest {
@@ -301,7 +302,7 @@ impl Packet for UnicodeTextMessageRequest {
         let hue = payload.read_u16::<Endian>()?;
         let font = payload.read_u16::<Endian>()?;
         let language = payload.read_str_fixed()?;
-        let mut keywords = Vec::new();
+        let mut keywords = SmallVec::new();
 
         let text = if kind_raw & Self::HAS_KEYWORDS != 0 {
             let word = payload.read_u16::<Endian>()?;

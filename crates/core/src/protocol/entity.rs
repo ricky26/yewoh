@@ -1,12 +1,12 @@
 use std::borrow::Cow;
 use std::io::Write;
-use std::mem::size_of;
 
 use anyhow::anyhow;
 use bitflags::bitflags;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use glam::{IVec2, IVec3};
 use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
 use strum_macros::FromRepr;
 
 use crate::{Direction, EntityId, EntityKind, Notoriety};
@@ -372,7 +372,7 @@ pub struct UpsertEntityCharacter {
     pub hue: u16,
     pub flags: EntityFlags,
     pub notoriety: Notoriety,
-    pub equipment: Vec<CharacterEquipment>,
+    pub equipment: SmallVec<[CharacterEquipment; 32]>,
 }
 
 impl UpsertEntityCharacter {
@@ -394,7 +394,7 @@ impl Packet for UpsertEntityCharacter {
         let flags = EntityFlags::from_bits_truncate(payload.read_u8()?);
         let notoriety = Notoriety::from_repr(payload.read_u8()?)
             .ok_or_else(|| anyhow!("invalid notoriety"))?;
-        let mut equipment = Vec::new();
+        let mut equipment = SmallVec::new();
 
         loop {
             let child_id = payload.read_entity_id()?;
@@ -581,8 +581,8 @@ pub struct EntityTooltipLine {
 
 #[derive(Debug, Clone)]
 pub enum EntityTooltip {
-    Request(Vec<EntityId>),
-    Response { id: EntityId, entries: Vec<EntityTooltipLine> },
+    Request(SmallVec<[EntityId; 16]>),
+    Response { id: EntityId, entries: SmallVec<[EntityTooltipLine; 8]> },
 }
 
 impl Packet for EntityTooltip {
@@ -591,7 +591,7 @@ impl Packet for EntityTooltip {
 
     fn decode(_client_version: ClientVersion, from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         if from_client {
-            let mut ids = Vec::with_capacity(payload.len() / size_of::<EntityId>());
+            let mut ids = SmallVec::new();
             while !payload.is_empty() {
                 let id = payload.read_entity_id()?;
                 ids.push(id);
@@ -601,7 +601,7 @@ impl Packet for EntityTooltip {
             payload.skip(2)?;
             let id = payload.read_entity_id()?;
             payload.skip(6)?;
-            let mut entries = Vec::new();
+            let mut entries = SmallVec::new();
 
             loop {
                 let text_id = payload.read_u32::<Endian>()?;
@@ -716,7 +716,7 @@ impl Packet for UpsertEntityContained {
 
 #[derive(Debug, Clone)]
 pub struct UpsertContainerContents {
-    pub contents: Vec<UpsertEntityContained>,
+    pub contents: SmallVec<[UpsertEntityContained; 16]>,
 }
 
 impl Packet for UpsertContainerContents {
@@ -726,7 +726,7 @@ impl Packet for UpsertContainerContents {
 
     fn decode(client_version: ClientVersion, from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let count = payload.read_u16::<Endian>()? as usize;
-        let mut items = Vec::with_capacity(count);
+        let mut items = SmallVec::new();
 
         for _ in 0..count {
             items.push(UpsertEntityContained::decode(
@@ -757,7 +757,7 @@ pub struct ContainerEquipment {
 #[derive(Debug, Clone, Default)]
 pub struct UpsertContainerEquipment {
     pub container_id: EntityId,
-    pub equipment: Vec<ContainerEquipment>,
+    pub equipment: SmallVec<[ContainerEquipment; 8]>,
 }
 
 impl Packet for UpsertContainerEquipment {
@@ -767,7 +767,7 @@ impl Packet for UpsertContainerEquipment {
 
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let container_id = payload.read_entity_id()?;
-        let mut equipment = Vec::new();
+        let mut equipment = SmallVec::new();
 
         loop {
             let raw_slot = payload.read_u8()?;
@@ -1147,4 +1147,3 @@ impl Packet for EntityLightLevel {
         Ok(())
     }
 }
-
