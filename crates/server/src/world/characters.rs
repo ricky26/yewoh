@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use bevy::utils::{Entry, HashSet};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
-use yewoh::protocol::{AnyPacket, CharacterAnimation, CharacterEquipment, CharacterPredefinedAnimation, DeleteEntity, EntityFlags, EntityTooltipVersion, IntoAnyPacket, Race, UpdateCharacter, UpsertEntityCharacter, UpsertEntityStats};
+use yewoh::protocol::{AnyPacket, CharacterAnimation, CharacterEquipment, CharacterPredefinedAnimation, DeleteEntity, EntityFlags, EntityTooltipVersion, IntoAnyPacket, Race, UpdateCharacter, UpsertEntityCharacter, UpsertEntityStats, UpsertLocalPlayer};
 use yewoh::{EntityId, Notoriety};
 use yewoh::types::FixedString;
 
@@ -406,6 +406,18 @@ impl CharacterQueryItem<'_> {
             hue: **self.hue,
             flags: self.flags(),
             notoriety: self.notoriety(),
+        }
+    }
+
+    pub fn to_local_upsert(&self, id: EntityId) -> UpsertLocalPlayer {
+        UpsertLocalPlayer {
+            id,
+            body_type: **self.body_type,
+            hue: **self.hue,
+            server_id: 0,
+            flags: self.flags(),
+            position: self.position.position,
+            direction: self.position.direction.into(),
         }
     }
 

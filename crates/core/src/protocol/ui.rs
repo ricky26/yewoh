@@ -22,11 +22,11 @@ impl Packet for OpenChatWindow {
     const PACKET_KIND: u8 = 0xb5;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(64) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, _payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, _payload: &[u8]) -> anyhow::Result<Self> {
         Ok(Self)
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_zeros(63)?;
         Ok(())
     }
@@ -43,14 +43,14 @@ impl Packet for OpenPaperDoll {
     const PACKET_KIND: u8 = 0x88;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(66) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
         let text = payload.read_str_fixed()?;
         let flags = EntityFlags::from_bits_truncate(payload.read_u8()?);
         Ok(Self { id, text, flags })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.id)?;
         writer.write_str_fixed(&self.text)?;
         writer.write_u8(self.flags.bits())?;
@@ -71,7 +71,7 @@ impl Packet for OpenContainer {
         Some(if client_version > VERSION_HIGH_SEAS { 9 } else { 7 })
     }
 
-    fn decode(client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
         let gump_id = payload.read_u16::<Endian>()?;
         if client_version > VERSION_HIGH_SEAS {
@@ -80,7 +80,7 @@ impl Packet for OpenContainer {
         Ok(Self { id, gump_id })
     }
 
-    fn encode(&self, client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.id)?;
         writer.write_u16::<Endian>(self.gump_id)?;
         if client_version > VERSION_HIGH_SEAS {
@@ -134,7 +134,7 @@ impl Packet for OpenGump {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_u32::<Endian>()?;
         let type_id = payload.read_u32::<Endian>()?;
         let x = payload.read_i32::<Endian>()?;
@@ -158,7 +158,7 @@ impl Packet for OpenGump {
         Ok(Self { gump_id: id, type_id, position: IVec2::new(x, y), layout })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u32::<Endian>(self.gump_id)?;
         writer.write_u32::<Endian>(self.type_id)?;
         writer.write_i32::<Endian>(self.position.x)?;
@@ -225,7 +225,7 @@ impl Packet for OpenGumpCompressed {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_u32::<Endian>()?;
         let type_id = payload.read_u32::<Endian>()?;
         let x = payload.read_i32::<Endian>()?;
@@ -262,7 +262,7 @@ impl Packet for OpenGumpCompressed {
         Ok(Self { gump_id: id, type_id, position: IVec2::new(x, y), layout })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u32::<Endian>(self.gump_id)?;
         writer.write_u32::<Endian>(self.type_id)?;
         writer.write_i32::<Endian>(self.position.x)?;
@@ -294,7 +294,7 @@ impl Packet for GumpResult {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_u32::<Endian>()?;
         let type_id = payload.read_u32::<Endian>()?;
         let button_id = payload.read_u32::<Endian>()?;
@@ -313,7 +313,7 @@ impl Packet for GumpResult {
         Ok(Self { gump_id: id, type_id, button_id, on_switches, text_fields })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u32::<Endian>(self.gump_id)?;
         writer.write_u32::<Endian>(self.type_id)?;
         writer.write_u32::<Endian>(self.button_id)?;

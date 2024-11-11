@@ -155,8 +155,8 @@ pub fn update_gumps(
         Without<GumpId>,
     >,
     updated_gumps: Query<
-        (&Gump, &GumpClient, Ref<GumpId>),
-        (Without<GumpSent>, Or<(Changed<Gump>, Changed<GumpClient>, Changed<GumpId>)>),
+        (Entity, &Gump, &GumpClient, Ref<GumpId>),
+        Without<GumpSent>,
     >,
     mut removed_gumps: RemovedComponents<GumpId>,
 ) {
@@ -165,24 +165,25 @@ pub fn update_gumps(
             continue;
         };
 
+        info!("new gump {entity}");
+
         let id = allocator.allocate();
         gumps.insert(&mut commands, entity, **client_entity, *id, gump.type_id);
         commands.entity(entity)
-            .insert(id)
-            .remove::<GumpSent>();
+            .insert((
+                id,
+                GumpSent,
+            ));
         client.send_packet(gump.to_packet(*id));
     }
 
-    for (gump, client, id) in &updated_gumps {
-        if id.is_added() {
-            // This will have been sent last frame.
-            continue;
-        }
-
+    for (entity, gump, client, id) in &updated_gumps {
         let Ok((client, _)) = clients.get(**client) else {
             continue;
         };
 
+        commands.entity(entity)
+            .insert(GumpSent);
         client.send_packet(gump.to_packet(**id));
     }
 

@@ -37,7 +37,7 @@ impl Packet for EntityRequest {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(10) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         payload.skip(4)?;
         let kind = EntityRequestKind::from_repr(payload.read_u8()?)
             .ok_or_else(|| anyhow!("invalid entity request kind"))?;
@@ -45,7 +45,7 @@ impl Packet for EntityRequest {
         Ok(EntityRequest { kind, target })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u32::<Endian>(0xedededed)?;
         writer.write_u8(self.kind as u8)?;
         writer.write_entity_id(self.target)?;
@@ -82,7 +82,7 @@ impl Packet for UpsertEntityLegacy {
     const PACKET_KIND: u8 = 0x1a;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?.as_u32();
         let mut graphic_id = payload.read_u16::<Endian>()? as u32;
         let quantity = if id & 0x80000000 != 0 {
@@ -125,7 +125,7 @@ impl Packet for UpsertEntityLegacy {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u32::<Endian>(self.id.as_u32() | if self.quantity > 1 {
             0x80000000
         } else {
@@ -194,7 +194,7 @@ impl Packet for UpsertEntityWorld {
         Some(if client_version >= VERSION_HIGH_SEAS { 26 } else { 24 })
     }
 
-    fn decode(client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         payload.skip(2)?;
         let kind = EntityKind::from_repr(payload.read_u8()?)
             .ok_or_else(|| anyhow!("invalid entity kind"))?;
@@ -227,7 +227,7 @@ impl Packet for UpsertEntityWorld {
         })
     }
 
-    fn encode(&self, client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u16::<Endian>(1)?;
         writer.write_u8(self.kind as u8)?;
         writer.write_entity_id(self.id)?;
@@ -257,12 +257,12 @@ impl Packet for DeleteEntity {
     const PACKET_KIND: u8 = 0x1d;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(5) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
         Ok(Self { id })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.id)?;
         Ok(())
     }
@@ -283,7 +283,7 @@ impl Packet for UpsertLocalPlayer {
     const PACKET_KIND: u8 = 0x20;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(19) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
         let body_type = payload.read_u16::<Endian>()?;
         payload.skip(1)?;
@@ -305,7 +305,7 @@ impl Packet for UpsertLocalPlayer {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.id)?;
         writer.write_u16::<Endian>(self.body_type)?;
         writer.write_u8(0)?;
@@ -383,7 +383,7 @@ impl Packet for UpsertEntityCharacter {
     const PACKET_KIND: u8 = 0x78;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
         let body_type = payload.read_u16::<Endian>()?;
         let x = payload.read_u16::<Endian>()? as i32;
@@ -434,7 +434,7 @@ impl Packet for UpsertEntityCharacter {
         })
     }
 
-    fn encode(&self, client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.id)?;
         writer.write_u16::<Endian>(self.body_type)?;
         writer.write_u16::<Endian>(self.position.x as u16)?;
@@ -479,7 +479,7 @@ impl Packet for UpdateCharacter {
     const PACKET_KIND: u8 = 0x77;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(17) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
         let body_type = payload.read_u16::<Endian>()?;
         let x = payload.read_i16::<Endian>()? as i32;
@@ -501,7 +501,7 @@ impl Packet for UpdateCharacter {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.id)?;
         writer.write_u16::<Endian>(self.body_type)?;
         writer.write_i16::<Endian>(self.position.x as i16)?;
@@ -528,7 +528,7 @@ impl Packet for UpsertEntityEquipped {
     const PACKET_KIND: u8 = 0x2e;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(15) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
         let graphic_id = payload.read_u16::<Endian>()?;
         payload.skip(1)?;
@@ -539,7 +539,7 @@ impl Packet for UpsertEntityEquipped {
         Ok(Self { id, parent_id, slot, graphic_id, hue })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.id)?;
         writer.write_u16::<Endian>(self.graphic_id)?;
         writer.write_u8(0)?;
@@ -560,13 +560,13 @@ impl Packet for EntityTooltipVersion {
     const PACKET_KIND: u8 = 0xdc;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(9) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
         let revision = payload.read_u32::<Endian>()?;
         Ok(Self { id, revision })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.id)?;
         writer.write_u32::<Endian>(self.revision)?;
         Ok(())
@@ -580,73 +580,75 @@ pub struct EntityTooltipLine {
 }
 
 #[derive(Debug, Clone)]
-pub enum EntityTooltip {
-    Request(SmallVec<[EntityId; 16]>),
-    Response { id: EntityId, entries: SmallVec<[EntityTooltipLine; 8]> },
+pub struct EntityTooltipRequest {
+    pub entity_ids: SmallVec<[EntityId; 16]>,
+}
+
+impl Packet for EntityTooltipRequest {
+    const PACKET_KIND: u8 = 0xd6;
+    const S2C: bool = false;
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
+
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let mut entity_ids = SmallVec::new();
+        while !payload.is_empty() {
+            let id = payload.read_entity_id()?;
+            entity_ids.push(id);
+        }
+        Ok(EntityTooltipRequest { entity_ids })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+        for id in self.entity_ids.iter() {
+            writer.write_entity_id(*id)?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct EntityTooltip {
+    pub id: EntityId,
+    pub entries: SmallVec<[EntityTooltipLine; 8]>,
 }
 
 impl Packet for EntityTooltip {
     const PACKET_KIND: u8 = 0xd6;
+    const S2C: bool = false;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
-        if from_client {
-            let mut ids = SmallVec::new();
-            while !payload.is_empty() {
-                let id = payload.read_entity_id()?;
-                ids.push(id);
-            }
-            Ok(Self::Request(ids))
-        } else {
-            payload.skip(2)?;
-            let id = payload.read_entity_id()?;
-            payload.skip(6)?;
-            let mut entries = SmallVec::new();
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+        payload.skip(2)?;
+        let id = payload.read_entity_id()?;
+        payload.skip(6)?;
+        let mut entries = SmallVec::new();
 
-            loop {
-                let text_id = payload.read_u32::<Endian>()?;
-                if text_id == 0 {
-                    break;
-                }
-
-                let params = Cow::Owned(payload.read_utf16le_pascal()?);
-                entries.push(EntityTooltipLine { text_id, params });
+        loop {
+            let text_id = payload.read_u32::<Endian>()?;
+            if text_id == 0 {
+                break;
             }
 
-            Ok(Self::Response { id, entries })
+            let params = Cow::Owned(payload.read_utf16le_pascal()?);
+            entries.push(EntityTooltipLine { text_id, params });
         }
+
+        Ok(EntityTooltip { id, entries })
     }
 
-    fn encode(&self, _client_version: ClientVersion, to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
-        match self {
-            EntityTooltip::Request(ids) => {
-                if to_client {
-                    return Err(anyhow!("can't send tooltip request to client"));
-                }
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_u16::<Endian>(1)?;
+        writer.write_entity_id(self.id)?;
+        writer.write_u16::<Endian>(0)?;
+        writer.write_entity_id(self.id)?;
 
-                for id in ids.iter() {
-                    writer.write_entity_id(*id)?;
-                }
-            }
-            EntityTooltip::Response { id, entries } => {
-                if !to_client {
-                    return Err(anyhow!("can't send tooltip response to server"));
-                }
-
-                writer.write_u16::<Endian>(1)?;
-                writer.write_entity_id(*id)?;
-                writer.write_u16::<Endian>(0)?;
-                writer.write_entity_id(*id)?;
-
-                for line in entries.iter() {
-                    writer.write_u32::<Endian>(line.text_id)?;
-                    writer.write_utf16le_pascal(&line.params)?;
-                }
-
-                writer.write_u32::<Endian>(0)?;
-            }
+        for line in &self.entries {
+            writer.write_u32::<Endian>(line.text_id)?;
+            writer.write_utf16le_pascal(&line.params)?;
         }
 
+        writer.write_u32::<Endian>(0)?;
         Ok(())
     }
 }
@@ -670,7 +672,7 @@ impl Packet for UpsertEntityContained {
         Some(if client_version >= VERSION_GRID_INVENTORY { 21 } else { 20 })
     }
 
-    fn decode(client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
         let graphic_id = payload.read_u16::<Endian>()?;
         let graphic_inc = payload.read_u8()?;
@@ -696,7 +698,7 @@ impl Packet for UpsertEntityContained {
         })
     }
 
-    fn encode(&self, client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.id)?;
         writer.write_u16::<Endian>(self.graphic_id)?;
         writer.write_u8(self.graphic_inc)?;
@@ -724,24 +726,24 @@ impl Packet for UpsertContainerContents {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(client_version: ClientVersion, from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let count = payload.read_u16::<Endian>()? as usize;
         let mut items = SmallVec::new();
 
         for _ in 0..count {
             items.push(UpsertEntityContained::decode(
-                client_version, from_client, &payload[..19])?);
+                client_version, &payload[..19])?);
             payload = &payload[19..];
         }
 
         Ok(Self { contents: items })
     }
 
-    fn encode(&self, client_version: ClientVersion, to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u16::<Endian>(self.contents.len() as u16)?;
 
         for item in self.contents.iter() {
-            item.encode(client_version, to_client, writer)?;
+            item.encode(client_version, writer)?;
         }
 
         Ok(())
@@ -765,7 +767,7 @@ impl Packet for UpsertContainerEquipment {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let container_id = payload.read_entity_id()?;
         let mut equipment = SmallVec::new();
 
@@ -784,7 +786,7 @@ impl Packet for UpsertContainerEquipment {
         Ok(Self { container_id, equipment })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.container_id)?;
 
         for ContainerEquipment { slot, id } in self.equipment.iter() {
@@ -859,7 +861,7 @@ impl Packet for UpsertEntityStats {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
         let name = payload.read_str_fixed()?;
         let hp = payload.read_u16::<Endian>()?;
@@ -984,7 +986,7 @@ impl Packet for UpsertEntityStats {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         let level = self.max_info_level;
 
         writer.write_entity_id(self.id)?;
@@ -1060,13 +1062,13 @@ impl Packet for DamageDealt {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(7) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let target_id = payload.read_entity_id()?;
         let damage = payload.read_u16::<Endian>()?;
         Ok(Self { target_id, damage })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.target_id)?;
         writer.write_u16::<Endian>(self.damage)?;
         Ok(())
@@ -1084,7 +1086,7 @@ impl Packet for RequestName {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let target_id = payload.read_entity_id()?;
         let name = if !payload.is_empty() {
             payload.read_str_nul()?
@@ -1094,7 +1096,7 @@ impl Packet for RequestName {
         Ok(Self { target_id, name })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.target_id)?;
         writer.write_str_nul(&self.name)?;
         Ok(())
@@ -1112,13 +1114,13 @@ impl Packet for RenameEntity {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(35) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let target_id = payload.read_entity_id()?;
         let name = payload.read_str_fixed()?;
         Ok(Self { target_id, name })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.target_id)?;
         writer.write_str_fixed(&self.name)?;
         Ok(())
@@ -1135,13 +1137,13 @@ impl Packet for EntityLightLevel {
     const PACKET_KIND: u8 = 0x4e;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(6) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
         let light_level = payload.read_u8()?;
         Ok(Self { id, light_level })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.id)?;
         writer.write_u8(self.light_level)?;
         Ok(())

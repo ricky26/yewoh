@@ -40,6 +40,10 @@ pub struct Synchronized;
 
 #[derive(Debug, Clone, Copy, Component, Reflect)]
 #[reflect(Component)]
+pub struct StartedEnteringWorld;
+
+#[derive(Debug, Clone, Copy, Component, Reflect)]
+#[reflect(Component)]
 pub struct EnteredWorld;
 
 #[derive(Debug, Clone, PartialEq, Eq, Component, Reflect)]
@@ -107,6 +111,12 @@ impl SeenEntities {
     }
 }
 
+#[derive(Debug, Clone, Component, Reflect)]
+#[reflect(Component)]
+pub struct ExpectedPossessedPosition {
+    pub position: MapPosition,
+}
+
 fn view_aabb(center: IVec2, range: i32) -> (IVec2, IVec2) {
     let range2 = IVec2::splat(range.abs());
     let min = center - range2;
@@ -115,24 +125,42 @@ fn view_aabb(center: IVec2, range: i32) -> (IVec2, IVec2) {
 }
 
 pub fn send_deltas(
+    mut commands: Commands,
     delta_grid: Res<DeltaGrid>,
-    mut clients: Query<(&NetClient, &View, &mut SeenEntities, &Possessing), With<Synchronized>>,
-    owned: Query<&MapPosition, With<OwningClient>>,
+    mut clients: Query<
+        (
+            Entity,
+            &NetClient,
+            &View,
+            &mut SeenEntities,
+            &Possessing,
+            Option<&ExpectedPossessedPosition>,
+        ),
+        With<Synchronized>,
+    >,
+    owned: Query<(&NetId, CharacterQuery), With<OwningClient>>,
     mut deltas: Local<Vec<Delta>>,
     character_query: Query<(&NetId, CharacterQuery, Option<&Children>)>,
     equipment_query: Query<(&NetId, ItemQuery), With<EquippedPosition>>,
 ) {
-    for (client, view, mut seen, possessing) in &mut clients {
-        let location = match owned.get(possessing.entity) {
-            Ok(x) => *x,
-            _ => continue,
-        };
-
-        let Some(delta_map) = delta_grid.maps.get(&location.map_id) else {
+    for (client_entity, client, view, mut seen, possessing, expected_position) in &mut clients {
+        let Ok((character_id, character)) = owned.get(possessing.entity) else {
             continue;
         };
 
-        let (min, max) = view_aabb(location.position.truncate(), view.range);
+        let position = character.position.clone();
+        if Some(position) != expected_position.map(|x| x.position) {
+            commands.entity(client_entity).insert(ExpectedPossessedPosition {
+                position,
+            });
+            client.send_packet(character.to_local_upsert(character_id.id));
+        }
+
+        let Some(delta_map) = delta_grid.maps.get(&position.map_id) else {
+            continue;
+        };
+
+        let (min, max) = view_aabb(position.position.truncate(), view.range);
         let grid_min = delta_grid_cell(min);
         let grid_max = delta_grid_cell(max);
         for grid_x in grid_min.x..=grid_max.x {
@@ -200,6 +228,7 @@ pub fn send_deltas(
                             }
                         }
 
+                        equipment.sort_by_key(|e| e.slot);
                         let packet = character.to_upsert(id.id, equipment);
                         client.send_packet(packet);
                         seen.insert_entity(entity, None);
@@ -295,6 +324,7 @@ pub fn sync_visible_entities(
                             }
                         }
 
+                        equipment.sort_by_key(|e| e.slot);
                         let packet = character.to_upsert(id.id, equipment);
                         client.send_packet(packet);
 
@@ -335,9 +365,8 @@ pub fn start_synchronizing(
     mut commands: Commands,
 ) {
     for (entity, view_key, possessing) in &clients {
-        let map_position = match characters.get(possessing.entity) {
-            Ok(x) => x,
-            _ => continue,
+        let Ok(map_position) = characters.get(possessing.entity) else {
+            continue;
         };
 
         let new_view_key = ViewKey { possessing: possessing.entity, map_id: map_position.map_id };
@@ -355,31 +384,36 @@ pub fn start_synchronizing(
 }
 
 pub fn send_change_map(
-    mut clients: Query<(&NetClient, &mut SeenEntities, Ref<Possessing>), With<Synchronizing>>,
+    mut commands: Commands,
+    mut clients: Query<
+        (Entity, &NetClient, &mut SeenEntities, Ref<Possessing>, Has<StartedEnteringWorld>),
+        With<Synchronizing>,
+    >,
     characters: Query<(&NetId, &MapPosition, Ref<CharacterBodyType>)>,
     maps: Res<MapInfos>,
 ) {
-    for (client, mut seen_entities, possessing) in clients.iter_mut() {
-        let (possessed_net, map_position, body_type) = match characters.get(possessing.entity) {
-            Ok(x) => x,
-            _ => continue,
+    for (entity, client, mut seen_entities, possessing, already_in_world) in clients.iter_mut() {
+        let Ok((possessed_net, map_position, body_type)) = characters.get(possessing.entity) else {
+            continue;
         };
 
-        let map = match maps.maps.get(&map_position.map_id) {
-            Some(v) => v,
-            None => continue,
+        let Some(map) = maps.maps.get(&map_position.map_id) else {
+            continue;
         };
 
         seen_entities.seen_entities.clear();
         seen_entities.open_containers.clear();
 
-        client.send_packet(BeginEnterWorld {
-            entity_id: possessed_net.id,
-            body_type: **body_type,
-            position: map_position.position,
-            direction: map_position.direction.into(),
-            map_size: map.size,
-        });
+        if !already_in_world {
+            commands.entity(entity).insert(StartedEnteringWorld);
+            client.send_packet(BeginEnterWorld {
+                entity_id: possessed_net.id,
+                body_type: **body_type,
+                position: map_position.position,
+                direction: map_position.direction.into(),
+                map_size: map.size,
+            });
+        }
         client.send_packet(ExtendedCommand::ChangeMap(map_position.map_id));
         client.send_packet(ChangeSeason { season: map.season, play_sound: true });
     }
@@ -451,11 +485,14 @@ pub fn send_opened_containers(
 pub fn plugin(app: &mut App) {
     app
         .register_type::<OwningClient>()
-        .add_systems(First, (
-            start_synchronizing,
-        ).in_set(ServerSet::UpdateVisibility))
+        .register_type::<StartedEnteringWorld>()
+        .register_type::<EnteredWorld>()
+        .register_type::<ExpectedPossessedPosition>()
         .add_systems(Last, (
-            send_change_map,
+            (
+                start_synchronizing,
+                send_change_map,
+            ).chain(),
         ).in_set(ServerSet::SendFirst))
         .add_systems(Last, (
             send_deltas,

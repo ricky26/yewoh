@@ -15,14 +15,14 @@ impl Packet for SetTime {
     const PACKET_KIND: u8 = 0x5b;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some (4) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let hour = payload.read_u8()?;
         let minute = payload.read_u8()?;
         let second = payload.read_u8()?;
         Ok(SetTime { hour, minute, second })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u8(self.hour)?;
         writer.write_u8(self.minute)?;
         writer.write_u8(self.second)?;
@@ -40,13 +40,13 @@ impl Packet for ChangeSeason {
     const PACKET_KIND: u8 = 0xbc;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(3) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let season = payload.read_u8()?;
         let play_sound = payload.read_u8()? != 0;
         Ok(ChangeSeason { season, play_sound })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u8(self.season)?;
         writer.write_u8(if self.play_sound { 1 } else { 0 })?;
         Ok(())
@@ -60,11 +60,11 @@ impl Packet for ViewRange {
     const PACKET_KIND: u8 = 0xc8;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         Ok(Self(payload.read_u8()?))
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u8(self.0)?;
         Ok(())
     }
@@ -77,11 +77,11 @@ impl Packet for GlobalLightLevel {
     const PACKET_KIND: u8 = 0x4f;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         Ok(Self(payload.read_u8()?))
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u8(self.0)?;
         Ok(())
     }

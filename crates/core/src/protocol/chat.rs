@@ -36,7 +36,7 @@ impl Packet for TextCommand {
     const PACKET_KIND: u8 = 0x12;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let kind = TextCommandKind::from_repr(payload.read_u8()?)
             .ok_or_else(|| anyhow!("invalid text command kind"))?;
         let command = payload.read_str_nul()?;
@@ -46,7 +46,7 @@ impl Packet for TextCommand {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u8(self.kind as u8)?;
         writer.write_str_nul(&self.command)?;
         Ok(())
@@ -86,7 +86,7 @@ impl Packet for AsciiTextMessage {
     const PACKET_KIND: u8 = 0x1c;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let raw_entity_id = payload.read_u32::<Endian>()?;
         let entity_id = if raw_entity_id != !0 {
             Some(EntityId::from_u32(raw_entity_id))
@@ -111,7 +111,7 @@ impl Packet for AsciiTextMessage {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         if let Some(entity_id) = self.entity_id {
             writer.write_entity_id(entity_id)?;
         } else {
@@ -143,7 +143,7 @@ impl Packet for UnicodeTextMessage {
     const PACKET_KIND: u8 = 0xae;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let raw_entity_id = payload.read_u32::<Endian>()?;
         let entity_id = if raw_entity_id != !0 {
             Some(EntityId::from_u32(raw_entity_id))
@@ -170,7 +170,7 @@ impl Packet for UnicodeTextMessage {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         if let Some(entity_id) = self.entity_id {
             writer.write_entity_id(entity_id)?;
         } else {
@@ -203,7 +203,7 @@ impl Packet for LocalisedTextMessage {
     const PACKET_KIND: u8 = 0xc1;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let raw_entity_id = payload.read_u32::<Endian>()?;
         let entity_id = if raw_entity_id != !0 {
             Some(EntityId::from_u32(raw_entity_id))
@@ -230,7 +230,7 @@ impl Packet for LocalisedTextMessage {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         if let Some(entity_id) = self.entity_id {
             writer.write_entity_id(entity_id)?;
         } else {
@@ -259,7 +259,7 @@ impl Packet for AsciiTextMessageRequest {
     const PACKET_KIND: u8 = 0x03;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let kind = MessageKind::from_repr(payload.read_u8()?)
             .ok_or_else(|| anyhow!("unknown message type"))?;
         let hue = payload.read_u16::<Endian>()?;
@@ -268,7 +268,7 @@ impl Packet for AsciiTextMessageRequest {
         Ok(Self { kind, hue, font, text })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u8(self.kind as u8)?;
         writer.write_u16::<Endian>(self.hue)?;
         writer.write_u16::<Endian>(self.font)?;
@@ -295,7 +295,7 @@ impl Packet for UnicodeTextMessageRequest {
     const PACKET_KIND: u8 = 0xad;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let kind_raw = payload.read_u8()?;
         let kind = MessageKind::from_repr(kind_raw & 0x3f)
             .ok_or_else(|| anyhow!("unknown message type"))?;
@@ -331,7 +331,7 @@ impl Packet for UnicodeTextMessageRequest {
         Ok(Self { kind, hue, font, language, text, keywords })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         let has_keywords = !self.keywords.is_empty();
         let mut raw_kind = self.kind as u8;
         if has_keywords {

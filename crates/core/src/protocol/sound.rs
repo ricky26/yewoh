@@ -18,12 +18,12 @@ impl Packet for PlayMusic {
     const PACKET_KIND: u8 = 0x6d;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(3) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let track_id = payload.read_u16::<Endian>()?;
         Ok(Self { track_id })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u16::<Endian>(self.track_id)?;
         Ok(())
     }
@@ -48,7 +48,7 @@ impl Packet for PlaySoundEffect {
     const PACKET_KIND: u8 = 0x54;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(12) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let kind = SoundEffectKind::from_repr(payload.read_u8()?)
             .ok_or_else(|| anyhow!("invalid sound effect kind"))?;
         let sound_effect_id = payload.read_u16::<Endian>()?;
@@ -63,7 +63,7 @@ impl Packet for PlaySoundEffect {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u8(self.kind as u8)?;
         writer.write_u16::<Endian>(self.sound_effect_id)?;
         writer.write_u16::<Endian>(0)?;

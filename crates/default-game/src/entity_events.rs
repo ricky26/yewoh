@@ -178,7 +178,7 @@ impl<E: EntityEvent> Plugin for EntityEventPlugin<E> {
         app
             .add_event::<E>()
             .init_resource::<EntityEvents<E>>()
-            .add_systems(Update, (
+            .add_systems(First, (
                 dispatch_events::<E>.in_set(DefaultGameSet::DispatchEvents),
             ));
     }

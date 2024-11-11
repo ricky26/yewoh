@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{info, trace, warn};
 use yewoh::protocol::encryption::Encryption;
-use yewoh::protocol::{AnyPacket, CharacterProfile, ClientVersion, ClientVersionRequest, EntityRequestKind, EntityTooltip, ExtendedCommand, FeatureFlags, GameServerLogin, IntoAnyPacket, SetAttackTarget, SupportedFeatures, UnicodeTextMessageRequest};
+use yewoh::protocol::{AnyPacket, ClientVersion, ClientVersionRequest, EntityRequestKind, ExtendedCommand, FeatureFlags, GameServerLogin, IntoAnyPacket, SetAttackTarget, SupportedFeatures, UnicodeTextMessageRequest};
 
 use crate::async_runtime::AsyncRuntime;
 use crate::game_server::NewSessionAttempt;
@@ -29,6 +29,7 @@ pub enum WriterAction {
 }
 
 #[derive(Debug, Clone, Component, Reflect)]
+#[reflect(Component)]
 pub struct Possessing {
     pub entity: Entity,
 }
@@ -423,25 +424,20 @@ pub fn handle_new_packets(
                     }
                 }
             }
-            AnyPacket::CharacterProfile(request) => {
-                match request {
-                    CharacterProfile::Request(request) => {
-                        if let Some(target) = lookup.net_to_ecs(request.target_id) {
-                            if let Some(new_profile) = request.new_profile {
-                                events.profile_update.send(OnClientProfileUpdateRequest {
-                                    client_entity,
-                                    target,
-                                    new_profile,
-                                });
-                            } else {
-                                events.profile_request.send(OnClientProfileRequest {
-                                    client_entity,
-                                    target,
-                                });
-                            }
-                        }
+            AnyPacket::ProfileRequest(request) => {
+                if let Some(target) = lookup.net_to_ecs(request.target_id) {
+                    if let Some(new_profile) = request.new_profile {
+                        events.profile_update.send(OnClientProfileUpdateRequest {
+                            client_entity,
+                            target,
+                            new_profile,
+                        });
+                    } else {
+                        events.profile_request.send(OnClientProfileRequest {
+                            client_entity,
+                            target,
+                        });
                     }
-                    _ => unreachable!(),
                 }
             }
             AnyPacket::EntityRequest(request) => {
@@ -486,16 +482,14 @@ pub fn handle_new_packets(
                 });
             }
 
-            AnyPacket::EntityTooltip(request) => {
-                if let EntityTooltip::Request(ids) = request {
-                    let targets = ids.into_iter()
-                        .filter_map(|id| lookup.net_to_ecs(id))
-                        .collect();
-                    events.tooltip_request.send(OnClientTooltipRequest {
-                        client_entity,
-                        targets,
-                    });
-                }
+            AnyPacket::EntityTooltipRequest(request) => {
+                let targets = request.entity_ids.into_iter()
+                    .filter_map(|id| lookup.net_to_ecs(id))
+                    .collect();
+                events.tooltip_request.send(OnClientTooltipRequest {
+                    client_entity,
+                    targets,
+                });
             }
 
             AnyPacket::ExtendedCommand(packet) => {
@@ -602,6 +596,7 @@ pub fn handle_new_packets(
 pub fn plugin(app: &mut App) {
     app
         .register_type::<OwningClient>()
+        .register_type::<Possessing>()
         .add_systems(First, (
             (accept_new_clients, handle_new_packets)
                 .chain()

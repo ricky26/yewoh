@@ -121,7 +121,7 @@ pub fn finish_tooltips(
             })
             .collect();
 
-        client.send_packet(EntityTooltip::Response {
+        client.send_packet(EntityTooltip {
             id: net_id.id,
             entries,
         })

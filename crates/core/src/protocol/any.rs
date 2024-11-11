@@ -1,7 +1,9 @@
 use std::any::type_name;
+use std::fmt::{Debug, Formatter};
 use std::io::Write;
 use std::sync::Arc;
-use crate::protocol::{AccountLogin, AsciiTextMessage, AsciiTextMessageRequest, AttackRequest, BeginEnterWorld, ChangeSeason, CharacterAnimation, CharacterList, CharacterPredefinedAnimation, CharacterProfile, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DamageDealt, DeleteCharacter, DeleteEntity, DoubleClick, DropEntity, EndEnterWorld, EntityLightLevel, EntityRequest, EntityTooltip, EntityTooltipVersion, EquipEntity, ExtendedCommand, ExtendedCommandAos, GameServerLogin, GlobalLightLevel, GumpResult, LocalisedTextMessage, LoginError, Logout, Move, MoveConfirm, PickUpReject, MoveReject, OpenChatWindow, OpenContainer, OpenGump, OpenGumpCompressed, OpenPaperDoll, OutgoingPacket, Packet, PickTarget, PickUpEntity, Ping, PlayMusic, PlaySoundEffect, RenameEntity, RequestHelp, RequestName, Seed, SelectCharacter, SelectGameServer, ServerList, SetAttackTarget, SetTime, ShowPublicHouses, SingleClick, Skills, SupportedFeatures, Swing, SwitchServer, UnicodeTextMessage, UnicodeTextMessageRequest, UpdateCharacter, UpsertContainerContents, UpsertContainerEquipment, UpsertEntityCharacter, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityLegacy, UpsertEntityStats, UpsertEntityWorld, UpsertLocalPlayer, ViewRange, WarMode, DropAccept, TextCommand};
+
+use crate::protocol::{AccountLogin, AsciiTextMessage, AsciiTextMessageRequest, AttackRequest, BeginEnterWorld, ChangeSeason, CharacterAnimation, CharacterList, CharacterPredefinedAnimation, ClientVersion, ClientVersionRequest, CreateCharacterClassic, CreateCharacterEnhanced, DamageDealt, DeleteCharacter, DeleteEntity, DoubleClick, DropEntity, EndEnterWorld, EntityLightLevel, EntityRequest, EntityTooltip, EntityTooltipVersion, EquipEntity, ExtendedCommand, ExtendedCommandAos, GameServerLogin, GlobalLightLevel, GumpResult, LocalisedTextMessage, LoginError, Logout, Move, MoveConfirm, PickUpReject, MoveReject, OpenChatWindow, OpenContainer, OpenGump, OpenGumpCompressed, OpenPaperDoll, OutgoingPacket, Packet, PickTarget, PickUpEntity, Ping, PlayMusic, PlaySoundEffect, RenameEntity, RequestHelp, RequestName, Seed, SelectCharacter, SelectGameServer, ServerList, SetAttackTarget, SetTime, ShowPublicHouses, SingleClick, SupportedFeatures, Swing, SwitchServer, UnicodeTextMessage, UnicodeTextMessageRequest, UpdateCharacter, UpsertContainerContents, UpsertContainerEquipment, UpsertEntityCharacter, UpsertEntityContained, UpsertEntityEquipped, UpsertEntityLegacy, UpsertEntityStats, UpsertEntityWorld, UpsertLocalPlayer, ViewRange, WarMode, DropAccept, TextCommand, ProfileRequest, ProfileResponse, SkillLockRequest, SkillsResponse, EntityTooltipRequest};
 
 pub trait IntoAnyPacket where Self: Sized {
     fn into_any(self) -> AnyPacket;
@@ -25,7 +27,7 @@ pub trait AnyDowncast where Self: Sized {
 pub(crate) struct PacketRegistration {
     pub type_name: &'static str,
     pub fixed_length: fn(client_version: ClientVersion) -> Option<usize>,
-    pub decode: fn(client_version: ClientVersion, from_client: bool, payload: &[u8]) -> anyhow::Result<AnyPacket>,
+    pub decode: fn(client_version: ClientVersion, payload: &[u8]) -> anyhow::Result<AnyPacket>,
 }
 
 impl AnyPacket {
@@ -33,8 +35,8 @@ impl AnyPacket {
         PacketRegistration {
             type_name: type_name::<P>(),
             fixed_length: P::fixed_length,
-            decode: |client_version, from_client, payload| {
-                P::decode(client_version, from_client, payload).map(Into::into)
+            decode: |client_version, payload| {
+                P::decode(client_version, payload).map(Into::into)
             },
         }
     }
@@ -112,17 +114,26 @@ macro_rules! impl_packet {
     };
 }
 
+
 macro_rules! impl_any {
     ($($ty:ident),+ $(,)?) => {
-        #[derive(Clone, Debug)]
+        #[derive(Clone)]
         pub enum AnyPacket {
             $($ty($ty),)+
         }
 
+        impl Debug for AnyPacket {
+            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                match self {
+                    $(AnyPacket::$ty(p) => p.fmt(f),)*
+                }
+            }
+        }
+
         impl AnyPacket {
-            pub(crate) fn registration_for(packet_kind: u8) -> Option<PacketRegistration> {
+            pub(crate) fn registration_for<const C2S: bool>(packet_kind: u8) -> Option<PacketRegistration> {
                 match packet_kind {
-                    $($ty::PACKET_KIND => Some(Self::packet_registration::<$ty>()),)*
+                    $($ty::PACKET_KIND if (if C2S { $ty::C2S } else { $ty::S2C }) => Some(Self::packet_registration::<$ty>()),)*
                     _ => None,
                 }
             }
@@ -148,10 +159,10 @@ macro_rules! impl_any {
             }
 
             fn encode(
-                &self, client_version: ClientVersion, to_client: bool, writer: &mut impl Write,
+                &self, client_version: ClientVersion, writer: &mut impl Write,
             ) -> anyhow::Result<()> {
                 match self {
-                    $(AnyPacket::$ty(p) => OutgoingPacket::encode(p, client_version, to_client, writer),)*
+                    $(AnyPacket::$ty(p) => OutgoingPacket::encode(p, client_version, writer),)*
                 }
             }
         }
@@ -242,6 +253,7 @@ impl_any!(
     UpsertContainerContents,
     UpsertContainerEquipment,
     EntityTooltipVersion,
+    EntityTooltipRequest,
     EntityTooltip,
     UpsertEntityStats,
     RequestName,
@@ -249,8 +261,10 @@ impl_any!(
     EntityLightLevel,
 
     // Character
-    CharacterProfile,
-    Skills,
+    ProfileRequest,
+    ProfileResponse,
+    SkillLockRequest,
+    SkillsResponse,
     AttackRequest,
     SetAttackTarget,
     Swing,

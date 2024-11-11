@@ -11,8 +11,8 @@ use yewoh::protocol::{new_io, Reader, Writer};
 
 pub struct NewSessionAttempt {
     pub address: SocketAddr,
-    pub reader: Reader,
-    pub writer: Writer,
+    pub reader: Reader<true>,
+    pub writer: Writer<true>,
     pub token: u32,
 }
 
@@ -22,7 +22,7 @@ pub async fn serve_game(
     tx: mpsc::UnboundedSender<NewSessionAttempt>,
 ) -> anyhow::Result<()> {
     let token = stream.read_u32().await?;
-    let (reader, mut writer) = new_io(stream, true);
+    let (reader, mut writer) = new_io::<true>(stream);
     writer.enable_compression();
 
     tx

@@ -24,67 +24,62 @@ pub struct ProfileResponse {
     pub profile: String,
 }
 
-#[derive(Debug, Clone)]
-pub enum CharacterProfile {
-    Request(ProfileRequest),
-    Response(ProfileResponse),
-}
-
-impl Packet for CharacterProfile {
+impl Packet for ProfileRequest {
     const PACKET_KIND: u8 = 0xb8;
+    const S2C: bool = false;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
-        match from_client {
-            true => {
-                let is_edit = payload.read_u8()? != 0;
-                let target_id = payload.read_entity_id()?;
-                let new_profile = if is_edit {
-                    payload.skip(2)?;
-                    Some(payload.read_utf16_pascal()?)
-                } else {
-                    None
-                };
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let is_edit = payload.read_u8()? != 0;
+        let target_id = payload.read_entity_id()?;
+        let new_profile = if is_edit {
+            payload.skip(2)?;
+            Some(payload.read_utf16_pascal()?)
+        } else {
+            None
+        };
 
-                Ok(CharacterProfile::Request(ProfileRequest {
-                    target_id,
-                    new_profile,
-                }))
-            }
-            false => {
-                let target_id = payload.read_entity_id()?;
-                let title = payload.read_str_nul()?;
-                let static_profile = payload.read_utf16_nul()?;
-                let profile = payload.read_utf16_nul()?;
-                Ok(CharacterProfile::Response(ProfileResponse {
-                    target_id,
-                    header: title,
-                    footer: static_profile,
-                    profile,
-                }))
-            }
-        }
+        Ok(ProfileRequest {
+            target_id,
+            new_profile,
+        })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
-        match self {
-            CharacterProfile::Request(request) => {
-                writer.write_u8(if request.new_profile.is_some() { 1 } else { 0 })?;
-                writer.write_entity_id(request.target_id)?;
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_u8(if self.new_profile.is_some() { 1 } else { 0 })?;
+        writer.write_entity_id(self.target_id)?;
 
-                if let Some(new_profile) = request.new_profile.as_ref() {
-                    writer.write_u16::<Endian>(1)?;
-                    writer.write_utf16_pascal(new_profile)?;
-                }
-            }
-            CharacterProfile::Response(response) => {
-                writer.write_entity_id(response.target_id)?;
-                writer.write_str_nul(&response.header)?;
-                writer.write_utf16_nul(&response.footer)?;
-                writer.write_utf16_nul(&response.profile)?;
-            }
+        if let Some(new_profile) = self.new_profile.as_ref() {
+            writer.write_u16::<Endian>(1)?;
+            writer.write_utf16_pascal(new_profile)?;
         }
+        Ok(())
+    }
+}
 
+impl Packet for ProfileResponse {
+    const PACKET_KIND: u8 = 0xb8;
+    const C2S: bool = false;
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
+
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let target_id = payload.read_entity_id()?;
+        let title = payload.read_str_nul()?;
+        let static_profile = payload.read_utf16_nul()?;
+        let profile = payload.read_utf16_nul()?;
+        Ok(ProfileResponse {
+            target_id,
+            header: title,
+            footer: static_profile,
+            profile,
+        })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_entity_id(self.target_id)?;
+        writer.write_str_nul(&self.header)?;
+        writer.write_utf16_nul(&self.footer)?;
+        writer.write_utf16_nul(&self.profile)?;
         Ok(())
     }
 }
@@ -127,83 +122,83 @@ pub struct SkillLockRequest {
     pub lock: SkillLock,
 }
 
-#[derive(Debug, Clone)]
-pub enum Skills {
-    Lock(SkillLockRequest),
-    Response(SkillsResponse),
-}
-
-impl Packet for Skills {
+impl Packet for SkillLockRequest {
     const PACKET_KIND: u8 = 0x3a;
+    const S2C: bool = false;
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
 
-    fn decode(_client_version: ClientVersion, from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
-        if from_client {
-            let id = payload.read_u16::<Endian>()?;
-            let lock = SkillLock::from_repr(payload.read_u8()?)
-                .ok_or_else(|| anyhow!("invalid skill lock"))?;
-            Ok(Self::Lock(SkillLockRequest { id, lock }))
-        } else {
-            let kind = SkillsResponseKind::from_repr(payload.read_u8()?)
-                .ok_or_else(|| anyhow!("invalid skills response"))?;
-            let mut skills = SmallVec::new();
-
-            while payload.len() > 2 {
-                let id = payload.read_u16::<Endian>()?;
-                let value = payload.read_u16::<Endian>()?;
-                let raw_value = payload.read_u16::<Endian>()?;
-                let lock = SkillLock::from_repr(payload.read_u8()?)
-                    .ok_or_else(|| anyhow!("invalid skill lock"))?;
-                let cap = if kind == SkillsResponseKind::FullWithCaps || kind == SkillsResponseKind::SingleUpdateWithCap {
-                    payload.read_u16::<Endian>()?
-                } else {
-                    0
-                };
-                skills.push(SkillEntry {
-                    id,
-                    value,
-                    raw_value,
-                    lock,
-                    cap,
-                });
-            }
-
-            if kind == SkillsResponseKind::Full {
-                payload.skip(2)?;
-            }
-
-            Ok(Self::Response(SkillsResponse {
-                kind,
-                skills,
-            }))
-        }
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let id = payload.read_u16::<Endian>()?;
+        let lock = SkillLock::from_repr(payload.read_u8()?)
+            .ok_or_else(|| anyhow!("invalid skill lock"))?;
+        Ok(SkillLockRequest { id, lock })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
-        match self {
-            Skills::Lock(request) => {
-                writer.write_u16::<Endian>(request.id)?;
-                writer.write_u8(request.lock as u8)?;
-            }
-            Skills::Response(response) => {
-                writer.write_u8(response.kind as u8)?;
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_u16::<Endian>(self.id)?;
+        writer.write_u8(self.lock as u8)?;
+        Ok(())
+    }
+}
 
-                for skill in response.skills.iter() {
-                    writer.write_u16::<Endian>(skill.id)?;
-                    writer.write_u16::<Endian>(skill.value)?;
-                    writer.write_u16::<Endian>(skill.raw_value)?;
-                    writer.write_u8(skill.lock as u8)?;
-                    if response.kind == SkillsResponseKind::FullWithCaps
-                        || response.kind == SkillsResponseKind::SingleUpdateWithCap {
-                        writer.write_u16::<Endian>(skill.cap)?;
-                    }
-                }
+impl Packet for SkillsResponse {
+    const PACKET_KIND: u8 = 0x3a;
+    const C2S: bool = false;
 
-                if response.kind == SkillsResponseKind::Full {
-                    writer.write_u16::<Endian>(0)?;
-                }
+    fn fixed_length(_client_version: ClientVersion) -> Option<usize> { None }
+
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
+        let kind = SkillsResponseKind::from_repr(payload.read_u8()?)
+            .ok_or_else(|| anyhow!("invalid skills response"))?;
+        let mut skills = SmallVec::new();
+
+        while payload.len() > 2 {
+            let id = payload.read_u16::<Endian>()?;
+            let value = payload.read_u16::<Endian>()?;
+            let raw_value = payload.read_u16::<Endian>()?;
+            let lock = SkillLock::from_repr(payload.read_u8()?)
+                .ok_or_else(|| anyhow!("invalid skill lock"))?;
+            let cap = if kind == SkillsResponseKind::FullWithCaps || kind == SkillsResponseKind::SingleUpdateWithCap {
+                payload.read_u16::<Endian>()?
+            } else {
+                0
+            };
+            skills.push(SkillEntry {
+                id,
+                value,
+                raw_value,
+                lock,
+                cap,
+            });
+        }
+
+        if kind == SkillsResponseKind::Full {
+            payload.skip(2)?;
+        }
+
+        Ok(SkillsResponse {
+            kind,
+            skills,
+        })
+    }
+
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
+        writer.write_u8(self.kind as u8)?;
+
+        for skill in self.skills.iter() {
+            writer.write_u16::<Endian>(skill.id)?;
+            writer.write_u16::<Endian>(skill.value)?;
+            writer.write_u16::<Endian>(skill.raw_value)?;
+            writer.write_u8(skill.lock as u8)?;
+            if self.kind == SkillsResponseKind::FullWithCaps
+                || self.kind == SkillsResponseKind::SingleUpdateWithCap {
+                writer.write_u16::<Endian>(skill.cap)?;
             }
+        }
+
+        if self.kind == SkillsResponseKind::Full {
+            writer.write_u16::<Endian>(0)?;
         }
 
         Ok(())
@@ -220,11 +215,11 @@ impl Packet for AttackRequest {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(5) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         Ok(Self { target_id: payload.read_entity_id()? })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.target_id)?;
         Ok(())
     }
@@ -240,7 +235,7 @@ impl Packet for SetAttackTarget {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(5) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let raw_target_id = payload.read_u32::<Endian>()?;
         let target_id = if raw_target_id != 0 {
             Some(EntityId::from_u32(raw_target_id))
@@ -251,7 +246,7 @@ impl Packet for SetAttackTarget {
         Ok(Self { target_id })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         if let Some(id) = self.target_id {
             writer.write_entity_id(id)?;
         } else {
@@ -272,14 +267,14 @@ impl Packet for Swing {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(10) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         payload.read_u8()?;
         let attacker_id = payload.read_entity_id()?;
         let target_id = payload.read_entity_id()?;
         Ok(Self { attacker_id, target_id })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u8(0)?;
         writer.write_entity_id(self.attacker_id)?;
         writer.write_entity_id(self.target_id)?;
@@ -302,7 +297,7 @@ impl Packet for CharacterAnimation {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(14) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let target_id = payload.read_entity_id()?;
         let animation_id = payload.read_u16::<Endian>()?;
         let frame_count = payload.read_u16::<Endian>()?;
@@ -325,7 +320,7 @@ impl Packet for CharacterAnimation {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.target_id)?;
         writer.write_u16::<Endian>(self.animation_id)?;
         writer.write_u16::<Endian>(self.frame_count)?;
@@ -350,7 +345,7 @@ impl Packet for CharacterPredefinedAnimation {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(10) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let target_id = payload.read_entity_id()?;
         let kind = payload.read_u16::<Endian>()?;
         let action = payload.read_u16::<Endian>()?;
@@ -363,7 +358,7 @@ impl Packet for CharacterPredefinedAnimation {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.target_id)?;
         writer.write_u16::<Endian>(self.kind)?;
         writer.write_u16::<Endian>(self.action)?;

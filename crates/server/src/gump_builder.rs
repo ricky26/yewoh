@@ -22,6 +22,12 @@ impl GumpText {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum GumpButtonAction {
+    GoToPage(usize),
+    Close(usize),
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct GumpBuilder {
     layout: String,
@@ -218,12 +224,13 @@ impl GumpBuilder {
         &mut self,
         up_texture_id: u32,
         down_texture_id: u32,
-        button_id: u32,
-        page_id: u16,
-        close: bool,
+        action: GumpButtonAction,
         position: IVec2,
     ) -> &mut Self {
-        let kind = if close { 1 } else { 0 };
+        let (kind, page_id, button_id) = match action {
+            GumpButtonAction::GoToPage(index) => (0, index, 0),
+            GumpButtonAction::Close(response) => (1, 0, response),
+        };
         write!(
             &mut self.layout,
             "{{ button {} {} {} {} {} {} {} }}",
@@ -236,6 +243,36 @@ impl GumpBuilder {
             button_id,
         ).unwrap();
         self
+    }
+
+    pub fn add_page_button(
+        &mut self,
+        up_texture_id: u32,
+        down_texture_id: u32,
+        page_id: usize,
+        position: IVec2,
+    ) -> &mut Self {
+        self.add_button(
+            up_texture_id,
+            down_texture_id,
+            GumpButtonAction::GoToPage(page_id),
+            position,
+        )
+    }
+
+    pub fn add_close_button(
+        &mut self,
+        up_texture_id: u32,
+        down_texture_id: u32,
+        result: usize,
+        position: IVec2,
+    ) -> &mut Self {
+        self.add_button(
+            up_texture_id,
+            down_texture_id,
+            GumpButtonAction::Close(result),
+            position,
+        )
     }
 
     #[allow(clippy::too_many_arguments)]

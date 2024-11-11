@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use smallvec::smallvec;
 use yewoh::protocol;
-use yewoh::protocol::{CharacterProfile, MoveConfirm, PickUpReject, MoveReject, ProfileResponse, SkillEntry, SkillLock, Skills, SkillsResponse, SkillsResponseKind};
+use yewoh::protocol::{MoveConfirm, PickUpReject, MoveReject, ProfileResponse, SkillEntry, SkillLock, SkillsResponse, SkillsResponseKind};
 use yewoh_server::world::characters::{CharacterBodyType, NotorietyQuery, OnClientProfileRequest, OnClientSkillsRequest, WarMode};
 use yewoh_server::world::combat::{AttackTarget, OnClientWarModeChanged};
 use yewoh_server::world::connection::{NetClient, Possessing};
@@ -13,7 +13,7 @@ use yewoh_server::world::navigation::try_move_in_direction;
 use yewoh_server::world::net_id::NetId;
 use yewoh_server::world::spatial::SpatialQuery;
 use yewoh_server::world::ServerSet;
-
+use yewoh_server::world::view::ExpectedPossessedPosition;
 use crate::data::prefabs::PrefabLibraryWorldExt;
 use crate::entities::position::PositionExt;
 use crate::entities::{Persistent, PrefabInstance};
@@ -36,12 +36,12 @@ pub fn on_client_move(
     spatial_query: SpatialQuery,
     chunk_query: Query<(&MapPosition, &Chunk)>,
     tile_data: Res<TileDataResource>,
-    connection_query: Query<(&NetClient, &Possessing)>,
+    mut connection_query: Query<(&NetClient, &Possessing, &mut ExpectedPossessedPosition)>,
     mut characters: Query<(&mut MapPosition, NotorietyQuery), Without<Chunk>>,
     mut events: EventReader<OnClientMove>,
 ) {
     for request in events.read() {
-        let Ok((client, owned)) = connection_query.get(request.client_entity) else {
+        let Ok((client, owned, mut expected)) = connection_query.get_mut(request.client_entity) else {
             continue;
         };
 
@@ -63,6 +63,7 @@ pub fn on_client_move(
                         position: map_position.position,
                         direction: map_position.direction.into(),
                     });
+                    continue;
                 }
             }
         }
@@ -72,6 +73,7 @@ pub fn on_client_move(
             sequence: request.sequence,
             notoriety,
         });
+        expected.position = *map_position;
     }
 }
 
@@ -103,10 +105,10 @@ pub fn on_client_pick_up(
         };
 
         let item_position = position.item_position().unwrap();
-        let quantity_left = (**quantity).saturating_sub(request.quantity);
+        let quantity_left = (**quantity).saturating_sub(request.quantity.min(1));
         let quantity_taken = **quantity - quantity_left;
 
-        let held_entity = if request.quantity >= **quantity {
+        let held_entity = if quantity_left == 0 {
             commands.entity(entity)
                 .insert(Holder { held_by: character })
                 .remove_position();
@@ -259,12 +261,12 @@ pub fn on_client_profile_request(
             continue;
         };
 
-        client.send_packet(CharacterProfile::Response(ProfileResponse {
+        client.send_packet(ProfileResponse {
             target_id: target_id.id,
             header: "Supreme Commander".to_string(),
             footer: "Static Profile".to_string(),
             profile: "Bio".to_string(),
-        }));
+        });
     }
 }
 
@@ -277,7 +279,7 @@ pub fn on_client_skills_request(
             continue;
         };
 
-        client.send_packet(Skills::Response(SkillsResponse {
+        client.send_packet(SkillsResponse {
             kind: SkillsResponseKind::FullWithCaps,
             skills: smallvec![
                 SkillEntry {
@@ -288,7 +290,7 @@ pub fn on_client_skills_request(
                     cap: 1200,
                 }
             ],
-        }));
+        });
     }
 }
 

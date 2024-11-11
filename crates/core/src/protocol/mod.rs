@@ -58,18 +58,20 @@ where
     Self: Sized,
 {
     const PACKET_KIND: u8;
+    const C2S: bool = true;
+    const S2C: bool = true;
 
     fn fixed_length(client_version: ClientVersion) -> Option<usize>;
 
-    fn decode(client_version: ClientVersion, from_client: bool, payload: &[u8]) -> anyhow::Result<Self>;
-    fn encode(&self, client_version: ClientVersion, to_client: bool, writer: &mut impl Write) -> anyhow::Result<()>;
+    fn decode(client_version: ClientVersion, payload: &[u8]) -> anyhow::Result<Self>;
+    fn encode(&self, client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()>;
 }
 
 pub trait OutgoingPacket {
     fn packet_type_name(&self) -> &'static str;
     fn packet_kind(&self) -> u8;
     fn fixed_length(&self, client_version: ClientVersion) -> Option<usize>;
-    fn encode(&self, client_version: ClientVersion, to_client: bool, writer: &mut impl Write) -> anyhow::Result<()>;
+    fn encode(&self, client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()>;
 }
 
 impl<T: Packet> OutgoingPacket for T {
@@ -86,30 +88,28 @@ impl<T: Packet> OutgoingPacket for T {
     }
 
     fn encode(
-        &self, client_version: ClientVersion, to_client: bool, writer: &mut impl Write,
+        &self, client_version: ClientVersion, writer: &mut impl Write,
     ) -> anyhow::Result<()> {
-        <T as Packet>::encode(self, client_version, to_client, writer)
+        <T as Packet>::encode(self, client_version, writer)
     }
 }
 
-pub struct Reader {
+pub struct Reader<const C2S: bool> {
     reader: OwnedReadHalf,
     encryption: Option<Encryption>,
     buffer: Vec<u8>,
     buffer_offset: usize,
     buffer_len: usize,
-    from_client: bool,
 }
 
-impl Reader {
-    fn new(reader: OwnedReadHalf, from_client: bool) -> Reader {
+impl<const C2S: bool> Reader<C2S> {
+    fn new(reader: OwnedReadHalf) -> Reader<C2S> {
         Reader {
             reader,
             encryption: None,
             buffer: Vec::with_capacity(4096),
             buffer_offset: 0,
             buffer_len: 0,
-            from_client,
         }
     }
 
@@ -122,15 +122,15 @@ impl Reader {
             let offset = self.buffer_offset;
             let len = self.buffer_len;
             let queued_slice = &mut self.buffer[offset..(offset + len)];
-            Self::encrypt(Some(encryption), self.from_client, queued_slice);
+            Self::encrypt(Some(encryption), queued_slice);
         }
 
         self.encryption = encryption;
     }
 
-    fn encrypt(encryption: Option<&mut Encryption>, from_client: bool, buffer: &mut [u8]) {
+    fn encrypt(encryption: Option<&mut Encryption>, buffer: &mut [u8]) {
         if let Some(encryption) = encryption {
-            if from_client {
+            if C2S {
                 encryption.crypt_client_to_server(buffer);
             } else {
                 encryption.crypt_server_to_client(buffer);
@@ -154,7 +154,7 @@ impl Reader {
 
             self.buffer_len += n;
             let read_bytes = &mut self.buffer[read_offset..(read_offset + n)];
-            Self::encrypt(self.encryption.as_mut(), self.from_client, read_bytes);
+            Self::encrypt(self.encryption.as_mut(), read_bytes);
         }
 
         Ok(&self.buffer[self.buffer_offset..(self.buffer_offset + n)])
@@ -181,7 +181,7 @@ impl Reader {
 
         let packet_kind = packet_kind_slice[0];
         self.consume(1);
-        let registration = AnyPacket::registration_for(packet_kind)
+        let registration = AnyPacket::registration_for::<C2S>(packet_kind)
             .ok_or_else(|| anyhow!("Unknown packet type {packet_kind:2x}"))?;
 
         let length = if let Some(fixed_length) = (registration.fixed_length)(client_version) {
@@ -199,31 +199,28 @@ impl Reader {
 
         trace!("RECV: {packet_kind:2x} {} length={length}", registration.type_name);
 
-        let from_client = self.from_client;
         let buffer = self.read(length).await?;
-        let decoded = (registration.decode)(client_version, from_client, buffer);
+        let decoded = (registration.decode)(client_version, buffer);
         self.consume(length);
         Ok(Some(decoded?))
     }
 }
 
-pub struct Writer {
+pub struct Writer<const C2S: bool> {
     writer: BufWriter<OwnedWriteHalf>,
     buffer: Vec<u8>,
     has_sent: bool,
-    to_client: bool,
     compress: bool,
     compress_buffer: Vec<u8>,
     encryption: Option<Encryption>,
 }
 
-impl Writer {
-    fn new(writer: OwnedWriteHalf, to_client: bool) -> Writer {
+impl<const C2S: bool> Writer<C2S> {
+    fn new(writer: OwnedWriteHalf) -> Writer<C2S> {
         Writer {
             writer: BufWriter::new(writer),
             buffer: Vec::with_capacity(4096),
-            has_sent: to_client,
-            to_client,
+            has_sent: C2S,
             compress: false,
             compress_buffer: Vec::new(),
             encryption: None,
@@ -263,7 +260,7 @@ impl Writer {
         }
 
         if let Some(encryption) = self.encryption.as_mut() {
-            if self.to_client {
+            if C2S {
                 encryption.crypt_server_to_client(&mut self.buffer);
             } else {
                 encryption.crypt_client_to_server(&mut self.buffer);
@@ -287,11 +284,11 @@ impl Writer {
         if let Some(length) = packet.fixed_length(client_version) {
             self.buffer.reserve(length);
             self.buffer.push(packet_kind);
-            packet.encode(client_version, self.to_client, &mut self.buffer)?;
+            packet.encode(client_version, &mut self.buffer)?;
             assert_eq!(length, self.buffer.len(), "Fixed length packet wrote wrong size");
         } else {
             self.buffer.extend([packet_kind, 0, 0]);
-            packet.encode(client_version, self.to_client, &mut self.buffer)?;
+            packet.encode(client_version, &mut self.buffer)?;
             let packet_len = self.buffer.len() as u16;
             Endian::write_u16(&mut self.buffer[1..3], packet_len);
         }
@@ -300,7 +297,7 @@ impl Writer {
     }
 }
 
-pub fn new_io(stream: TcpStream, is_server: bool) -> (Reader, Writer) {
+pub fn new_io<const C2S: bool>(stream: TcpStream) -> (Reader<C2S>, Writer<C2S>) {
     let (reader, writer) = stream.into_split();
-    (Reader::new(reader, is_server), Writer::new(writer, is_server))
+    (Reader::new(reader), Writer::new(writer))
 }

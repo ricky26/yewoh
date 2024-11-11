@@ -32,7 +32,7 @@ pub async fn serve_lobby(
     mut servers: impl ServerRepository, mut accounts: impl AccountRepository,
     encrypted: bool, stream: TcpStream,
 ) -> anyhow::Result<()> {
-    let (mut reader, mut writer) = new_io(stream, true);
+    let (mut reader, mut writer) = new_io::<true>(stream);
     let seed = reader.recv(ClientVersion::default()).await?
         .and_then(|r| r.downcast::<Seed>().ok())
         .ok_or_else(|| anyhow!("expected seed as first packet"))?;

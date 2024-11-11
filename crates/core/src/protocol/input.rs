@@ -24,7 +24,7 @@ impl Packet for Move {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(7) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let direction_and_run = payload.read_u8()?;
         let run = (direction_and_run & 0x80) != 0;
         let direction = Direction::from_repr(direction_and_run & 0x7f)
@@ -34,7 +34,7 @@ impl Packet for Move {
         Ok(Move { direction, run, sequence, fast_walk })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         let mut direction_and_run = self.direction as u8;
         if self.run {
             direction_and_run |= 0x80;
@@ -56,14 +56,14 @@ impl Packet for MoveConfirm {
     const PACKET_KIND: u8 = 0x22;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(3) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let sequence = payload.read_u8()?;
         let notoriety = Notoriety::from_repr(payload.read_u8()?)
             .ok_or_else(|| anyhow!("invalid notoriety"))?;
         Ok(Self { sequence, notoriety })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u8(self.sequence)?;
         writer.write_u8(self.notoriety as u8)?;
         Ok(())
@@ -82,7 +82,7 @@ impl Packet for MoveReject {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(8) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let sequence = payload.read_u8()?;
         let x = payload.read_u16::<Endian>()? as i32;
         let y = payload.read_u16::<Endian>()? as i32;
@@ -95,7 +95,7 @@ impl Packet for MoveReject {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u8(self.sequence)?;
         writer.write_u16::<Endian>(self.position.x as u16)?;
         writer.write_u16::<Endian>(self.position.y as u16)?;
@@ -114,12 +114,12 @@ impl Packet for SingleClick {
     const PACKET_KIND: u8 = 0x09;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(5) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let target_id = payload.read_entity_id()?;
         Ok(Self { target_id })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.target_id)?;
         Ok(())
     }
@@ -135,14 +135,14 @@ impl Packet for DoubleClick {
     const PACKET_KIND: u8 = 0x06;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(5) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let raw_target_id = payload.read_u32::<Endian>()?;
         let target_id = EntityId::from_u32(raw_target_id & 0x7fffffff);
         let paperdoll = (raw_target_id & 0x80000000) != 0;
         Ok(Self { target_id, paperdoll })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         let mut target_id = self.target_id.as_u32();
         if self.paperdoll {
             target_id |= 0x80000000;
@@ -162,13 +162,13 @@ impl Packet for PickUpEntity {
     const PACKET_KIND: u8 = 0x07;
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(7) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let target_id = payload.read_entity_id()?;
         let quantity = payload.read_u16::<Endian>()?;
         Ok(Self { target_id, quantity })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.target_id)?;
         writer.write_u16::<Endian>(self.quantity)?;
         Ok(())
@@ -190,7 +190,7 @@ impl Packet for DropEntity {
         Some(if client_version >= VERSION_GRID_INVENTORY { 15 } else { 14 })
     }
 
-    fn decode(client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let target_id = payload.read_entity_id()?;
         let x = payload.read_u16::<Endian>()? as i32;
         let y = payload.read_u16::<Endian>()? as i32;
@@ -214,7 +214,7 @@ impl Packet for DropEntity {
         })
     }
 
-    fn encode(&self, client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.target_id)?;
         writer.write_u16::<Endian>(self.position.x as u16)?;
         writer.write_u16::<Endian>(self.position.x as u16)?;
@@ -246,12 +246,12 @@ impl Packet for PickUpReject {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         PickUpReject::from_repr(payload.read_u8()?)
             .ok_or_else(|| anyhow!("Invalid rejection reason"))
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u8(*self as u8)?;
         Ok(())
     }
@@ -267,12 +267,12 @@ impl Packet for DropAccept {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(2) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let target_id = payload.read_entity_id()?;
         Ok(DropAccept { target_id })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.target_id)?;
         Ok(())
     }
@@ -290,7 +290,7 @@ impl Packet for EquipEntity {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(10) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let id = payload.read_entity_id()?;
         let layer = EquipmentSlot::from_repr(payload.read_u8()?)
             .ok_or_else(|| anyhow!("invalid equipment slot"))?;
@@ -298,7 +298,7 @@ impl Packet for EquipEntity {
         Ok(Self { target_id: id, slot: layer, character_id: to })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_entity_id(self.target_id)?;
         writer.write_u8(self.slot as u8)?;
         writer.write_entity_id(self.character_id)?;
@@ -331,7 +331,7 @@ impl Packet for PickTarget {
 
     fn fixed_length(_client_version: ClientVersion) -> Option<usize> { Some(19) }
 
-    fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
+    fn decode(_client_version: ClientVersion, mut payload: &[u8]) -> anyhow::Result<Self> {
         let target_ground = payload.read_u8()? != 0;
         let id = payload.read_u32::<Endian>()?;
         let target_type = TargetType::from_repr(payload.read_u8()?)
@@ -356,7 +356,7 @@ impl Packet for PickTarget {
         })
     }
 
-    fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
+    fn encode(&self, _client_version: ClientVersion, writer: &mut impl Write) -> anyhow::Result<()> {
         writer.write_u8(if self.target_ground { 1 } else { 0 })?;
         writer.write_u32::<Endian>(self.id)?;
         writer.write_u8(self.target_type as u8)?;
