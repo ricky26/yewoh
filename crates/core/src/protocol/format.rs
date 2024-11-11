@@ -65,7 +65,7 @@ impl<T: Write> PacketWriteExt for T {
     fn write_utf16_pascal(&mut self, src: &str) -> anyhow::Result<()> {
         let utf16 = src.encode_utf16();
         let len = utf16.clone().count();
-        self.write_u16::<Endian>((len * size_of::<u16>()) as u16)?;
+        self.write_u16::<Endian>(len as u16)?;
         for c in utf16 {
             self.write_u16::<Endian>(c)?;
         }
@@ -202,9 +202,9 @@ impl PacketReadExt for &[u8] {
 
     fn read_utf16le_pascal(&mut self) -> anyhow::Result<String> {
         let len = self.read_u16::<Endian>()? as usize;
-        let bytes = &self[..len * 2];
+        let bytes = &self[..len];
         let result = utf16le_slice_to_string(bytes);
-        *self = &self[len * 2..];
+        *self = &self[len..];
         Ok(result)
     }
 
