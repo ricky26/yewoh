@@ -52,6 +52,7 @@ pub enum EntityKind {
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, FromRepr, Serialize, Deserialize)]
 pub enum Notoriety {
+    Invalid = 0,
     Innocent = 1,
     Ally = 2,
     #[default]

@@ -104,8 +104,7 @@ pub fn handle_list_characters_callback(
 
         match result {
             Ok(characters) => {
-                let mut flags = CharacterListFlags::ALLOW_OVERWRITE_CONFIG
-                    | CharacterListFlags::CONTEXT_MENU
+                let mut flags = CharacterListFlags::CONTEXT_MENU
                     | CharacterListFlags::PALADIN_NECROMANCER_TOOLTIPS
                     | CharacterListFlags::SAMURAI_NINJA
                     | CharacterListFlags::ELVES
