@@ -28,6 +28,8 @@ pub mod view;
 
 pub mod account;
 
+pub mod gump;
+
 #[derive(SystemSet, Hash, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerSet {
     Receive,
@@ -63,6 +65,7 @@ impl Plugin for ServerPlugin {
                 items::plugin,
                 characters::plugin,
                 account::plugin,
+                gump::plugin,
             ))
             .configure_sets(First, (
                 (

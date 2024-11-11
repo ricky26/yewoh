@@ -183,34 +183,6 @@ pub fn update_targets(
     }
 }
 
-/*
-pub fn send_context_menu(
-    clients: Query<&NetClient>,
-    requests: Query<(Entity, &OnClientContextMenuRequest)>,
-    net_ids: Query<&NetId>,
-    mut commands: Commands,
-) {
-    for (entity, request) in requests.iter() {
-        commands.entity(entity).despawn();
-
-        let client = match clients.get(request.client_entity) {
-            Ok(x) => x,
-            _ => continue,
-        };
-
-        let target_id = match net_ids.get(request.target) {
-            Ok(x) => x.id,
-            _ => continue,
-        };
-
-        client.send_packet(ExtendedCommand::ContextMenuEnhanced(ContextMenu {
-            target_id,
-            entries: request.entries.clone(),
-        }));
-    }
-}
-*/
-
 pub fn plugin(app: &mut App) {
     app
         .add_event::<OnClientMove>()
@@ -222,7 +194,6 @@ pub fn plugin(app: &mut App) {
         .add_event::<OnClientContextMenuRequest>()
         .add_event::<OnClientContextMenuAction>()
         .add_systems(Last, (
-            // send_context_menu,
             update_targets,
         ).in_set(ServerSet::Send));
 }

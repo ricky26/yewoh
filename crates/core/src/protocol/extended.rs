@@ -12,6 +12,12 @@ use crate::EntityId;
 use super::{ClientVersion, Endian, Packet};
 
 #[derive(Debug, Clone)]
+pub struct CloseGump {
+    pub gump_id: u32,
+    pub button_id: u32,
+}
+
+#[derive(Debug, Clone)]
 pub struct ScreenSize {
     pub width: u32,
     pub height: u32,
@@ -50,6 +56,7 @@ pub struct ContextMenuResponse {
 #[derive(Debug, Clone)]
 pub enum ExtendedCommand {
     Unknown(u16),
+    CloseGump(CloseGump),
     ScreenSize(ScreenSize),
     ChangeMap(u8),
     Language(String),
@@ -62,6 +69,7 @@ pub enum ExtendedCommand {
 }
 
 impl ExtendedCommand {
+    const CLOSE_GUMP: u16 = 0x4;
     const SCREEN_SIZE: u16 = 0x5;
     const CHANGE_MAP: u16 = 0x8;
     const LANGUAGE: u16 = 0xb;
@@ -76,6 +84,7 @@ impl ExtendedCommand {
     pub fn kind(&self) -> u16 {
         match self {
             ExtendedCommand::Unknown(_) => panic!("Tried to send unknown extended command"),
+            ExtendedCommand::CloseGump(_) => Self::CLOSE_GUMP,
             ExtendedCommand::ScreenSize(_) => Self::SCREEN_SIZE,
             ExtendedCommand::ChangeMap(_) => Self::CHANGE_MAP,
             ExtendedCommand::Language(_) => Self::LANGUAGE,
@@ -96,6 +105,10 @@ impl Packet for ExtendedCommand {
     fn decode(_client_version: ClientVersion, _from_client: bool, mut payload: &[u8]) -> anyhow::Result<Self> {
         let kind = payload.read_u16::<Endian>()?;
         match kind {
+            Self::CLOSE_GUMP => Ok(ExtendedCommand::CloseGump(CloseGump {
+                gump_id: payload.read_u32::<Endian>()?,
+                button_id: payload.read_u32::<Endian>()?,
+            })),
             Self::SCREEN_SIZE => Ok(ExtendedCommand::ScreenSize(ScreenSize {
                 width: payload.read_u32::<Endian>()?,
                 height: payload.read_u32::<Endian>()?,
@@ -160,6 +173,10 @@ impl Packet for ExtendedCommand {
         match self {
             ExtendedCommand::Unknown(_) =>
                 return Err(anyhow!("tried to send unknown extended command")),
+            ExtendedCommand::CloseGump(close_gump) => {
+                writer.write_u32::<Endian>(close_gump.gump_id)?;
+                writer.write_u32::<Endian>(close_gump.button_id)?;
+            }
             ExtendedCommand::ScreenSize(screen_size) => {
                 writer.write_u32::<Endian>(screen_size.width)?;
                 writer.write_u32::<Endian>(screen_size.height)?;

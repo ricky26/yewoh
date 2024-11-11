@@ -74,7 +74,7 @@ pub fn test_gump(
     for (from, _) in exec.iter() {
         if let Ok(client) = clients.get(from) {
             client.send_packet(OpenGump {
-                id: 1,
+                gump_id: 1,
                 type_id: 2,
                 position: IVec2::new(50, 50),
                 layout: GumpLayout {

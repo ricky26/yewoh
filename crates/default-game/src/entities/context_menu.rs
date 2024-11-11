@@ -102,6 +102,10 @@ pub fn finish_context_menu(
             continue;
         };
 
+        if event.entries.is_empty() {
+            continue;
+        }
+
         event.entries.sort_by_key(|l| (l.priority, l.id, l.text_id));
         let entries = event.entries.drain(..)
             .map(|l| protocol::ContextMenuEntry {

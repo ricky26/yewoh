@@ -54,6 +54,8 @@ pub mod l10n;
 
 pub mod reflect;
 
+pub mod gumps;
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq, SystemSet)]
 pub enum DefaultGameSet {
     DispatchEvents,
@@ -90,6 +92,7 @@ impl Plugin for DefaultGamePlugin {
             .add_plugins((
                 actions::plugin,
                 l10n::plugin,
+                gumps::plugin,
             ))
             .configure_sets(First, (
                 (

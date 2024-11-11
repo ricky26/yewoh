@@ -1,9 +1,9 @@
-use std::fmt::Debug;
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use std::fmt::Debug;
 use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use bevy::ecs::system::SystemParam;
 use tokio::sync::mpsc;
 use tracing::{info, trace, warn};
 use yewoh::protocol::encryption::Encryption;
@@ -12,11 +12,12 @@ use yewoh::protocol::{AnyPacket, CharacterProfile, ClientVersion, ClientVersionR
 use crate::async_runtime::AsyncRuntime;
 use crate::game_server::NewSessionAttempt;
 use crate::lobby::{NewSessionRequest, SessionAllocator};
-use crate::world::account::{OnClientDeleteCharacter, OnClientCharacterListRequest, OnClientCreateCharacter, OnClientSelectCharacter, SentCharacterList, User};
+use crate::world::account::{OnClientCharacterListRequest, OnClientCreateCharacter, OnClientDeleteCharacter, OnClientSelectCharacter, SentCharacterList, User};
 use crate::world::characters::{OnClientProfileRequest, OnClientProfileUpdateRequest, OnClientSkillsRequest, OnClientStatusRequest};
 use crate::world::chat::OnClientChatMessage;
 use crate::world::combat::{OnClientAttackRequest, OnClientWarModeChanged};
 use crate::world::entity::{EquipmentSlot, OnClientTooltipRequest};
+use crate::world::gump::{GumpIdAllocator, GumpLookup, GumpSent, OnClientCloseGump};
 use crate::world::input::{EntityTargetResponse, OnClientContextMenuAction, OnClientContextMenuRequest, OnClientDoubleClick, OnClientDrop, OnClientEquip, OnClientMove, OnClientPickUp, OnClientSingleClick, Targeting, WorldTargetResponse};
 use crate::world::net_id::NetEntityLookup;
 use crate::world::view::View;
@@ -38,6 +39,7 @@ pub struct OwningClient {
 }
 
 #[derive(Debug, Clone, Component)]
+#[require(GumpIdAllocator)]
 pub struct NetClient {
     address: SocketAddr,
     client_version: ClientVersion,
@@ -283,6 +285,7 @@ pub struct NewPacketEvents<'w> {
     pub context_menu_action: EventWriter<'w, OnClientContextMenuAction>,
     pub war_mode: EventWriter<'w, OnClientWarModeChanged>,
     pub attack: EventWriter<'w, OnClientAttackRequest>,
+    pub close_gump: EventWriter<'w, OnClientCloseGump>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -290,6 +293,7 @@ pub fn handle_new_packets(
     mut commands: Commands,
     mut server: ResMut<NetServer>,
     lookup: Res<NetEntityLookup>,
+    gumps: ResMut<GumpLookup>,
     mut clients: Query<(&NetClient, Option<&SentCharacterList>, Option<&mut Targeting>)>,
     mut events: NewPacketEvents,
 ) {
@@ -573,43 +577,27 @@ pub fn handle_new_packets(
                 });
             }
 
+            // UI
+            AnyPacket::GumpResult(result) => {
+                if let Some(gump) = gumps.get_gump(client_entity, result.gump_id, result.type_id) {
+                    commands.entity(gump).remove::<GumpSent>();
+                    events.close_gump.send(OnClientCloseGump {
+                        client_entity,
+                        gump,
+                        button_id: result.button_id,
+                        on_switches: result.on_switches,
+                        text_fields: result.text_fields,
+                    });
+                } else {
+                    warn!("result for unknown gump {} {} for client {client_entity}",
+                        result.gump_id, result.type_id);
+                }
+            }
+
             _ => {}
         }
     }
 }
-
-/*
-pub fn send_tooltips(
-    clients: Query<&NetClient>,
-    mut tooltips: Query<(&NetId, &mut TooltipRequests), Changed<TooltipRequests>>,
-) {
-    for (net_id, mut tooltip) in &mut tooltips {
-        if tooltip.requests.is_empty() {
-            continue;
-        }
-
-        let id = net_id.id;
-        for OnClientTooltipRequest { client_entity: client, mut entries } in tooltip.requests.drain(..) {
-            let client = match clients.get(client) {
-                Ok(x) => x,
-                _ => continue,
-            };
-
-            entries.sort();
-            let entries = entries.into_iter()
-                .map(|entry| {
-                    EntityTooltipLine {
-                        text_id: entry.text_id,
-                        params: entry.arguments,
-                    }
-                })
-                .collect();
-
-            client.send_packet(EntityTooltip::Response { id, entries });
-        }
-    }
-}
- */
 
 pub fn plugin(app: &mut App) {
     app
@@ -619,7 +607,4 @@ pub fn plugin(app: &mut App) {
                 .chain()
                 .in_set(ServerSet::Receive),
         ));
-        // .add_systems(Last, (
-        //     send_tooltips,
-        // ).in_set(ServerSet::Send));
 }

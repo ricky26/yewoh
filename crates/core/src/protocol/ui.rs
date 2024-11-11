@@ -123,7 +123,7 @@ impl TryFrom<CompressedGumpLayout> for GumpLayout {
 
 #[derive(Debug, Clone)]
 pub struct OpenGump {
-    pub id: u32,
+    pub gump_id: u32,
     pub type_id: u32,
     pub position: IVec2,
     pub layout: GumpLayout,
@@ -155,11 +155,11 @@ impl Packet for OpenGump {
             text,
         };
 
-        Ok(Self { id, type_id, position: IVec2::new(x, y), layout })
+        Ok(Self { gump_id: id, type_id, position: IVec2::new(x, y), layout })
     }
 
     fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
-        writer.write_u32::<Endian>(self.id)?;
+        writer.write_u32::<Endian>(self.gump_id)?;
         writer.write_u32::<Endian>(self.type_id)?;
         writer.write_i32::<Endian>(self.position.x)?;
         writer.write_i32::<Endian>(self.position.y)?;
@@ -214,7 +214,7 @@ impl TryFrom<GumpLayout> for CompressedGumpLayout {
 
 #[derive(Debug, Clone)]
 pub struct OpenGumpCompressed {
-    pub id: u32,
+    pub gump_id: u32,
     pub type_id: u32,
     pub position: IVec2,
     pub layout: CompressedGumpLayout,
@@ -259,11 +259,11 @@ impl Packet for OpenGumpCompressed {
             text,
         };
 
-        Ok(Self { id, type_id, position: IVec2::new(x, y), layout })
+        Ok(Self { gump_id: id, type_id, position: IVec2::new(x, y), layout })
     }
 
     fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
-        writer.write_u32::<Endian>(self.id)?;
+        writer.write_u32::<Endian>(self.gump_id)?;
         writer.write_u32::<Endian>(self.type_id)?;
         writer.write_i32::<Endian>(self.position.x)?;
         writer.write_i32::<Endian>(self.position.y)?;
@@ -282,7 +282,7 @@ impl Packet for OpenGumpCompressed {
 
 #[derive(Debug, Clone)]
 pub struct GumpResult {
-    pub id: u32,
+    pub gump_id: u32,
     pub type_id: u32,
     pub button_id: u32,
     pub on_switches: SmallVec<[u32; 16]>,
@@ -310,11 +310,11 @@ impl Packet for GumpResult {
             text_fields.push(payload.read_utf16_pascal()?);
         }
 
-        Ok(Self { id, type_id, button_id, on_switches, text_fields })
+        Ok(Self { gump_id: id, type_id, button_id, on_switches, text_fields })
     }
 
     fn encode(&self, _client_version: ClientVersion, _to_client: bool, writer: &mut impl Write) -> anyhow::Result<()> {
-        writer.write_u32::<Endian>(self.id)?;
+        writer.write_u32::<Endian>(self.gump_id)?;
         writer.write_u32::<Endian>(self.type_id)?;
         writer.write_u32::<Endian>(self.button_id)?;
         writer.write_u32::<Endian>(self.on_switches.len() as u32)?;
