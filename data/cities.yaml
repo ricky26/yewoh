@@ -3,7 +3,7 @@ cities:
     building: New Haven Bank
     description_id: 1150168
     map_id: 1
-    position: [3667, 2625, 0]
+    position: [3503, 2574, 14]
   - name: Yew
     building: The Empath Abbey
     description_id: 1075072
@@ -22,6 +22,7 @@ cities:
   - name: Moonglow
     building: The Scholars Inn
     description_id: 1075075
+    map_id: 1
     position: [4408, 1168, 0]
   - name: Trinsic
     building: The Traveler's Inn
@@ -43,3 +44,8 @@ cities:
     description_id: 1075080
     map_id: 1
     position: [2771, 976, 0]
+  - name: Royal City
+    building: Royal City Inn
+    description_id: 1150169
+    map_id: 5
+    position: [738, 3486, -19]

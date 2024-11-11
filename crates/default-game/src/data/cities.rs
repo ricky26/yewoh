@@ -6,11 +6,11 @@ use yewoh::protocol::StartingCity;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct City {
-    name: String,
-    building: String,
-    map_id: u32,
-    description_id: u32,
-    position: IVec3,
+    pub name: String,
+    pub building: String,
+    pub map_id: u32,
+    pub description_id: u32,
+    pub position: IVec3,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

@@ -1,7 +1,7 @@
 use bevy::prelude::*;
-use glam::IVec3;
 use std::collections::HashMap;
 use std::marker::PhantomData;
+use anyhow::bail;
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
@@ -223,8 +223,9 @@ pub fn on_delete_character<T: AccountRepository>(
 
 pub fn create_new_character(
     commands: &mut Commands,
+    static_data: &StaticData,
     info: NewCharacterInfo,
-) -> Entity {
+) -> anyhow::Result<Entity> {
     let race_name = match info.race {
         CharacterRace::Human => "human",
         CharacterRace::Elf => "elf",
@@ -241,6 +242,10 @@ pub fn create_new_character(
         pants_hue: info.pants_hue,
     };
 
+    let Some(city) = static_data.cities.cities.get(info.city_index as usize) else {
+        bail!("Unknown city index {}", info.city_index);
+    };
+
     let prefab_name = format!("player_{race_name}_{gender_name}");
     let entity = commands
         .fabricate_prefab(prefab_name)
@@ -254,8 +259,8 @@ pub fn create_new_character(
             info.stats,
             new_character,
             MapPosition {
-                map_id: 1,
-                position: IVec3::new(1325, 1624, 55),
+                map_id: city.map_id as u8,
+                position: city.position,
                 direction: Direction::North,
             },
         ))
@@ -283,12 +288,13 @@ pub fn create_new_character(
             .move_to_equipped_position(entity, EquipmentSlot::FacialHair);
     }
 
-    entity
+    Ok(entity)
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn handle_spawn_character<T: AccountRepository>(
     runtime: Res<AsyncRuntime>,
+    static_data: Res<StaticData>,
     mut pending: ResMut<PendingCharacterInfo>,
     pending_list: ResMut<PendingCharacterLists>,
     mut commands: Commands,
@@ -339,7 +345,13 @@ pub fn handle_spawn_character<T: AccountRepository>(
             }
             CharacterToSpawn::NewCharacter(id, info) => {
                 info!("Creating new character: {}", &id);
-                let primary_entity = create_new_character(&mut commands, info);
+                let primary_entity = match create_new_character(&mut commands, &static_data, info) {
+                    Ok(x) => x,
+                    Err(err) => {
+                        warn!("failed to create character: {err}");
+                        continue;
+                    }
+                };
                 all_players.insert(id, primary_entity);
                 commands.entity(primary_entity)
                     .insert((

@@ -134,7 +134,7 @@ pub fn on_client_pick_up(
 
 pub fn on_client_drop(
     clients: Query<&Possessing>,
-    characters: Query<(&MapPosition, &Held)>,
+    holders: Query<(&MapPosition, &Held)>,
     containers: Query<&Container>,
     stackable: Query<(&PrefabInstance, &ItemQuantity), With<Stackable>>,
     mut commands: Commands,
@@ -146,7 +146,7 @@ pub fn on_client_drop(
         };
 
         let character = owner.entity;
-        let Ok((character_position, held)) = characters.get(character) else {
+        let Ok((character_position, held)) = holders.get(character) else {
             continue;
         };
 
