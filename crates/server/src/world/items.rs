@@ -320,8 +320,9 @@ pub fn detect_item_changes(
                 .map(|id| id.id);
             let Some(packet) = item.to_upsert(net_id.id, parent_id) else {
                 warn!(
-                    "failed to create item packet for {entity} (id={:?}, parent_id={:?})",
+                    "failed to create item packet for {entity} (id={:?}, parent={:?}, parent_id={:?})",
                     net_id.id,
+                    item.parent(),
                     parent_id,
                 );
                 continue;
