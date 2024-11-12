@@ -377,7 +377,7 @@ pub struct StartingCity {
 bitflags! {
     #[derive(Default, Clone, Copy, Debug)]
     pub struct CharacterListFlags : u32 {
-        const ALLOW_OVERWRITE_CONFIG = 0x2;
+        const REMOTE_CONFIG = 0x2;
         const SINGLE_CHARACTER_SLOT = 0x4;
         const CONTEXT_MENU = 0x8;
         const SLOT_LIMIT = 0x10;

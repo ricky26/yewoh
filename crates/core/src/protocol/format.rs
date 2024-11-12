@@ -15,6 +15,7 @@ pub trait PacketWriteExt {
     fn write_zeros(&mut self, count: usize) -> anyhow::Result<()>;
     fn write_str_fixed<const I: usize>(&mut self, src: &FixedString<I>) -> anyhow::Result<()>;
     fn write_str_block(&mut self, src: &str, block_size: usize) -> anyhow::Result<()>;
+    fn write_str_pascal(&mut self, src: &str) -> anyhow::Result<()>;
     fn write_str_nul(&mut self, src: &str) -> anyhow::Result<()>;
     fn write_utf16_nul(&mut self, src: &str) -> anyhow::Result<()>;
     fn write_utf16_pascal(&mut self, src: &str) -> anyhow::Result<()>;
@@ -46,6 +47,12 @@ impl<T: Write> PacketWriteExt for T {
             self.write_all(src.as_bytes())?;
             self.write_zeros(block_size - src.len())
         }
+    }
+
+    fn write_str_pascal(&mut self, src: &str) -> anyhow::Result<()> {
+        self.write_u16::<Endian>(src.len() as u16)?;
+        self.write_all(src.as_bytes())?;
+        Ok(())
     }
 
     fn write_str_nul(&mut self, src: &str) -> anyhow::Result<()> {
@@ -104,6 +111,7 @@ pub trait PacketReadExt {
     fn read_str_fixed<const I: usize>(&mut self) -> anyhow::Result<FixedString<I>>;
     fn read_str_block(&mut self, block_size: usize) -> anyhow::Result<String>;
     fn read_str_nul(&mut self) -> anyhow::Result<String>;
+    fn read_str_pascal(&mut self) -> anyhow::Result<String>;
     fn read_utf16_nul(&mut self) -> anyhow::Result<String>;
     fn read_utf16_pascal(&mut self) -> anyhow::Result<String>;
     fn read_utf16le_nul(&mut self) -> anyhow::Result<String>;
@@ -160,6 +168,13 @@ impl PacketReadExt for &[u8] {
         } else {
             Err(anyhow!("unexpected EOF"))
         }
+    }
+
+    fn read_str_pascal(&mut self) -> anyhow::Result<String> {
+        let len = self.read_u16::<Endian>()? as usize;
+        let bytes = &self[..len];
+        let result = std::str::from_utf8(bytes)?;
+        Ok(result.to_string())
     }
 
     fn read_utf16_nul(&mut self) -> anyhow::Result<String> {

@@ -139,9 +139,7 @@ impl Packet for OpenGump {
         let type_id = payload.read_u32::<Endian>()?;
         let x = payload.read_i32::<Endian>()?;
         let y = payload.read_i32::<Endian>()?;
-
-        let len = payload.read_u16::<Endian>()? as usize;
-        let layout = std::str::from_utf8(&payload[..len])?.to_string();
+        let layout = payload.read_str_pascal()?;
 
         let text_count = payload.read_u16::<Endian>()? as usize;
         let mut text = Vec::with_capacity(text_count);
@@ -163,9 +161,7 @@ impl Packet for OpenGump {
         writer.write_u32::<Endian>(self.type_id)?;
         writer.write_i32::<Endian>(self.position.x)?;
         writer.write_i32::<Endian>(self.position.y)?;
-
-        writer.write_u16::<Endian>(self.layout.layout.len() as u16)?;
-        writer.write_all(self.layout.layout.as_bytes())?;
+        writer.write_str_pascal(&self.layout.layout)?;
 
         writer.write_u16::<Endian>(self.layout.text.len() as u16)?;
         for line in self.layout.text.iter() {
