@@ -61,9 +61,7 @@ impl<'a> Iterator for LocationLevelIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let (next_key, next_value) = &self.locations.locations.get_index(self.offset)?;
-        let Some(rest) = next_key.strip_prefix(self.prefix) else {
-            return None;
-        };
+        let rest = next_key.strip_prefix(self.prefix)?;
 
         self.offset += 1;
         if let Some(slash) = rest.find('/') {
@@ -84,7 +82,7 @@ impl<'a> Iterator for LocationLevelIter<'a> {
 
             Some((result, LocationLevelAction::Descend(new_prefix)))
         } else {
-            Some((rest, LocationLevelAction::Location(*next_value)))
+            Some((rest, LocationLevelAction::Location(next_value)))
         }
     }
 }

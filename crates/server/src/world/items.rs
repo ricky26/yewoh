@@ -331,7 +331,12 @@ pub fn detect_item_changes(
             let parent = item.position.parent.map(|p| p.get());
             let packet = Arc::new(packet);
             let grid_cell = delta_grid_cell(position.position.truncate());
-            let delta = delta_version.new_delta(DeltaEntry::ItemChanged { entity, parent, packet });
+            let delta = delta_version.new_delta(DeltaEntry::ItemChanged {
+                entity,
+                parent,
+                position: **position,
+                packet,
+            });
 
             let mut position_entry = cache.last_position.entry(entity);
             if let Entry::Occupied(entry) = &mut position_entry {

@@ -33,6 +33,7 @@ impl Default for LocalisedString<'_> {
 }
 
 impl<'a> LocalisedString<'a> {
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(text: impl Into<Cow<'a, str>>) -> LocalisedString<'a> {
         Self {
             text_id: EMPTY_TEXT_1,
@@ -61,7 +62,7 @@ impl<'a> LocalisedString<'a> {
     }
 }
 
-impl<'a> Convert for LocalisedString<'a> {
+impl Convert for LocalisedString<'_> {
     fn convert(from: Box<dyn PartialReflect>) -> anyhow::Result<Box<dyn PartialReflect>> {
         let from = match from.try_downcast::<LocalisedString<'static>>() {
             Ok(value) => return Ok(value),
@@ -77,7 +78,7 @@ impl<'a> Convert for LocalisedString<'a> {
             let text_id = reflect_optional_field(s, "text_id")?
                 .unwrap_or(EMPTY_TEXT_1);
             let arguments = reflect_optional_field::<String>(s, "arguments")?
-                .map_or(Cow::Borrowed(""), |v| Cow::Owned(v));
+                .map_or(Cow::Borrowed(""), Cow::Owned);
             Ok(Box::new(LocalisedString { text_id, arguments }))
         }
     }

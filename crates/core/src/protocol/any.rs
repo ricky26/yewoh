@@ -118,6 +118,7 @@ macro_rules! impl_packet {
 macro_rules! impl_any {
     ($($ty:ident),+ $(,)?) => {
         #[derive(Clone)]
+        #[allow(clippy::large_enum_variant)]
         pub enum AnyPacket {
             $($ty($ty),)+
         }

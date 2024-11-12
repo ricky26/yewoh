@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{info, trace, warn};
 use yewoh::protocol::encryption::Encryption;
-use yewoh::protocol::{AnyPacket, ClientVersion, ClientVersionRequest, EntityRequestKind, ExtendedCommand, FeatureFlags, GameServerLogin, IntoAnyPacket, SetAttackTarget, SupportedFeatures, UnicodeTextMessageRequest};
+use yewoh::protocol::{AnyPacket, ClientVersion, ClientVersionRequest, EntityRequestKind, ExtendedCommand, FeatureFlags, GameServerLogin, IntoAnyPacket, SetAttackTarget, SupportedFeatures, UnicodeTextMessageRequest, ViewRange};
 
 use crate::async_runtime::AsyncRuntime;
 use crate::game_server::NewSessionAttempt;
@@ -20,7 +20,7 @@ use crate::world::entity::{EquipmentSlot, OnClientTooltipRequest};
 use crate::world::gump::{GumpIdAllocator, GumpLookup, GumpSent, OnClientCloseGump};
 use crate::world::input::{EntityTargetResponse, OnClientContextMenuAction, OnClientContextMenuRequest, OnClientDoubleClick, OnClientDrop, OnClientEquip, OnClientMove, OnClientPickUp, OnClientSingleClick, Targeting, WorldTargetResponse};
 use crate::world::net_id::NetEntityLookup;
-use crate::world::view::View;
+use crate::world::view::{View, MAX_VIEW_RANGE, MIN_VIEW_RANGE};
 use crate::world::ServerSet;
 
 pub enum WriterAction {
@@ -40,7 +40,7 @@ pub struct OwningClient {
 }
 
 #[derive(Debug, Clone, Component)]
-#[require(GumpIdAllocator)]
+#[require(Targeting, View, GumpIdAllocator)]
 pub struct NetClient {
     address: SocketAddr,
     client_version: ClientVersion,
@@ -223,8 +223,6 @@ pub fn accept_new_clients(
             .spawn((
                 client.clone(),
                 User { username },
-                Targeting::default(),
-                View::default(),
             ))
             .id();
 
@@ -295,11 +293,13 @@ pub fn handle_new_packets(
     mut server: ResMut<NetServer>,
     lookup: Res<NetEntityLookup>,
     gumps: ResMut<GumpLookup>,
-    mut clients: Query<(&NetClient, Option<&SentCharacterList>, Option<&mut Targeting>)>,
+    mut clients: Query<
+        (&NetClient, &mut View, Option<&SentCharacterList>, &mut Targeting),
+    >,
     mut events: NewPacketEvents,
 ) {
     while let Ok((client_entity, packet)) = server.received_packets_rx.try_recv() {
-        let Ok((client, sent_character_list, targeting)) = clients.get_mut(client_entity) else {
+        let Ok((client, mut view, sent_character_list, mut targeting)) = clients.get_mut(client_entity) else {
             continue;
         };
 
@@ -524,10 +524,6 @@ pub fn handle_new_packets(
             }
 
             AnyPacket::PickTarget(request) => {
-                let Some(mut targeting) = targeting else {
-                    continue;
-                };
-
                 if let Some(pending) = targeting.pending.front() {
                     let mut entity = commands.entity(pending.request_entity);
 
@@ -586,6 +582,16 @@ pub fn handle_new_packets(
                     warn!("result for unknown gump {} {} for client {client_entity}",
                         result.gump_id, result.type_id);
                 }
+            }
+
+            AnyPacket::ViewRange(packet) => {
+                let new_view_range = packet.0
+                    .min(MAX_VIEW_RANGE as u8)
+                    .max(MIN_VIEW_RANGE as u8);
+                if new_view_range != packet.0 {
+                    client.send_packet(ViewRange(new_view_range));
+                }
+                view.range = new_view_range as i32;
             }
 
             _ => {}

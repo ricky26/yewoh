@@ -545,7 +545,11 @@ pub fn detect_character_changes(
             let map_id = character.position.map_id;
             let position = character.position.position;
             let grid_cell = delta_grid_cell(position.truncate());
-            let delta = delta_version.new_delta(DeltaEntry::CharacterChanged { entity, update_packet });
+            let delta = delta_version.new_delta(DeltaEntry::CharacterChanged {
+                entity,
+                position: *character.position,
+                update_packet,
+            });
 
             let mut position_entry = cache.last_position.entry(entity);
             if let Entry::Occupied(entry) = &mut position_entry {

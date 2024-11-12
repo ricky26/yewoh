@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use smallvec::smallvec;
 use yewoh::protocol;
-use yewoh::protocol::{MoveConfirm, PickUpReject, MoveReject, ProfileResponse, SkillEntry, SkillLock, SkillsResponse, SkillsResponseKind};
+use yewoh::protocol::{MoveConfirm, PickUpReject, MoveReject, ProfileResponse, SkillEntry, SkillLock, SkillsResponse, SkillsResponseKind, EntityFlags};
 use yewoh_server::world::characters::{CharacterBodyType, NotorietyQuery, OnClientProfileRequest, OnClientSkillsRequest, WarMode};
 use yewoh_server::world::combat::{AttackTarget, OnClientWarModeChanged};
 use yewoh_server::world::connection::{NetClient, Possessing};
@@ -13,7 +13,7 @@ use yewoh_server::world::navigation::try_move_in_direction;
 use yewoh_server::world::net_id::NetId;
 use yewoh_server::world::spatial::SpatialQuery;
 use yewoh_server::world::ServerSet;
-use yewoh_server::world::view::ExpectedPossessedPosition;
+use yewoh_server::world::view::ExpectedCharacterState;
 use crate::data::prefabs::PrefabLibraryWorldExt;
 use crate::entities::position::PositionExt;
 use crate::entities::{Persistent, PrefabInstance};
@@ -36,7 +36,7 @@ pub fn on_client_move(
     spatial_query: SpatialQuery,
     chunk_query: Query<(&MapPosition, &Chunk)>,
     tile_data: Res<TileDataResource>,
-    mut connection_query: Query<(&NetClient, &Possessing, &mut ExpectedPossessedPosition)>,
+    mut connection_query: Query<(&NetClient, &Possessing, &mut ExpectedCharacterState)>,
     mut characters: Query<(&mut MapPosition, NotorietyQuery), Without<Chunk>>,
     mut events: EventReader<OnClientMove>,
 ) {
@@ -105,7 +105,7 @@ pub fn on_client_pick_up(
         };
 
         let item_position = position.item_position().unwrap();
-        let quantity_left = (**quantity).saturating_sub(request.quantity.min(1));
+        let quantity_left = (**quantity).saturating_sub(request.quantity.max(1));
         let quantity_taken = **quantity - quantity_left;
 
         let held_entity = if quantity_left == 0 {
@@ -296,12 +296,12 @@ pub fn on_client_skills_request(
 
 pub fn on_client_war_mode_changed(
     mut commands: Commands,
-    clients: Query<(&NetClient, &Possessing)>,
+    mut clients: Query<(&NetClient, &Possessing, &mut ExpectedCharacterState)>,
     mut characters: Query<&mut WarMode>,
     mut events: EventReader<OnClientWarModeChanged>,
 ) {
     for request in events.read() {
-        let Ok((client, owned)) = clients.get(request.client_entity) else {
+        let Ok((client, owned, mut expected)) = clients.get_mut(request.client_entity) else {
             continue;
         };
 
@@ -310,8 +310,10 @@ pub fn on_client_war_mode_changed(
         };
 
         if request.war_mode {
+            expected.flags |= EntityFlags::WAR_MODE.bits();
             **war_mode = true;
         } else {
+            expected.flags &= !EntityFlags::WAR_MODE.bits();
             **war_mode = false;
             commands.entity(owned.entity).remove::<AttackTarget>();
         }

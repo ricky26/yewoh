@@ -356,9 +356,7 @@ fn build_tuple_struct(
 ) -> impl Fn(
     &mut Context, &mut RegisterValues,
 ) -> anyhow::Result<DynamicTupleStruct> {
-    let body = body.iter()
-        .copied()
-        .collect::<Vec<_>>();
+    let body = body.to_vec();
     move |_ctx: &mut Context, registers: &mut RegisterValues| {
         let mut value = DynamicTupleStruct::default();
         for src in body.iter() {

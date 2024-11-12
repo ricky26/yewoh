@@ -4,7 +4,7 @@ use std::sync::Arc;
 use bevy::prelude::*;
 use bevy::utils::HashMap;
 use yewoh::protocol::AnyPacket;
-
+use crate::world::entity::MapPosition;
 use crate::world::map::MapInfos;
 use crate::world::ServerSet;
 
@@ -31,9 +31,9 @@ pub fn delta_grid_cell(position: IVec2) -> IVec2 {
 
 #[derive(Clone, Debug)]
 pub enum DeltaEntry {
-    ItemChanged { entity: Entity, parent: Option<Entity>, packet: Arc<AnyPacket> },
+    ItemChanged { entity: Entity, parent: Option<Entity>, position: MapPosition, packet: Arc<AnyPacket> },
     ItemRemoved { entity: Entity, packet: Arc<AnyPacket> },
-    CharacterChanged { entity: Entity, update_packet: Arc<AnyPacket> },
+    CharacterChanged { entity: Entity, position: MapPosition, update_packet: Arc<AnyPacket> },
     CharacterRemoved { entity: Entity, packet: Arc<AnyPacket> },
     CharacterAnimation { entity: Entity, packet: Arc<AnyPacket> },
     CharacterDamaged { entity: Entity, packet: Arc<AnyPacket> },

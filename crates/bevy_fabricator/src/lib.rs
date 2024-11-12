@@ -55,7 +55,7 @@ impl Debug for Fabricator {
         let mut s = f.debug_struct("Fabricator");
 
         for (k, v) in &self.parameters {
-            s.field(&k, v);
+            s.field(k, v);
         }
 
         s.finish()
@@ -120,7 +120,9 @@ pub struct FabricateRequest {
 
 impl FabricateRequest {
     pub fn fabricate(&self, world: &mut World, entity: Entity) -> anyhow::Result<Fabricated> {
-        (self.factory)(entity, self.parameters.as_ref(), world)
+        let mut result = (self.factory)(entity, self.parameters.as_ref(), world)?;
+        result.factory = Some(Arc::downgrade(&self.factory));
+        Ok(result)
     }
 }
 
@@ -173,8 +175,7 @@ pub fn fabricate(
 
         commands.queue(move |world: &mut World| {
             match request.fabricate(world, entity) {
-                Ok(mut result) => {
-                    result.factory = Some(Arc::downgrade(&request.factory));
+                Ok(result) => {
                     world.entity_mut(entity).insert(result);
                 }
                 Err(err) => {
