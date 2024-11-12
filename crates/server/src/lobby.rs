@@ -1,4 +1,5 @@
 use std::collections::{hash_map, HashMap};
+use std::fmt::{Debug, Formatter};
 use std::net::Ipv4Addr;
 use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 use std::sync::Arc;
@@ -24,7 +25,11 @@ pub trait AccountRepository {
 pub trait ServerRepository {
     async fn list_servers(&mut self, username: &str) -> anyhow::Result<ServerList>;
     async fn allocate_session(
-        &mut self, username: &str, server_id: u16, seed: u32, client_version: ClientVersion,
+        &mut self, username: &str,
+        server_id: u16,
+        seed: u32,
+        client_version: ClientVersion,
+        encrypted: bool,
     ) -> anyhow::Result<SwitchServer>;
 }
 
@@ -62,8 +67,10 @@ pub async fn serve_lobby(
                 login_packet.server_id,
                 seed.seed,
                 seed.client_version,
+                encrypted,
             ).await?;
             writer.send(seed.client_version, &session).await?;
+            return Ok(());
         } else {
             writer.send(seed.client_version, &LoginError::CommunicationProblem).await.ok();
             return Err(anyhow!("unexpected lobby packet {:?}", packet));
@@ -101,6 +108,7 @@ pub struct NewSessionRequest {
     pub seed: u32,
     pub client_version: ClientVersion,
     pub token: u32,
+    pub encryption: Option<Encryption>,
     pub done: oneshot::Sender<anyhow::Result<()>>,
 }
 
@@ -164,15 +172,26 @@ impl ServerRepository for LocalServerRepository {
     }
 
     async fn allocate_session(
-        &mut self, username: &str, _server_id: u16, seed: u32, client_version: ClientVersion,
+        &mut self,
+        username: &str,
+        _server_id: u16,
+        seed: u32,
+        client_version: ClientVersion,
+        encrypted: bool,
     ) -> anyhow::Result<SwitchServer> {
         let (tx, rx) = oneshot::channel();
         let token = self.shared.next_token.fetch_add(1, Ordering::Relaxed);
+        let encryption = if encrypted {
+            Some(Encryption::new(client_version, token, false))
+        } else {
+            None
+        };
         let request = NewSessionRequest {
             username: username.to_string(),
             client_version,
             seed,
             token,
+            encryption,
             done: tx,
         };
         self.shared.new_session_tx.send(request)
@@ -191,10 +210,26 @@ pub struct NewSession {
     pub username: String,
 }
 
+#[derive(Clone)]
+pub struct SessionParameters {
+    pub client_version: ClientVersion,
+    pub encryption: Option<Encryption>,
+}
+
+impl Debug for SessionParameters {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let encrypted = self.encryption.is_some();
+        f.debug_struct("SessionParameters")
+            .field("client_version", &self.client_version)
+            .field("encrypted", &encrypted)
+            .finish()
+    }
+}
+
 #[derive(Debug)]
 struct PendingSession {
     pub username: String,
-    pub client_version: ClientVersion,
+    pub parameters: SessionParameters,
 }
 
 #[derive(Debug, Default)]
@@ -212,7 +247,10 @@ impl SessionAllocator {
         let result = if matches!(entry, hash_map::Entry::Vacant(_)) {
             entry.or_insert(PendingSession {
                 username: session.username,
-                client_version: session.client_version,
+                parameters: SessionParameters {
+                    client_version: session.client_version,
+                    encryption: session.encryption,
+                },
             });
             Ok(())
         } else {
@@ -222,8 +260,8 @@ impl SessionAllocator {
         session.done.send(result).ok();
     }
 
-    pub fn client_version_for_token(&self, token: u32) -> Option<ClientVersion> {
-        self.pending_sessions.get(&token).map(|t| t.client_version)
+    pub fn session_parameters(&self, token: u32) -> Option<SessionParameters> {
+        self.pending_sessions.get(&token).map(|t| t.parameters.clone())
     }
 
     pub fn start_session(&mut self, token: u32, login: GameServerLogin) -> anyhow::Result<NewSession> {

@@ -14,7 +14,8 @@ use bevy::prelude::*;
 use bevy::tasks::block_on;
 use bevy::time::Time;
 use clap::Parser;
-use futures::future::join;
+use futures::stream::FuturesUnordered;
+use futures::{FutureExt, StreamExt, TryFutureExt};
 use tokio::fs;
 use tokio::net::{lookup_host, TcpListener};
 use tokio::sync::mpsc;
@@ -56,10 +57,6 @@ struct Args {
     #[clap(short, long, default_value = "Yewoh Server", env = "YEWOH_SERVER_NAME")]
     server_display_name: String,
 
-    /// Whether or not to enable packet encryption.
-    #[clap(short = 'e', long, env = "YEWOH_DISABLE_ENCRYPTION")]
-    disable_encryption: bool,
-
     /// The external address of this server to provide to clients.
     #[clap(short, long, default_value = "127.0.0.1", env = "YEWOH_ADVERTISE_ADDRESS")]
     advertise_address: String,
@@ -75,6 +72,10 @@ struct Args {
     /// The bind address for the game server.
     #[clap(long, default_value = "0.0.0.0:2594", env = "YEWOH_GAME_BIND")]
     game_bind: String,
+
+    /// The bind address for unencrypted lobby connections.
+    #[clap(long, env = "YEWOH_PLAIN_LOBBY_BIND")]
+    plain_lobby_bind: Option<String>,
 
     /// The address of the database.
     #[clap(long, default_value = "postgres://postgres:postgres@localhost/yewoh", env = "YEWOH_POSTGRES")]
@@ -114,7 +115,7 @@ fn main() -> anyhow::Result<()> {
     let (new_session_requests_tx, new_session_requests) = mpsc::unbounded_channel();
 
     let server_repo = LocalServerRepository::new(
-        args.server_display_name, external_ip, game_port, 0, new_session_requests_tx);
+        args.server_display_name.clone(), external_ip, game_port, 0, new_session_requests_tx.clone());
     let accounts_repo = SqlAccountRepository::new(SqlAccountRepositoryConfig {
         auto_create_accounts: args.auto_create_accounts,
     }, pool.clone());
@@ -184,29 +185,56 @@ fn main() -> anyhow::Result<()> {
     // Spawn static entities
     load_static_entities(&mut app, load_wait, &args.data_path, "entities")?;
 
-    let (lobby_listener, game_listener) = block_on(join(
-        TcpListener::bind(&args.lobby_bind),
-        TcpListener::bind(&args.game_bind),
-    ));
-
-    let lobby_listener = lobby_listener?;
-    let game_listener = game_listener?;
-
-    let accounts_repo_clone = accounts_repo.clone();
-    let lobby_handle = tokio::spawn(listen_for_lobby(
-        lobby_listener, !args.disable_encryption,
-        move || server_repo.clone(), move || accounts_repo_clone.clone()));
-
+    let mut listen_futures = FuturesUnordered::new();
     let (new_session_tx, new_session_rx) = mpsc::unbounded_channel();
-    let game_handle = tokio::spawn(listen_for_game(game_listener, new_session_tx));
+
+    // Listen for game traffic
+    {
+        let game_listener = block_on(TcpListener::bind(&args.game_bind))?;
+        let game_handle = tokio::spawn(listen_for_game(game_listener, new_session_tx.clone()));
+        listen_futures.push(async move {
+            game_handle.await??;
+            return Err(anyhow!("failed to serve game"));
+        }.boxed());
+    }
+
+    // Listen for encrypted lobby traffic
+    {
+        let server_repo = server_repo.clone();
+        let lobby_listener = block_on(TcpListener::bind(&args.lobby_bind))?;
+        let accounts_repo_clone = accounts_repo.clone();
+        let lobby_handle = tokio::spawn(listen_for_lobby(
+            lobby_listener, true,
+            move || server_repo.clone(), move || accounts_repo_clone.clone()));
+        listen_futures.push(async move {
+            lobby_handle.await??;
+            return Err(anyhow!("failed to serve lobby"));
+        }.boxed());
+    }
+
+    // Listen for unencrypted lobby traffic
+    if let Some(lobby_bind) = args.plain_lobby_bind.as_ref() {
+        let lobby_listener = block_on(TcpListener::bind(&lobby_bind))?;
+        let accounts_repo_clone = accounts_repo.clone();
+        let lobby_handle = tokio::spawn(listen_for_lobby(
+            lobby_listener, false,
+            move || server_repo.clone(), move || accounts_repo_clone.clone()));
+        listen_futures.push(async move {
+            lobby_handle.await??;
+            return Err(anyhow!("failed to serve unencrypted lobby"));
+        }.boxed());
+    }
 
     let http_app = axum::Router::new();
     let http_server_handle = tokio::spawn(axum_server::bind(SocketAddr::from_str(&args.http_bind)?)
-        .serve(http_app.into_make_service()));
+        .serve(http_app.into_make_service()))
+        .map_err(|e| anyhow::Error::from(e))
+        .boxed();
+    listen_futures.push(http_server_handle);
 
     app
         .insert_resource(AsyncRuntime::from(tokio::runtime::Handle::current()))
-        .insert_resource(NetServer::new(!args.disable_encryption, new_session_requests, new_session_rx))
+        .insert_resource(NetServer::new(new_session_requests, new_session_rx))
         .insert_resource(map_infos)
         .insert_resource(static_data)
         .insert_resource(TileDataResource { tile_data })
@@ -232,8 +260,18 @@ fn main() -> anyhow::Result<()> {
     }).expect("failed to register shutdown handler");
 
     info!("Listening for http connections on {}", &args.http_bind);
-    info!("Listening for lobby connections on {}", &args.lobby_bind);
     info!("Listening for game connections on {}", &args.game_bind);
+    info!("Listening for lobby connections on {}", &args.lobby_bind);
+    if let Some(lobby_bind) = args.plain_lobby_bind.as_ref() {
+        info!("Listening for unencrypted lobby connections on {}", &lobby_bind);
+    }
+
+    let serve_handle = tokio::spawn(async move {
+        if let Some(result) = listen_futures.next().await {
+            result??;
+        }
+        Ok::<_, anyhow::Error>(())
+    });
 
     loop {
         if SHOULD_EXIT.load(Ordering::Relaxed) {
@@ -247,19 +285,9 @@ fn main() -> anyhow::Result<()> {
         let start_time = Instant::now();
         app.update();
 
-        if game_handle.is_finished() {
-            block_on(game_handle)??;
-            return Err(anyhow!("failed to serve game connections"));
-        }
-
-        if lobby_handle.is_finished() {
-            block_on(lobby_handle)??;
-            return Err(anyhow!("failed to serve lobby"));
-        }
-
-        if http_server_handle.is_finished() {
-            block_on(http_server_handle)??;
-            return Err(anyhow!("failed to serve http API"));
+        if serve_handle.is_finished() {
+            block_on(serve_handle)??;
+            return Err(anyhow!("failed to serve services"));
         }
 
         #[cfg(feature = "trace_tracy")]

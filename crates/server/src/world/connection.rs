@@ -6,7 +6,6 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{info, trace, warn};
-use yewoh::protocol::encryption::Encryption;
 use yewoh::protocol::{AnyPacket, ClientVersion, ClientVersionRequest, EntityRequestKind, ExtendedCommand, FeatureFlags, GameServerLogin, IntoAnyPacket, SetAttackTarget, SupportedFeatures, UnicodeTextMessageRequest, ViewRange};
 
 use crate::async_runtime::AsyncRuntime;
@@ -63,8 +62,6 @@ impl NetClient {
 
 #[derive(Resource)]
 pub struct NetServer {
-    encrypted: bool,
-
     new_session_requests: mpsc::UnboundedReceiver<NewSessionRequest>,
     new_session_attempts: mpsc::UnboundedReceiver<NewSessionAttempt>,
 
@@ -82,7 +79,6 @@ pub struct NetServer {
 
 impl NetServer {
     pub fn new(
-        encrypted: bool,
         new_session_requests: mpsc::UnboundedReceiver<NewSessionRequest>,
         new_sessions: mpsc::UnboundedReceiver<NewSessionAttempt>,
     ) -> NetServer {
@@ -91,7 +87,6 @@ impl NetServer {
         let (login_attempts_tx, login_attempts_rx) = mpsc::unbounded_channel();
 
         Self {
-            encrypted,
             new_session_requests,
             new_session_attempts: new_sessions,
             session_allocator: SessionAllocator::new(),
@@ -123,14 +118,14 @@ pub fn accept_new_clients(
     }
 
     while let Ok(session_attempt) = server.new_session_attempts.try_recv() {
-        let client_version = match server.session_allocator.client_version_for_token(session_attempt.token) {
+        let parameters = match server.session_allocator.session_parameters(session_attempt.token) {
             Some(x) => x,
             None => {
                 warn!("Session attempt for unknown token {}", session_attempt.token);
                 continue;
             }
         };
-
+        let client_version = parameters.client_version;
         let NewSessionAttempt {
             address,
             mut reader,
@@ -138,11 +133,9 @@ pub fn accept_new_clients(
             token,
         } = session_attempt;
 
-        if server.encrypted {
-            let encryption = Encryption::new(client_version, token, false);
-            reader.set_encryption(Some(encryption.clone()));
-            writer.set_encryption(Some(encryption));
-        }
+        // Configure encryption
+        reader.set_encryption(parameters.encryption.clone());
+        writer.set_encryption(parameters.encryption);
 
         let attempt_tx = server.login_attempts_tx.clone();
         runtime.spawn(async move {
