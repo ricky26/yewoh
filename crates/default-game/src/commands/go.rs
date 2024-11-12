@@ -14,7 +14,7 @@ use crate::data::static_data::StaticData;
 use crate::DefaultGameSet;
 use crate::entities::position::PositionExt;
 use crate::entity_events::{EntityEventReader, EntityEventRoutePlugin};
-use crate::gumps::OnCloseGump;
+use crate::gumps::{OnCloseGump, RESIZABLE_PAPER_3};
 
 #[derive(Clone, Debug)]
 pub enum ButtonAction {
@@ -67,7 +67,7 @@ impl GoGump {
         let mut page_index = 1;
 
         layout
-            .add_image_sliced(0xdac, IVec2::ZERO, size)
+            .add_image_sliced(RESIZABLE_PAPER_3, IVec2::ZERO, size)
             .add_html(
                 text.intern("<center>Go to Location</center>".to_string()),
                 false,

@@ -11,7 +11,7 @@ use crate::world::map::Static;
 use crate::world::ServerSet;
 
 #[derive(Debug, Clone, Copy, Default, Reflect)]
-#[reflect(opaque, Default, Component)]
+#[reflect(opaque, Default, Debug, Component)]
 pub struct NetId {
     pub id: EntityId,
 }

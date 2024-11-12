@@ -17,4 +17,5 @@ tracing = { workspace = true }
 bevy = { workspace = true, default-features = false }
 glam = { workspace = true }
 smallvec = { workspace = true }
+indexmap = { workspace = true }
 rand = { workspace = true }

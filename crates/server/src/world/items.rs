@@ -390,6 +390,7 @@ pub fn plugin(app: &mut App) {
     app
         .register_type::<ItemQuantity>()
         .register_type::<ItemGraphic>()
+        .register_type::<ItemGraphicOffset>()
         .register_type::<Container>()
         .add_event::<OnContainerOpen>()
         .add_systems(PostUpdate, (
