@@ -1,11 +1,6 @@
 use bevy::prelude::*;
 use clap::Parser;
-use glam::IVec2;
 use tracing::info;
-use yewoh::protocol::{GumpLayout, OpenGump};
-use yewoh_server::world::connection::{NetClient, Possessing};
-use yewoh_server::world::entity::{Direction, Hue, MapPosition};
-use yewoh_server::world::items::ItemGraphic;
 
 use crate::commands::{TextCommand, TextCommandQueue, TextCommandRegistrationExt};
 
@@ -26,75 +21,11 @@ pub fn echo(mut exec: TextCommandQueue<Echo>) {
     }
 }
 
-#[derive(Parser, Resource)]
-pub struct FryPan;
-
-impl TextCommand for FryPan {
-    fn aliases() -> &'static [&'static str] {
-        &["frypan"]
-    }
-}
-
-pub fn frypan(
-    mut exec: TextCommandQueue<FryPan>,
-    owners: Query<&Possessing>,
-    characters: Query<&MapPosition>,
-    mut commands: Commands,
-) {
-    for (from, _) in exec.iter() {
-        if let Some(position) = owners.get(from)
-            .ok()
-            .and_then(|owner| characters.get(owner.entity).ok()) {
-            commands.spawn((
-                MapPosition {
-                    map_id: 1,
-                    position: position.position,
-                    direction: Direction::North,
-                },
-                ItemGraphic(0x97f),
-                Hue(0x7d0),
-            ));
-        }
-    }
-}
-
-#[derive(Parser, Resource)]
-pub struct TestGump;
-
-impl TextCommand for TestGump {
-    fn aliases() -> &'static [&'static str] {
-        &["testgump"]
-    }
-}
-
-pub fn test_gump(
-    mut exec: TextCommandQueue<TestGump>,
-    clients: Query<&NetClient>,
-) {
-    for (from, _) in exec.iter() {
-        if let Ok(client) = clients.get(from) {
-            client.send_packet(OpenGump {
-                gump_id: 1,
-                type_id: 2,
-                position: IVec2::new(50, 50),
-                layout: GumpLayout {
-                    layout: "{ page 0 }{ resizepic 0 0 5054 420 440 }{ text 0 0 120 0 }".to_string(),
-                    text: vec!["Hello, world!".into()],
-                },
-            });
-        }
-    }
-}
-
 pub fn plugin(app: &mut App) {
     app
         .add_text_command::<Echo>()
-        .add_text_command::<FryPan>()
-        .add_text_command::<TestGump>()
         .add_systems(Update, (
             echo,
-            frypan,
-            test_gump,
         ));
 }
 
