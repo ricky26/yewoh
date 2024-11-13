@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 use glam::{IVec2, IVec3};
 
 use yewoh::protocol::GumpLayout;
-use yewoh_server::gump_builder::{GumpBuilder, GumpText};
+use yewoh_server::gump_builder::{GumpBuilder, GumpRect, GumpRectLayout, GumpText};
 use yewoh_server::world::entity::MapPosition;
 use yewoh_server::world::connection::Possessing;
 use yewoh_server::world::gump::{Gump, GumpClient};
@@ -15,6 +15,7 @@ use crate::DefaultGameSet;
 use crate::entities::position::PositionExt;
 use crate::entity_events::{EntityEventReader, EntityEventRoutePlugin};
 use crate::gumps::{OnCloseGump, RESIZABLE_PAPER_3};
+use crate::gumps::page_allocator::GumpPageBoxAllocator;
 
 #[derive(Clone, Debug)]
 pub enum ButtonAction {
@@ -59,81 +60,38 @@ impl GoGump {
 
     pub fn render(&self) -> GumpLayout {
         let size = IVec2::new(400, 600);
-        let padding = IVec2::new(16, 16);
         let row = 20;
 
         let mut text = GumpText::new();
-        let mut layout = GumpBuilder::new();
-        let mut page_index = 1;
+        let mut builder = GumpBuilder::new();
+        let mut layout = GumpRectLayout::new(&mut builder, &mut text, GumpRect::from_zero(size))
+            .background(|builder| builder.image_sliced(RESIZABLE_PAPER_3))
+            .with_padding(16)
+            .into_vbox();
 
         layout
-            .add_image_sliced(RESIZABLE_PAPER_3, IVec2::ZERO, size)
-            .add_html(
-                text.intern("<center>Go to Location</center>".to_string()),
-                false,
-                false,
-                padding,
-                IVec2::new(size.x - padding.x, row),
-            )
-            .add_page(page_index);
+            .allocate(row, |builder| builder
+                .html("<center>Go to Location</center>"))
+            .gap(row);
 
-        let prev_page_text = text.intern("<center>Previous Page</center>".to_string());
-        let next_page_text = text.intern("<center>Next Page</center>".to_string());
-
-        let mut y = padding.y + row * 2;
+        let mut page = GumpPageBoxAllocator::new(layout.rest(), 1);
         if !self.prefix.is_empty() {
-            layout
-                .add_close_button(0x15e1, 0x15e5, 1, IVec2::new(padding.x, y))
-                .add_html(
-                    text.intern("<center>Back</center>".to_string()),
-                    false,
-                    false,
-                    IVec2::new(padding.x + 10, y),
-                    IVec2::new(size.x - padding.x * 2 - 8, row),
-                );
-            y += row;
+            page.allocate(row, |builder| builder
+                .background(|builder| builder
+                    .html("<center>Back</center>"))
+                .right(16)
+                .close_button(0x15e1, 0x15e5, 1));
         }
 
         for (button_index, (button_text, _)) in self.buttons.iter().enumerate() {
-            if y >= 500 {
-                page_index += 1;
-                layout
-                    .add_page_button(0x15e1, 0x15e5, page_index, IVec2::new(padding.x, y))
-                    .add_html(
-                        next_page_text,
-                        false,
-                        false,
-                        IVec2::new(padding.x + 10, y),
-                        IVec2::new(size.x - padding.x * 2 - 8, row),
-                    );
-
-                y = padding.y + row * 2;
-                layout
-                    .add_page(page_index)
-                    .add_page_button(0x15e1, 0x15e5, page_index - 1, IVec2::new(padding.x, y))
-                    .add_html(
-                        prev_page_text,
-                        false,
-                        false,
-                        IVec2::new(padding.x + 10, y),
-                        IVec2::new(size.x - padding.x * 2 - 8, row),
-                    );
-                y += row;
-            }
-
-            layout
-                .add_close_button(0x15e1, 0x15e5, button_index + 2, IVec2::new(padding.x, y))
-                .add_html(
-                    text.intern(format!("<center>{button_text}</center>")),
-                    false,
-                    false,
-                    IVec2::new(padding.x + 10, y),
-                    IVec2::new(size.x - padding.x * 2 - 8, row),
-                );
-            y += row;
+            page.allocate(row, |builder| builder
+                .background(|builder| builder
+                    .html(format!("<center>{button_text}</center>")))
+                .right(16)
+                .close_button(0x15e1, 0x15e5, button_index + 2));
         }
 
-        layout.into_layout(text)
+        builder.into_layout(text)
     }
 }
 

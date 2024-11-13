@@ -8,7 +8,7 @@ use clap::Parser;
 use glam::ivec2;
 use yewoh::assets::map::CHUNK_SIZE;
 use yewoh::protocol::{GumpLayout, TargetType};
-use yewoh_server::gump_builder::{GumpBuilder, GumpText};
+use yewoh_server::gump_builder::{GumpBoxLayout, GumpBuilder, GumpRect, GumpRectLayout, GumpText};
 use yewoh_server::world::gump::{Gump, GumpClient};
 use yewoh_server::world::input::{EntityTargetRequest, EntityTargetResponse, WorldTargetRequest, WorldTargetResponse};
 use yewoh_server::world::spatial::SpatialQuery;
@@ -18,11 +18,9 @@ use crate::commands::{TextCommand, TextCommandQueue, TextCommandRegistrationExt}
 use crate::DefaultGameSet;
 use crate::entity_events::{EntityEventReader, EntityEventRoutePlugin};
 use crate::gumps::{OnCloseGump, RESIZABLE_PAPER_3};
+use crate::gumps::page_allocator::GumpPageBoxAllocator;
 
-const SIZE: IVec2 = IVec2::new(400, 600);
-const PADDING: IVec2 = IVec2::new(16, 16);
 const ROW_HEIGHT: i32 = 20;
-const NEW_PAGE_Y: i32 = 500;
 
 fn type_short_name(name: &str) -> &str {
     let max = name.rfind('<').unwrap_or(name.len());
@@ -30,34 +28,6 @@ fn type_short_name(name: &str) -> &str {
         &name[(n + 1)..]
     } else {
         name
-    }
-}
-
-fn wrap_page(layout: &mut GumpBuilder, text: &mut GumpText, page_index: &mut usize, y: &mut i32) {
-    if *y >= NEW_PAGE_Y {
-        *page_index += 1;
-        layout
-            .add_page_button(0x15e1, 0x15e5, *page_index, IVec2::new(SIZE.x - PADDING.x * 2, *y))
-            .add_html(
-                text.intern("<center>Next Page</center>"),
-                false,
-                false,
-                IVec2::new(PADDING.x + 10, *y),
-                IVec2::new(SIZE.x - PADDING.x * 2 - 8, ROW_HEIGHT),
-            );
-
-        *y = PADDING.y + ROW_HEIGHT * 2;
-        layout
-            .add_page(*page_index)
-            .add_page_button(0x15e3, 0x15e7, *page_index - 1, IVec2::new(PADDING.x, *y))
-            .add_html(
-                text.intern("<center>Previous Page</center>"),
-                false,
-                false,
-                IVec2::new(PADDING.x + 10, *y),
-                IVec2::new(SIZE.x - PADDING.x * 2 - 8, ROW_HEIGHT),
-            );
-        *y += ROW_HEIGHT * 2;
     }
 }
 
@@ -240,151 +210,103 @@ impl InfoGump {
 
     fn render_chunk(
         &self,
-        layout: &mut GumpBuilder,
-        text: &mut GumpText,
+        mut layout: GumpBoxLayout,
         map_id: u8,
         chunk: IVec2,
     ) {
-        let mut page_index = 1;
-
         layout
-            .add_html(
-                text.intern(format!("<center>Chunk {map_id} - {chunk:?}</center>")),
-                false,
-                false,
-                PADDING,
-                IVec2::new(SIZE.x - PADDING.x, ROW_HEIGHT),
-            )
-            .add_page(page_index);
+            .allocate(ROW_HEIGHT, |builder| builder
+                .html(format!("<center>Chunk {map_id} - {chunk:?}</center>")))
+            .gap(ROW_HEIGHT);
 
-        let mut y = PADDING.y + ROW_HEIGHT * 2;
+        let mut page = GumpPageBoxAllocator::new(layout.rest(), 1);
         for (entity_index, entity) in self.entities.iter().enumerate() {
-            wrap_page(layout, text, &mut page_index, &mut y);
-            layout
-                .add_close_button(0x15e1, 0x15e5, entity_index + 1, IVec2::new(SIZE.x - PADDING.x * 2, y))
-                .add_html(
-                    text.intern(format!("<center>{entity}</center>")),
-                    false,
-                    false,
-                    IVec2::new(PADDING.x + 10, y),
-                    IVec2::new(SIZE.x - PADDING.x * 2 - 8, ROW_HEIGHT),
-                );
-            y += ROW_HEIGHT * 2;
+            page.allocate(ROW_HEIGHT, |builder| builder
+                .background(|b| b.html(format!("<center>{entity}</center>")))
+                .right(16)
+                .close_button(0x15e1, 0x15e5, entity_index + 1));
         }
     }
 
     fn render_entity(
         &self,
-        layout: &mut GumpBuilder,
-        text: &mut GumpText,
+        mut layout: GumpBoxLayout,
         entity: Entity,
     ) {
-        let mut page_index = 1;
-
         layout
-            .add_html(
-                text.intern(format!("<center>Entity {entity}</center>")),
-                false,
-                false,
-                PADDING,
-                IVec2::new(SIZE.x - PADDING.x, ROW_HEIGHT),
-            )
-            .add_page(page_index);
+            .allocate(ROW_HEIGHT, |builder| builder
+                .html(format!("<center>Entity {entity}</center>")))
+            .gap(ROW_HEIGHT);
 
-        let mut y = PADDING.y + ROW_HEIGHT * 2;
         if self.chunk.is_some() {
             layout
-                .add_close_button(0x15e3, 0x15e7, 1, IVec2::new(PADDING.x, y))
-                .add_html(
-                    text.intern("<center>Back</center>".to_string()),
-                    false,
-                    false,
-                    IVec2::new(PADDING.x + 10, y),
-                    IVec2::new(SIZE.x - PADDING.x * 2 - 8, ROW_HEIGHT),
-                );
-            y += ROW_HEIGHT * 2;
+                .allocate(ROW_HEIGHT, |builder| builder
+                    .background(|builder| builder
+                        .html("<center>Back</center>"))
+                    .right(16)
+                    .close_button(0x15e3, 0x15e7, 1))
+                .gap(ROW_HEIGHT);
         }
 
+        let mut page = GumpPageBoxAllocator::new(layout.rest(), 1);
         for (component_index, (type_name, _, value, can_navigate)) in self.components.iter().enumerate() {
-            wrap_page(layout, text, &mut page_index, &mut y);
+            page.allocate(ROW_HEIGHT * 3, |builder| {
+                builder
+                    .into_vbox()
+                    .allocate(ROW_HEIGHT, |builder| builder
+                        .html(format!("<center>{type_name}</center>")))
+                    .allocate(ROW_HEIGHT, |builder| {
+                        let builder = builder
+                            .background(|builder| builder
+                                .html(format!("<center>{value}</center>")));
 
-            layout
-                .add_html(
-                    text.intern(format!("<center>{type_name}</center>")),
-                    false,
-                    false,
-                    IVec2::new(PADDING.x + 10, y),
-                    IVec2::new(SIZE.x - PADDING.x * 2 - 8, ROW_HEIGHT),
-                )
-                .add_html(
-                    text.intern(format!("<center>{value}</center>")),
-                    false,
-                    false,
-                    IVec2::new(PADDING.x + 10, y + ROW_HEIGHT),
-                    IVec2::new(SIZE.x - PADDING.x * 2 - 8, ROW_HEIGHT),
-                );
-
-            if *can_navigate {
-                layout.add_close_button(0x15e1, 0x15e5, component_index + 2, IVec2::new(SIZE.x - PADDING.x * 2, y));
-            }
-
-            y += ROW_HEIGHT * 3;
+                        if *can_navigate {
+                            builder
+                                .right(16)
+                                .close_button(0x15e1, 0x15e5, component_index + 2);
+                        }
+                    });
+            });
         }
     }
 
     fn render_component(
         &self,
-        layout: &mut GumpBuilder,
-        text: &mut GumpText,
+        mut layout: GumpBoxLayout,
         _entity: Entity,
         _component_type: ComponentId,
     ) {
         let (type_name, value) = self.component_info.as_ref().unwrap();
-
         layout
-            .add_html(
-                text.intern(format!("<center>{type_name}</center>")),
-                false,
-                false,
-                PADDING,
-                IVec2::new(SIZE.x - PADDING.x, ROW_HEIGHT),
-            );
-
-        let mut y = PADDING.y + ROW_HEIGHT * 2;
-        layout
-            .add_close_button(0x15e3, 0x15e7, 1, IVec2::new(PADDING.x, y))
-            .add_html(
-                text.intern("<center>Back</center>".to_string()),
-                false,
-                false,
-                IVec2::new(PADDING.x + 10, y),
-                IVec2::new(SIZE.x - PADDING.x * 2 - 8, ROW_HEIGHT),
-            );
-        y += ROW_HEIGHT;
-
-        layout
-            .add_html(
-                text.intern(format!("<center>{value:#?}</center>")),
-                false,
-                false,
-                IVec2::new(PADDING.x + 10, y),
-                IVec2::new(SIZE.x - PADDING.x * 2 - 8, SIZE.y - PADDING.y * 2),
-            );
+            .allocate(ROW_HEIGHT, |builder| builder
+                .html(format!("<center>{type_name}</center>")))
+            .allocate(ROW_HEIGHT, |builder| builder
+                .background(|builder| builder
+                    .html("<center>Back</center>"))
+                .right(16)
+                .close_button(0x15e3, 0x15e7, 1))
+            .allocate(ROW_HEIGHT, |builder| builder
+                .html(format!("<center>{value:#?}</center>")));
     }
 
     pub fn render(&self) -> GumpLayout {
         let mut text = GumpText::new();
         let mut layout = GumpBuilder::new();
 
-        layout.add_image_sliced(RESIZABLE_PAPER_3, IVec2::ZERO, SIZE);
+        let rect = GumpRect::from_zero(ivec2(400, 600));
+        let box_layout = GumpRectLayout::new(&mut layout, &mut text, rect)
+            .background(|builder| builder
+                .image_sliced(RESIZABLE_PAPER_3))
+            .with_padding(16)
+            .into_vbox();
 
         match self.page {
             InfoGumpPage::Chunk(map_id, chunk) =>
-                self.render_chunk(&mut layout, &mut text, map_id, chunk),
+                self.render_chunk(box_layout, map_id, chunk),
             InfoGumpPage::Entity(entity) =>
-                self.render_entity(&mut layout, &mut text, entity),
+                self.render_entity(box_layout, entity),
             InfoGumpPage::Component(entity, component) =>
-                self.render_component(&mut layout, &mut text, entity, component),
+                self.render_component(box_layout, entity, component),
         }
 
         layout.into_layout(text)

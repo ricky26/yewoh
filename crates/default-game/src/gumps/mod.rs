@@ -5,6 +5,8 @@ use yewoh_server::world::ServerSet;
 
 use crate::entity_events::{EntityEvent, EntityEventPlugin};
 
+pub mod page_allocator;
+
 pub const RESIZABLE_PAPER_1: u16 = 0x62b;
 pub const RESIZABLE_PAPER_2: u16 = 0xbb8;
 pub const RESIZABLE_PAPER_3: u16 = 0xdac;
