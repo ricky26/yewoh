@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy_fabricator::traits::{Apply, Context, ReflectApply};
-use yewoh_server::world::entity::{ContainedPosition, Direction, EquipmentSlot, MapPosition};
+use yewoh_server::world::entity::{ContainedPosition, EquipmentSlot, MapPosition};
 use crate::data::prefabs::PrefabLibraryEntityExt;
 use crate::entities::position::PositionExt;
 
@@ -49,7 +49,6 @@ impl Apply for ContainedBy {
 pub struct AtMapPosition {
     pub position: IVec3,
     pub map_id: u8,
-    pub direction: Direction,
 }
 
 impl Apply for AtMapPosition {
@@ -57,9 +56,9 @@ impl Apply for AtMapPosition {
         let position = MapPosition {
             position: self.position,
             map_id: self.map_id,
-            direction: self.direction,
         };
-        ctx.world.entity_mut(entity).move_to_map_position(position);
+        ctx.world.entity_mut(entity)
+            .move_to_map_position(position);
         Ok(())
     }
 }

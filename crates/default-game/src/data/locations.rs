@@ -1,10 +1,11 @@
+use bevy::prelude::*;
 use glam::IVec3;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use crate::data::cities::Cities;
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Reflect, Serialize, Deserialize)]
 pub struct Location {
     pub map_id: u32,
     pub position: IVec3,

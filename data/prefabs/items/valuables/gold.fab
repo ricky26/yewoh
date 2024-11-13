@@ -1,9 +1,15 @@
 import yewoh_server::world::items::ItemGraphic;
 import yewoh_default_game::entities::common::Weight;
 import yewoh_default_game::items::persistence::PersistQuantity;
-import yewoh_default_game::items::common::Stackable;
+import yewoh_default_game::items::common::{CanLift, Stackable, DropSoundByQuantity};
 
 $ <- ItemGraphic(0xeed);
+$ <- DropSoundByQuantity([
+    { sound_id: 0x2e4 },
+    { min_quantity: 1, sound_id: 0x2e5 },
+    { min_quantity: 5, sound_id: 0x2e6 },
+]);
 $ <- Weight(0.25);
 $ <- PersistQuantity;
 $ <- Stackable;
+$ <- CanLift;

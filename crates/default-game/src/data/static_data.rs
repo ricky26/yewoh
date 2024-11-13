@@ -1,11 +1,15 @@
-use std::path::Path;
-use bevy::ecs::system::Resource;
+use std::path::{Path, PathBuf};
+use bevy::prelude::*;
 use tokio::fs;
 
 use crate::data::cities::Cities;
 use crate::data::locations::Locations;
 use crate::data::maps::Maps;
 use crate::data::skills::Skills;
+
+#[derive(Debug, Clone, Reflect, Resource)]
+#[reflect(Resource)]
+pub struct DataPath(pub PathBuf);
 
 #[derive(Debug, Clone, Resource)]
 pub struct StaticData {
@@ -28,4 +32,9 @@ pub async fn load_from_directory(data_path: &Path) -> anyhow::Result<StaticData>
         skills,
         locations,
     })
+}
+
+pub fn plugin(app: &mut App) {
+    app
+        .register_type::<DataPath>();
 }

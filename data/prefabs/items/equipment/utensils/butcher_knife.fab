@@ -3,6 +3,7 @@ import yewoh_server::world::characters::Animation;
 import yewoh_default_game::activities::combat::MeleeWeapon;
 import yewoh_default_game::activities::butchering::ButcheringKnife;
 import yewoh_default_game::entities::common::Weight;
+import yewoh_default_game::items::common::CanLift;
 import bevy_fabricator::humantime::HumanDuration;
 
 $ <- ItemGraphic(0x13f6);
@@ -14,4 +15,5 @@ $ <- MeleeWeapon {
     swing_animation: Animation::Predefined({ kind: 0, action: 4 }),
 };
 $ <- Weight(1);
+$ <- CanLift;
 $ <- ButcheringKnife;

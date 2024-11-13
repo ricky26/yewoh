@@ -9,7 +9,7 @@ use yewoh::protocol::{AnyPacket, DeleteEntity, EntityFlags, EntityTooltipVersion
 use yewoh::{EntityId, EntityKind};
 
 use crate::world::delta_grid::{delta_grid_cell, DeltaEntry, DeltaGrid, DeltaVersion};
-use crate::world::entity::{ContainedPosition, EquippedPosition, Hue, MapPosition, RootPosition, Tooltip};
+use crate::world::entity::{ContainedPosition, Direction, EquippedPosition, Hue, MapPosition, RootPosition, Tooltip};
 use crate::world::map::Static;
 use crate::world::net_id::{OnDestroyNetEntity, NetId};
 use crate::world::ServerSet;
@@ -137,6 +137,7 @@ pub struct ItemQuery {
     pub quantity: Ref<'static, ItemQuantity>,
     pub tooltip: Ref<'static, Tooltip>,
     pub position: PositionQuery,
+    pub direction: Option<Ref<'static, Direction>>,
 }
 
 impl ItemQueryItem<'_> {
@@ -148,6 +149,11 @@ impl ItemQueryItem<'_> {
         self.position.parent.as_ref().map(|p| p.get())
     }
 
+    pub fn direction(&self) -> Direction {
+        self.direction.as_ref()
+            .map_or(Direction::North, |d| *d.as_ref())
+    }
+
     pub fn to_upsert_map(
         &self, id: EntityId,
     ) -> Option<UpsertEntityWorld> {
@@ -157,7 +163,7 @@ impl ItemQueryItem<'_> {
             kind: EntityKind::Item,
             graphic_id: **self.graphic,
             graphic_inc: **self.graphic_offset,
-            direction: position.direction.into(),
+            direction: self.direction().into(),
             quantity: **self.quantity,
             position: position.position,
             hue: **self.hue,
@@ -215,7 +221,8 @@ impl ItemQueryItem<'_> {
     pub fn is_changed(&self) -> bool {
         self.is_item_changed() ||
             self.tooltip.is_changed() ||
-            self.position.is_changed()
+            self.position.is_changed() ||
+            self.direction.as_ref().map_or(false, |d| d.is_changed())
     }
 
     pub fn is_item_changed(&self) -> bool {

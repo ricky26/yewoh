@@ -1,8 +1,8 @@
 use std::collections::HashMap;
-
+use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Reflect, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Skill {
     name: String,
@@ -32,7 +32,7 @@ impl Default for Skill {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Reflect, Serialize, Deserialize)]
 pub struct Skills {
     pub skills: HashMap<u8, Skill>,
 }

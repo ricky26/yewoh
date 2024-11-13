@@ -1,0 +1,172 @@
+regions:
+  - maps: [0, 1]
+    areas:
+      - min: [250, 750]
+        max: [775, 1330]
+      - min: [525, 2095]
+        max: [925, 2430]
+      - min: [1025, 2155]
+        max: [1265, 2310]
+      - min: [1635, 2430]
+        max: [1705, 2508]
+      - min: [1775, 2605]
+        max: [2165, 2975]
+      - min: [1055, 3520]
+        max: [1570, 4075]
+      - min: [2860, 3310]
+        max: [3120, 3630]
+      - min: [2470, 1855]
+        max: [3950, 3045]
+      - min: [3425, 990]
+        max: [3900, 1455]
+      - min: [4175, 735]
+        max: [4840, 1600]
+      - min: [2375, 330]
+        max: [3100, 1045]
+      - min: [2100, 1090]
+        max: [2310, 1450]
+      - min: [1495, 1400]
+        max: [1550, 1475]
+      - min: [1085, 1520]
+        max: [1415, 1910]
+      - min: [1410, 1500]
+        max: [1745, 1795]
+      - min: [5120, 2300]
+        max: [6143, 4095]
+  - maps: [2]
+    areas:
+      - min: [0, 0]
+        max: [2304, 1600]
+  - maps: [3]
+    areas:
+      - min: [0, 0]
+        max: [2560, 2048]
+frames:
+  - { graphic: 0x0006, directions: [South, North] }
+  - { graphic: 0x0007, directions: [West, East] }
+  - { graphic: 0x0008, directions: [South, North] }
+  - { graphic: 0x000A, directions: [West] }
+  - { graphic: 0x000B, directions: [North] }
+  - { graphic: 0x000C, directions: [East] }
+  - { graphic: 0x000D, directions: [South] }
+  - { graphic: 0x001A, directions: [South, West, North, East] }
+  - { graphic: 0x001B, directions: [South, North] }
+  - { graphic: 0x001C, directions: [West, East] }
+  - { graphic: 0x001E, directions: [West] }
+  - { graphic: 0x001F, directions: [North] }
+  - { graphic: 0x0020, directions: [South] }
+  - { graphic: 0x0021, directions: [East] }
+  - { graphic: 0x0037, directions: [West] }
+  - { graphic: 0x0038, directions: [North] }
+  - { graphic: 0x0039, directions: [East] }
+  - { graphic: 0x003A, directions: [South] }
+  - { graphic: 0x0057, directions: [South, North] }
+  - { graphic: 0x0058, directions: [West, East] }
+  - { graphic: 0x0059, directions: [South, West, North, East] }
+  - { graphic: 0x005B, directions: [South, North] }
+  - { graphic: 0x005C, directions: [West, East] }
+  - { graphic: 0x005D, directions: [South, North] }
+  - { graphic: 0x005E, directions: [West, East] }
+  - { graphic: 0x0080, directions: [South, West, North, East] }
+  - { graphic: 0x0081, directions: [South, West, North, East] }
+  - { graphic: 0x0082, directions: [South, West, North, East] }
+  - { graphic: 0x0084, directions: [South, West, North, East] }
+  - { graphic: 0x0090, directions: [South, West, North, East] }
+  - { graphic: 0x0091, directions: [South, West, North, East] }
+  - { graphic: 0x0094, directions: [South, North] }
+  - { graphic: 0x0095, directions: [West, East] }
+  - { graphic: 0x0096, directions: [South, North] }
+  - { graphic: 0x0097, directions: [West, East] }
+  - { graphic: 0x0098, directions: [West, East] }
+  - { graphic: 0x0099, directions: [South, North] }
+  - { graphic: 0x00A6, directions: [South, West, North, East] }
+  - { graphic: 0x00A7, directions: [South, North] }
+  - { graphic: 0x00A8, directions: [West, East] }
+  - { graphic: 0x00AA, directions: [North] }
+  - { graphic: 0x00AB, directions: [West] }
+  - { graphic: 0x00AC, directions: [South] }
+  - { graphic: 0x00AD, directions: [East] }
+  - { graphic: 0x00AE, directions: [South, West, North, East] }
+  - { graphic: 0x00AF, directions: [West, East] }
+  - { graphic: 0x00B0, directions: [South, North] }
+  - { graphic: 0x00B2, directions: [West] }
+  - { graphic: 0x00B3, directions: [North] }
+  - { graphic: 0x00B4, directions: [South] }
+  - { graphic: 0x00B5, directions: [East] }
+  - { graphic: 0x00C7, directions: [South, West, North, East] }
+  - { graphic: 0x00C8, directions: [West, East] }
+  - { graphic: 0x00C9, directions: [South, North] }
+  - { graphic: 0x00EA, directions: [West, East] }
+  - { graphic: 0x00F8, directions: [South, West, North, East] }
+  - { graphic: 0x00F9, directions: [West, East] }
+  - { graphic: 0x00FA, directions: [South, North] }
+  - { graphic: 0x00FC, directions: [West, East] }
+  - { graphic: 0x00FD, directions: [South, North] }
+  - { graphic: 0x00FE, directions: [South, West, North, East] }
+  - { graphic: 0x00FF, directions: [West, East] }
+  - { graphic: 0x0100, directions: [South, North] }
+  - { graphic: 0x0102, directions: [West, East] }
+  - { graphic: 0x0103, directions: [South, North] }
+  - { graphic: 0x0104, directions: [South, West, North, East] }
+  - { graphic: 0x0105, directions: [West, East] }
+  - { graphic: 0x0106, directions: [South, North] }
+  - { graphic: 0x0108, directions: [West, East] }
+  - { graphic: 0x0109, directions: [South, North] }
+  - { graphic: 0x0127, directions: [South, West, North, East] }
+  - { graphic: 0x0128, directions: [West, East] }
+  - { graphic: 0x0129, directions: [South, North] }
+  - { graphic: 0x012B, directions: [South, West, North, East] }
+  - { graphic: 0x012C, directions: [West, East] }
+  - { graphic: 0x012D, directions: [South, North] }
+  - { graphic: 0x012E, directions: [West, East] }
+  - { graphic: 0x012F, directions: [South, North] }
+  - { graphic: 0x0130, directions: [West, East] }
+  - { graphic: 0x0131, directions: [South, North] }
+  - { graphic: 0x0132, directions: [South, West, North, East] }
+  - { graphic: 0x0133, directions: [West, East] }
+  - { graphic: 0x0134, directions: [South, North] }
+  - { graphic: 0x0135, directions: [South, West, North, East] }
+  - { graphic: 0x0136, directions: [West, East] }
+  - { graphic: 0x0137, directions: [South, North] }
+  - { graphic: 0x0138, directions: [West, East] }
+  - { graphic: 0x0139, directions: [South, North] }
+  - { graphic: 0x013A, directions: [West, East] }
+  - { graphic: 0x013B, directions: [South, North] }
+  - { graphic: 0x014C, directions: [South, West, North, East] }
+  - { graphic: 0x014D, directions: [West, East] }
+  - { graphic: 0x014E, directions: [South, North] }
+  - { graphic: 0x014F, directions: [South, West, North, East] }
+  - { graphic: 0x0150, directions: [West, East] }
+  - { graphic: 0x0151, directions: [South, North] }
+  - { graphic: 0x0152, directions: [West, East] }
+  - { graphic: 0x0153, directions: [South, North] }
+  - { graphic: 0x0154, directions: [West, East] }
+  - { graphic: 0x0155, directions: [South, North] }
+  - { graphic: 0x0156, directions: [West, East] }
+  - { graphic: 0x0157, directions: [South, North] }
+  - { graphic: 0x0158, directions: [South, West, North, East] }
+  - { graphic: 0x0159, directions: [West, East] }
+  - { graphic: 0x015A, directions: [South, North] }
+  - { graphic: 0x015C, directions: [West, East] }
+  - { graphic: 0x015D, directions: [South, North] }
+  - { graphic: 0x015E, directions: [South, West, North, East] }
+  - { graphic: 0x015F, directions: [South, North] }
+  - { graphic: 0x0160, directions: [West, East] }
+  - { graphic: 0x0162, directions: [South, North] }
+  - { graphic: 0x0163, directions: [West, East] }
+  - { graphic: 0x01CF, directions: [South, West, North, East] }
+  - { graphic: 0x01D0, directions: [West, East] }
+  - { graphic: 0x01D1, directions: [South, North] }
+  - { graphic: 0x01D3, directions: [West, East] }
+  - { graphic: 0x01D4, directions: [South, North] }
+  - { graphic: 0x01FF, directions: [South, West, North, East] }
+  - { graphic: 0x0200, directions: [East] }
+  - { graphic: 0x0201, directions: [South] }
+  - { graphic: 0x0203, directions: [West, East] }
+  - { graphic: 0x0204, directions: [South, North] }
+  - { graphic: 0x0205, directions: [West] }
+  - { graphic: 0x0206, directions: [North] }
+  - { graphic: 0x0207, directions: [West, East] }
+  - { graphic: 0x0208, directions: [South, North] }
+  - { graphic: 0x0209, directions: [West, East] }
+  - { graphic: 0x020A, directions: [South, North] }

@@ -12,7 +12,7 @@ use yewoh_server::async_runtime::AsyncRuntime;
 use yewoh_server::world::account::{OnClientDeleteCharacter, OnClientCharacterListRequest, OnClientCreateCharacter, OnClientSelectCharacter, User};
 use yewoh_server::world::characters::{CharacterBodyType, CharacterName, CharacterRace};
 use yewoh_server::world::connection::{NetClient, OwningClient, Possessing};
-use yewoh_server::world::entity::{Direction, EquipmentSlot, Hue, MapPosition};
+use yewoh_server::world::entity::{EquipmentSlot, Hue, MapPosition};
 use yewoh_server::world::items::ItemGraphic;
 use yewoh_server::world::ServerSet;
 
@@ -261,7 +261,6 @@ pub fn create_new_character(
             MapPosition {
                 map_id: city.map_id as u8,
                 position: city.position,
-                direction: Direction::North,
             },
         ))
         .id();

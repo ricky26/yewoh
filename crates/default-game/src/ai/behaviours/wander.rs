@@ -22,18 +22,19 @@ pub fn wander(
     tile_data: Res<TileDataResource>,
     spatial_query: SpatialQuery,
     chunk_query: Query<(&MapPosition, &Chunk)>,
-    mut npcs: Query<(Entity, &mut MapPosition, &mut MoveTimer), (Without<Chunk>, With<Wander>)>,
+    mut npcs: Query<(Entity, &mut MapPosition, &mut Direction, &mut MoveTimer), (Without<Chunk>, With<Wander>)>,
 ) {
     let mut rng = thread_rng();
 
-    for (entity, mut position, mut move_timer) in npcs.iter_mut() {
+    for (entity, mut position, mut direction, mut move_timer) in npcs.iter_mut() {
         if !move_timer.next_move.tick(time.delta()).just_finished() {
             continue;
         }
 
-        let direction = rng.gen::<Direction>();
-        if let Ok(new_position) = try_move_in_direction(&spatial_query, &chunk_query, &tile_data, *position, direction, Some(entity)) {
+        let new_direction = rng.gen::<Direction>();
+        if let Ok(new_position) = try_move_in_direction(&spatial_query, &chunk_query, &tile_data, *position, new_direction, Some(entity)) {
             *position = new_position;
+            *direction = new_direction;
         }
     }
 }

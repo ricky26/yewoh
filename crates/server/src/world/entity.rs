@@ -1,9 +1,13 @@
 use bevy::prelude::*;
+use bitflags::bitflags;
 use glam::{IVec2, IVec3};
 use rand::distributions::Distribution;
 use rand::Rng;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::ser::SerializeSeq;
 use yewoh::protocol;
+use strum_macros::FromRepr;
+
 use crate::math::IVecExt;
 
 #[derive(Clone, Copy, Debug, Default, Deref, DerefMut, Reflect, Component)]
@@ -23,18 +27,20 @@ pub struct Hue(pub u16);
 #[reflect(Component, Default)]
 pub struct Multi(pub u16);
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Reflect, Serialize, Deserialize)]
-#[reflect(Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(FromRepr, Reflect, Component, Serialize, Deserialize)]
+#[reflect(Default, Component, Serialize, Deserialize)]
+#[repr(u8)]
 pub enum Direction {
     #[default]
-    North,
-    Right,
-    East,
-    Down,
-    South,
-    Left,
-    West,
-    Up,
+    North = 0,
+    Right = 1,
+    East = 2,
+    Down = 3,
+    South = 4,
+    Left = 5,
+    West = 6,
+    Up = 7,
 }
 
 impl From<yewoh::Direction> for Direction {
@@ -80,6 +86,23 @@ impl Direction {
             Direction::Up => IVec2::new(-1, -1),
         }
     }
+
+    pub fn opposite(self) -> Direction {
+        match self {
+            Direction::North => Direction::South,
+            Direction::Right => Direction::Left,
+            Direction::East => Direction::West,
+            Direction::Down => Direction::Up,
+            Direction::South => Direction::North,
+            Direction::Left => Direction::Right,
+            Direction::West => Direction::East,
+            Direction::Up => Direction::Down,
+        }
+    }
+
+    pub fn rotate(self, n: u8) -> Direction {
+        Self::from_repr((self as u8).wrapping_add(n) & 7).unwrap()
+    }
 }
 
 impl Distribution<Direction> for rand::distributions::Standard {
@@ -95,6 +118,87 @@ impl Distribution<Direction> for rand::distributions::Standard {
             7 => Direction::Up,
             _ => unreachable!(),
         }
+    }
+}
+
+bitflags! {
+    #[derive(Debug, Clone, Copy, Default, Hash, PartialEq, Eq, PartialOrd, Ord, Reflect)]
+    #[reflect(opaque, Default, Serialize, Deserialize)]
+    pub struct DirectionMask : u8 {
+        const NORTH = 1;
+        const RIGHT = 2;
+        const EAST = 4;
+        const DOWN = 8;
+        const SOUTH = 16;
+        const LEFT = 32;
+        const WEST = 64;
+        const UP = 128;
+    }
+}
+
+impl DirectionMask {
+    pub fn iter_directions(self) -> impl Iterator<Item = Direction> {
+        self.iter().map(|item| match item {
+            DirectionMask::NORTH => Direction::North,
+            DirectionMask::RIGHT => Direction::Right,
+            DirectionMask::EAST => Direction::East,
+            DirectionMask::DOWN => Direction::Down,
+            DirectionMask::SOUTH => Direction::South,
+            DirectionMask::LEFT => Direction::Left,
+            DirectionMask::WEST => Direction::West,
+            DirectionMask::UP => Direction::Up,
+            _ => unreachable!(),
+        })
+    }
+}
+
+impl From<Direction> for DirectionMask {
+    fn from(value: Direction) -> Self {
+        match value {
+            Direction::North => DirectionMask::NORTH,
+            Direction::Right => DirectionMask::RIGHT,
+            Direction::East => DirectionMask::EAST,
+            Direction::Down => DirectionMask::DOWN,
+            Direction::South => DirectionMask::SOUTH,
+            Direction::Left => DirectionMask::LEFT,
+            Direction::West => DirectionMask::WEST,
+            Direction::Up => DirectionMask::UP,
+        }
+    }
+}
+
+impl Distribution<DirectionMask> for rand::distributions::Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> DirectionMask {
+        let bits = rng.gen::<u8>();
+        DirectionMask::from_bits_truncate(bits)
+    }
+}
+
+impl Serialize for DirectionMask {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer
+    {
+        let len = self.bits().count_ones() as usize;
+        let mut seq = serializer.serialize_seq(Some(len))?;
+        for direction in self.iter_directions() {
+            seq.serialize_element(&direction)?;
+        }
+        seq.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for DirectionMask {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>
+    {
+        let directions = <Vec<Direction>>::deserialize(deserializer)?;
+        let mut mask = DirectionMask::empty();
+        for direction in directions {
+            mask |= DirectionMask::from(direction);
+        }
+        Ok(mask)
     }
 }
 
@@ -208,7 +312,6 @@ impl From<EquipmentSlot> for protocol::EquipmentSlot {
 pub struct MapPosition {
     pub position: IVec3,
     pub map_id: u8,
-    pub direction: Direction,
 }
 
 #[derive(Debug, Clone, Copy, Default, Deref, DerefMut, Reflect, Component)]
@@ -269,6 +372,8 @@ pub struct TooltipRequests {
 
 pub fn plugin(app: &mut App) {
     app
+        .register_type::<Direction>()
+        .register_type::<DirectionMask>()
         .register_type::<Frozen>()
         .register_type::<Hidden>()
         .register_type::<Hue>()

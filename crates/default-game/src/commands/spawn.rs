@@ -109,7 +109,6 @@ pub fn spawn(
                 MapPosition {
                     map_id,
                     position,
-                    direction: Default::default(),
                 },
             ));
 

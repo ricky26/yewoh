@@ -1,5 +1,7 @@
 import yewoh_server::world::items::ItemGraphic;
 import yewoh_server::world::entity::Hue;
+import yewoh_default_game::items::common::CanLift;
 
 $ <- ItemGraphic(0x170f);
 $ <- Hue(2);
+$ <- CanLift;

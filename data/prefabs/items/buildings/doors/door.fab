@@ -1,0 +1,10 @@
+import yewoh_default_game::items::buildings::doors::{Door, FourWayDoor};
+
+$ <- Door {
+    open_sound: 0xea,
+    close_sound: 0xf1,
+};
+$ <- FourWayDoor {
+    graphic: 0x6a5,
+    has_offset: true,
+};

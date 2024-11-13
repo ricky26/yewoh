@@ -63,7 +63,49 @@ pub fn add_item_name_tooltip(
 
 #[derive(Clone, Debug, Default, Component, Reflect)]
 #[reflect(Component)]
+pub struct CanLift;
+
+#[derive(Clone, Debug, Default, Component, Reflect)]
+#[reflect(Component)]
 pub struct Stackable;
+
+#[derive(Clone, Copy, Debug, Default, Deref, DerefMut, Reflect, Component)]
+#[reflect(Default, Component)]
+pub struct DropSound(pub u16);
+
+#[derive(Clone, Debug, Default, Reflect)]
+#[reflect(Default)]
+pub struct DropSoundByQuantityEntry {
+    pub min_quantity: u16,
+    pub sound_id: u16,
+}
+
+#[derive(Clone, Debug, Default, Component, Reflect)]
+#[reflect(Component)]
+#[require(DropSound)]
+pub struct DropSoundByQuantity(pub Vec<DropSoundByQuantityEntry>);
+
+pub fn update_drop_sound_by_quantity(
+    mut entities: Query<
+        (&mut DropSound, &ItemQuantity, &DropSoundByQuantity),
+        Or<(Changed<ItemQuantity>, Changed<DropSoundByQuantity>)>,
+    >,
+) {
+    for (mut sound, quantity, sound_by_quantity) in &mut entities {
+        let sound_id = sound_by_quantity.0.iter()
+            .position(|entry| entry.min_quantity > **quantity)
+            .map_or_else(|| sound_by_quantity.0.last(), |index| {
+                if index > 0 {
+                    sound_by_quantity.0.get(index - 1)
+                } else {
+                    None
+                }
+            })
+            .map(|entry| entry.sound_id)
+            .unwrap_or(0);
+        **sound = sound_id;
+    }
+}
 
 #[derive(Clone, Debug, Default, Reflect)]
 pub struct GraphicOffsetEntry {
@@ -103,7 +145,11 @@ pub fn plugin(app: &mut App) {
             EntityEventRoutePlugin::<OnRequestEntityTooltip, (ItemName, ItemQuantity)>::default(),
         ))
         .register_type::<ItemName>()
+        .register_type::<CanLift>()
         .register_type::<Stackable>()
+        .register_type::<DropSound>()
+        .register_type::<DropSoundByQuantityEntry>()
+        .register_type::<DropSoundByQuantity>()
         .register_type::<GraphicOffsetEntry>()
         .register_type::<GraphicOffsetByQuantity>()
         .register_type_data::<Vec<GraphicOffsetEntry>, ReflectFromReflect>()
@@ -112,6 +158,7 @@ pub fn plugin(app: &mut App) {
         ))
         .add_systems(Update, (
             update_graphic_offset_by_quantity,
+            update_drop_sound_by_quantity,
             add_item_names,
         ));
 }

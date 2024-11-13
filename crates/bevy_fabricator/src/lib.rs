@@ -216,8 +216,13 @@ impl FabricateExt for EntityWorldMut<'_> {
         let request = request.into();
         let entity = self.id();
         self.world_scope(|world| {
-            if let Err(err) = request.fabricate(world, entity) {
-                error!("failed to fabricate: {err}");
+            match request.fabricate(world, entity) {
+                Ok(fabricated) => {
+                    world.entity_mut(entity).insert(fabricated);
+                }
+                Err(err) => {
+                    error!("failed to fabricate: {err}");
+                }
             }
         });
         self

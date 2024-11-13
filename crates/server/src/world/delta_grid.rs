@@ -40,6 +40,7 @@ pub enum DeltaEntry {
     CharacterSwing { entity: Entity, target: Entity, packet: Arc<AnyPacket> },
     CharacterStatusChanged { entity: Entity, packet: Arc<AnyPacket> },
     TooltipChanged { entity: Entity, packet: Arc<AnyPacket> },
+    Sound { position: IVec3, packet: Arc<AnyPacket> },
 }
 
 #[derive(Clone, Debug)]

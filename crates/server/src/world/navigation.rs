@@ -66,6 +66,6 @@ pub fn try_move_in_direction(
         Err(MoveError::Impassable)
     } else {
         test_position.z = new_z;
-        Ok(MapPosition { map_id: position.map_id, position: test_position, direction })
+        Ok(MapPosition { map_id: position.map_id, position: test_position })
     }
 }

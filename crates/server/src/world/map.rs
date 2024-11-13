@@ -9,7 +9,7 @@ use yewoh::assets::map::{load_map, load_statics, map_chunk_count, MapChunk, Stat
 use yewoh::assets::multi::MultiData;
 use yewoh::assets::tiles::{TileData, TileFlags};
 
-use crate::world::entity::{Direction, Hue, MapPosition};
+use crate::world::entity::{Hue, MapPosition};
 use crate::world::items::ItemGraphic;
 
 #[derive(Debug, Clone, Default, Reflect)]
@@ -128,7 +128,7 @@ pub fn spawn_map_entities(
         let position = IVec3::new(x, y, 0);
         (
             Chunk { map_chunk: chunk.chunk },
-            MapPosition { map_id: chunk.map_id, position, direction: Direction::default() },
+            MapPosition { map_id: chunk.map_id, position },
             Static,
         )
     }));
@@ -215,7 +215,6 @@ pub fn spawn_static_entities(
             MapPosition {
                 map_id: item.map_id,
                 position: item.position,
-                direction: Direction::default()
             },
             ItemGraphic(item.graphic_id),
             Hue(item.hue),

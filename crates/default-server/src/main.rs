@@ -34,10 +34,11 @@ use yewoh_server::world::map::{self, Chunk, MultiDataResource, Static, TileDataR
 use yewoh_server::world::ServerPlugin;
 
 use bevy_fabricator::hot_reload::{FabricatorChanged, WatchForFabricatorChanges};
-use bevy_fabricator::{empty_reflect, Fabricate, FabricateExt, Fabricator};
+use bevy_fabricator::{empty_reflect, Fabricate, FabricateExt, Fabricated, Fabricator};
 use sqlx::postgres::PgPool;
 use yewoh_default_game::accounts::sql::{SqlAccountRepository, SqlAccountRepositoryConfig};
 use yewoh_default_game::data::prefabs::PrefabLibrary;
+use yewoh_default_game::data::static_data::DataPath;
 use yewoh_default_game::persistence::db::WorldRepository;
 use yewoh_server::world::delta_grid::DeltaGrid;
 use yewoh_server::world::spatial::{ChunkLookup, SpatialCharacterLookup, SpatialDynamicItemLookup, SpatialStaticItemLookup};
@@ -237,6 +238,7 @@ fn main() -> anyhow::Result<()> {
         .insert_resource(NetServer::new(new_session_requests, new_session_rx))
         .insert_resource(map_infos)
         .insert_resource(static_data)
+        .insert_resource(DataPath(abs_data_path))
         .insert_resource(TileDataResource { tile_data })
         .insert_resource(MultiDataResource { multi_data })
         .insert_resource(world_repo.clone())
@@ -500,9 +502,12 @@ fn update_static_entities(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     fabricators: Res<Assets<Fabricator>>,
-    old_entities: Query<(Entity, &Name, &Fabricate, &StaticEntity), With<FabricatorChanged>>,
+    old_entities: Query<
+        (Entity, &Name, &Fabricate, Option<&Fabricated>, &StaticEntity),
+        With<FabricatorChanged>,
+    >,
 ) {
-    for (entity, name, fabricate, path) in &old_entities {
+    for (entity, name, fabricate, fabricated, path) in &old_entities {
         let fabricate = fabricate.clone();
         let asset_path = path.0.clone();
         let request = match fabricate.to_request(&fabricators, Some(&asset_server)) {
@@ -515,6 +520,13 @@ fn update_static_entities(
         };
 
         info!("Reloaded static entity '{name}'");
+
+        if let Some(fabricated) = fabricated {
+            for existing in fabricated.children.iter().copied() {
+                commands.entity(existing).despawn_recursive();
+            }
+        }
+
         commands.entity(entity).despawn_recursive();
         commands
             .spawn((

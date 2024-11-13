@@ -1,9 +1,10 @@
+use bevy::prelude::*;
 use glam::IVec3;
 use serde::{Deserialize, Serialize};
 
 use yewoh::protocol::StartingCity;
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Reflect, Serialize, Deserialize)]
 #[serde(default)]
 pub struct City {
     pub name: String,
@@ -13,7 +14,7 @@ pub struct City {
     pub position: IVec3,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Reflect, Serialize, Deserialize)]
 pub struct Cities {
     pub cities: Vec<City>,
 }

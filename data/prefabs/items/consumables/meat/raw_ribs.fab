@@ -1,9 +1,10 @@
 import yewoh_server::world::items::ItemGraphic;
 import yewoh_default_game::entities::common::Weight;
 import yewoh_default_game::items::persistence::PersistQuantity;
-import yewoh_default_game::items::common::Stackable;
+import yewoh_default_game::items::common::{CanLift, Stackable};
 
 $ <- ItemGraphic(0x9f1);
 $ <- Weight(1);
 $ <- PersistQuantity;
+$ <- CanLift;
 $ <- Stackable;

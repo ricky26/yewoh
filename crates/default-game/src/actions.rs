@@ -5,7 +5,7 @@ use yewoh::protocol::{MoveConfirm, PickUpReject, MoveReject, ProfileResponse, Sk
 use yewoh_server::world::characters::{CharacterBodyType, NotorietyQuery, OnClientProfileRequest, OnClientSkillsRequest, WarMode};
 use yewoh_server::world::combat::{AttackTarget, OnClientWarModeChanged};
 use yewoh_server::world::connection::{NetClient, Possessing};
-use yewoh_server::world::entity::{ContainedPosition, EquippedPosition, MapPosition};
+use yewoh_server::world::entity::{ContainedPosition, Direction, EquippedPosition, MapPosition, RootPosition};
 use yewoh_server::world::input::{OnClientDrop, OnClientEquip, OnClientMove, OnClientPickUp};
 use yewoh_server::world::items::{Container, ItemPosition, ItemQuantity, PositionQuery};
 use yewoh_server::world::map::{Chunk, TileDataResource};
@@ -13,12 +13,14 @@ use yewoh_server::world::navigation::try_move_in_direction;
 use yewoh_server::world::net_id::NetId;
 use yewoh_server::world::spatial::SpatialQuery;
 use yewoh_server::world::ServerSet;
+use yewoh_server::world::sound::{OnClientSound, SoundKind};
 use yewoh_server::world::view::ExpectedCharacterState;
+
 use crate::data::prefabs::PrefabLibraryWorldExt;
 use crate::entities::position::PositionExt;
 use crate::entities::{Persistent, PrefabInstance};
 use crate::entities::tooltips::MarkTooltipChanged;
-use crate::items::common::Stackable;
+use crate::items::common::{CanLift, DropSound, Stackable};
 use crate::items::MAX_STACK;
 
 #[derive(Debug, Clone, Component, Reflect)]
@@ -37,7 +39,7 @@ pub fn on_client_move(
     chunk_query: Query<(&MapPosition, &Chunk)>,
     tile_data: Res<TileDataResource>,
     mut connection_query: Query<(&NetClient, &Possessing, &mut ExpectedCharacterState)>,
-    mut characters: Query<(&mut MapPosition, NotorietyQuery), Without<Chunk>>,
+    mut characters: Query<(&mut MapPosition, &mut Direction, NotorietyQuery), Without<Chunk>>,
     mut events: EventReader<OnClientMove>,
 ) {
     for request in events.read() {
@@ -46,12 +48,12 @@ pub fn on_client_move(
         };
 
         let primary_entity = owned.entity;
-        let Ok((mut map_position, notoriety)) = characters.get_mut(primary_entity) else {
+        let Ok((mut map_position, mut direction, notoriety)) = characters.get_mut(primary_entity) else {
             continue;
         };
 
-        if map_position.direction != request.direction {
-            map_position.direction = request.direction;
+        if *direction != request.direction {
+            *direction = request.direction;
         } else {
             match try_move_in_direction(&spatial_query, &chunk_query, &tile_data, *map_position, request.direction, Some(primary_entity)) {
                 Ok(new_position) => {
@@ -61,7 +63,7 @@ pub fn on_client_move(
                     client.send_packet(MoveReject {
                         sequence: request.sequence,
                         position: map_position.position,
-                        direction: map_position.direction.into(),
+                        direction: (*direction).into(),
                     });
                     continue;
                 }
@@ -80,9 +82,13 @@ pub fn on_client_move(
 pub fn on_client_pick_up(
     clients: Query<(&NetClient, &Possessing)>,
     characters: Query<Option<&Held>>,
-    targets: Query<(Entity, &PrefabInstance, &ItemQuantity, PositionQuery)>,
+    targets: Query<
+        (Entity, &PrefabInstance, &ItemQuantity, &RootPosition, PositionQuery),
+        With<CanLift>,
+    >,
     mut commands: Commands,
     mut events: EventReader<OnClientPickUp>,
+    mut sounds: EventWriter<OnClientSound>,
 ) {
     for request in events.read() {
         let Ok((client, owner)) = clients.get(request.client_entity) else {
@@ -99,7 +105,7 @@ pub fn on_client_pick_up(
             continue;
         }
 
-        let Ok((entity, prefab, quantity, position)) = targets.get(request.target) else {
+        let Ok((entity, prefab, quantity, root, position)) = targets.get(request.target) else {
             client.send_packet(PickUpReject::CannotLift);
             continue;
         };
@@ -107,6 +113,13 @@ pub fn on_client_pick_up(
         let item_position = position.item_position().unwrap();
         let quantity_left = (**quantity).saturating_sub(request.quantity.max(1));
         let quantity_taken = **quantity - quantity_left;
+
+        sounds.send(OnClientSound {
+            client_entity: request.client_entity,
+            kind: SoundKind::OneShot,
+            sound_id: 0x57,
+            position: root.position,
+        });
 
         let held_entity = if quantity_left == 0 {
             commands.entity(entity)
@@ -139,8 +152,10 @@ pub fn on_client_drop(
     holders: Query<(&MapPosition, &Held)>,
     containers: Query<&Container>,
     stackable: Query<(&PrefabInstance, &ItemQuantity), With<Stackable>>,
+    targets: Query<&DropSound>,
     mut commands: Commands,
     mut events: EventReader<OnClientDrop>,
+    mut sounds: EventWriter<OnClientSound>,
 ) {
     for request in events.read() {
         let Ok(owner) = clients.get(request.client_entity) else {
@@ -153,6 +168,15 @@ pub fn on_client_drop(
         };
 
         let target = held.held_entity;
+        if let Ok(sound) = targets.get(target) {
+            sounds.send(OnClientSound {
+                client_entity: request.client_entity,
+                kind: SoundKind::OneShot,
+                sound_id: **sound,
+                position: character_position.position,
+            });
+        }
+
         if let Some(container_entity) = request.dropped_on {
             if containers.get(container_entity).is_ok() {
                 commands.entity(target)

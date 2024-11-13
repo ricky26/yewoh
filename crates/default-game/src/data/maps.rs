@@ -1,11 +1,11 @@
 use std::collections::HashMap;
-
+use bevy::prelude::*;
 use glam::UVec2;
 use serde::{Deserialize, Serialize};
 
 use yewoh_server::world::map::{MapInfo, MapInfos};
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Reflect, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Map {
     pub name: String,
@@ -14,7 +14,7 @@ pub struct Map {
     pub no_assets: bool,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Reflect, Serialize, Deserialize)]
 pub struct Maps {
     pub maps: HashMap<u8, Map>,
 }

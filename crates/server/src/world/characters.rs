@@ -13,7 +13,7 @@ use yewoh::types::FixedString;
 
 use crate::world::connection::{NetClient, OwningClient};
 use crate::world::delta_grid::{delta_grid_cell, DeltaEntry, DeltaGrid, DeltaVersion};
-use crate::world::entity::{Frozen, Hidden, Hue, MapPosition, RootPosition, Tooltip};
+use crate::world::entity::{Direction, Frozen, Hidden, Hue, MapPosition, RootPosition, Tooltip};
 use crate::world::items::ValidItemPosition;
 use crate::world::net_id::{OnDestroyNetEntity, NetId};
 use crate::world::ServerSet;
@@ -42,6 +42,7 @@ use crate::world::ServerSet;
     Tooltip,
     MapPosition,
     RootPosition,
+    Direction,
     WarMode,
     Allies,
     Enemies,
@@ -328,6 +329,7 @@ pub struct CharacterQuery {
     pub war_mode: Ref<'static, WarMode>,
     pub tooltip: Ref<'static, Tooltip>,
     pub position: Ref<'static, MapPosition>,
+    pub direction: Ref<'static, Direction>,
 }
 
 impl CharacterQueryItem<'_> {
@@ -389,7 +391,7 @@ impl CharacterQueryItem<'_> {
             id,
             body_type: **self.body_type,
             position: self.position.position,
-            direction: self.position.direction.into(),
+            direction: (*self.direction).into(),
             hue: **self.hue,
             flags: self.flags(),
             notoriety: self.notoriety(),
@@ -402,7 +404,7 @@ impl CharacterQueryItem<'_> {
             id,
             body_type: **self.body_type,
             position: self.position.position,
-            direction: self.position.direction.into(),
+            direction: (*self.direction).into(),
             hue: **self.hue,
             flags: self.flags(),
             notoriety: self.notoriety(),
@@ -417,7 +419,7 @@ impl CharacterQueryItem<'_> {
             server_id: 0,
             flags: self.flags(),
             position: self.position.position,
-            direction: self.position.direction.into(),
+            direction: (*self.direction).into(),
         }
     }
 
@@ -540,7 +542,7 @@ pub fn detect_character_changes(
     mut removed_characters: EventReader<OnDestroyNetEntity>,
 ) {
     for (entity, net_id, character) in &characters_query {
-        if net_id.is_changed() || character.is_character_changed() || character.position.is_changed() {
+        if net_id.is_changed() || character.is_character_changed() || character.position.is_changed() || character.direction.is_changed() {
             let update_packet = character.to_update(net_id.id).into_any_arc();
             let map_id = character.position.map_id;
             let position = character.position.position;

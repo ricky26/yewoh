@@ -11,7 +11,7 @@ use yewoh::protocol::{CharacterEquipment, OpenContainer, UpsertContainerContents
 use crate::world::characters::{CharacterBodyType, CharacterQuery};
 use crate::world::connection::{NetClient, OwningClient, Possessing};
 use crate::world::delta_grid::{delta_grid_cell, Delta, DeltaEntry, DeltaGrid};
-use crate::world::entity::{ContainedPosition, EquippedPosition, MapPosition, RootPosition};
+use crate::world::entity::{ContainedPosition, Direction, EquippedPosition, MapPosition, RootPosition};
 use crate::world::items::{Container, OnContainerOpen, ItemQuery, ItemGraphic};
 use crate::world::map::MapInfos;
 use crate::world::net_id::NetId;
@@ -478,6 +478,9 @@ pub fn send_deltas(
                         client.send_packet(packet);
                     }
                 }
+                DeltaEntry::Sound { packet, .. } => {
+                    client.send_packet(packet);
+                }
             }
 
             last_version = Some(delta.version);
@@ -591,12 +594,12 @@ pub fn start_synchronizing(
         Without<Synchronizing>,
     >,
     characters: Query<
-        (&NetId, &MapPosition, Ref<CharacterBodyType>),
+        (&NetId, &MapPosition, &Direction, Ref<CharacterBodyType>),
         (With<OwningClient>, With<MapPosition>),
     >,
 ) {
     for (entity, client, view_key, mut seen, possessing, already_in_world) in &mut clients {
-        let Ok((possessed_net, map_position, body_type)) = characters.get(possessing.entity) else {
+        let Ok((possessed_net, map_position, direction, body_type)) = characters.get(possessing.entity) else {
             continue;
         };
 
@@ -620,7 +623,7 @@ pub fn start_synchronizing(
                 entity_id: possessed_net.id,
                 body_type: **body_type,
                 position: map_position.position,
-                direction: map_position.direction.into(),
+                direction: (*direction).into(),
                 map_size: map.size,
             });
         }

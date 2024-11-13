@@ -32,8 +32,8 @@ impl Packet for PlayMusic {
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, Default, FromRepr)]
 pub enum SoundEffectKind {
-    #[default]
     Ambiance = 0,
+    #[default]
     OneShot = 1,
 }
 

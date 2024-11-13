@@ -13,6 +13,37 @@ use crate::world::items::ItemGraphic;
 use crate::world::map::{Chunk, MapInfos, Static, TileDataResource};
 use crate::world::ServerSet;
 
+pub struct Area2Iter {
+    min: IVec2,
+    width: usize,
+    count: usize,
+    offset: usize,
+}
+
+impl Area2Iter {
+    pub fn new(min: IVec2, max: IVec2) -> Area2Iter {
+        let delta = max - min;
+        let width = delta.x.max(0) as usize;
+        let count = delta.y.max(0) as usize * width;
+        Area2Iter { min, width, count, offset: 0 }
+    }
+}
+
+impl Iterator for Area2Iter {
+    type Item = IVec2;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.offset >= self.count {
+            None
+        } else {
+            let x = (self.offset % self.width) as i32;
+            let y = (self.offset / self.width) as i32;
+            self.offset += 1;
+            Some(self.min + ivec2(x, y))
+        }
+    }
+}
+
 fn cell_index(size: IVec2, position: IVec2) -> Option<usize> {
     if position.x < 0 ||
         position.x >= size.x ||

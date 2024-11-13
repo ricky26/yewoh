@@ -6,6 +6,8 @@ pub mod common;
 
 pub mod containers;
 
+pub mod buildings;
+
 pub const MAX_STACK: u16 = 60000;
 
 #[derive(Default)]
@@ -18,6 +20,7 @@ impl Plugin for ItemsPlugin {
                 persistence::plugin,
                 common::plugin,
                 containers::plugin,
+                buildings::plugin,
             ));
     }
 }
