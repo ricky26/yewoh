@@ -165,8 +165,6 @@ pub fn update_gumps(
             continue;
         };
 
-        info!("new gump {entity}");
-
         let id = allocator.allocate();
         gumps.insert(&mut commands, entity, **client_entity, *id, gump.type_id);
         commands.entity(entity)
